@@ -1,0 +1,169 @@
+// The "network" feature. contractSha256 pins the declared interface below; the self-test reports
+// contract-mismatch when it changes.
+// Declared interface:
+//   input:
+//     Host, port and optional proxy settings (type, host, port, credentials)
+//   output:
+//     A connected TCP channel ready to hand to the SSH library
+//   state:
+//     One connection per session
+//   errors:
+//     Typed resolve/connect/proxy-rejected/proxy-auth/timeout errors
+import GloamuxShared
+import Foundation
+import NIOCore
+import NIOPosix
+import NIOSOCKS
+
+// Establishes the TCP connection for an SSH session, directly or through a proxy, and hands the
+// connected NIO Channel to the SSH layer (Citadel connect(on:)). SOCKS5 is done with Apple's
+// maintained NIOSOCKS (swift-nio-extras), not a hand-written handshake. This is the connect-and-proxy
+// piece only; it does not implement SSH.
+//
+// Supported now: direct; SOCKS5 without authentication (NIOSOCKS); SOCKS4 and SOCKS4a; and HTTP CONNECT
+// without authentication. The SOCKS4 and HTTP exchanges are small fixed formats handled in ProxyHandshake.swift.
+// Not yet: proxy sign-in (SOCKS5 user/password, SOCKS4 user ID, HTTP Proxy-Authorization).
+
+public enum ProxyKind: String, Sendable, CaseIterable, Codable {
+    case none, socks5, socks4, http
+
+    public var title: String {
+        switch self {
+        case .none: return "None"
+        case .socks5: return "SOCKS5"
+        case .socks4: return "SOCKS4"
+        case .http: return "HTTP"
+        }
+    }
+}
+
+public struct ProxyConfiguration: Equatable, Sendable {
+    public var kind: ProxyKind
+    public var host: String
+    public var port: Int
+    public init(kind: ProxyKind, host: String = "", port: Int = 1080) { self.kind = kind; self.host = host; self.port = port }
+    public static let direct = ProxyConfiguration(kind: .none)
+}
+
+public enum NetworkError: Error, Equatable {
+    case invalidTarget(String)
+    case connectFailed(String)
+    case proxyFailed(String)
+    case unsupportedProxy(String)
+}
+
+// Fulfilled when the SOCKS tunnel is ready; then it removes the SOCKS handler so the channel is a
+// clean byte pipe to the target.
+private final class SOCKSEstablishmentHandler: ChannelInboundHandler, RemovableChannelHandler {
+    typealias InboundIn = NIOAny
+    private let onEstablished: EventLoopPromise<Void>
+    private var settled = false
+    private var timeout: Scheduled<Void>?
+    private let timeoutAmount: TimeAmount
+    init(_ promise: EventLoopPromise<Void>, timeout: TimeAmount) { self.onEstablished = promise; self.timeoutAmount = timeout }
+    func handlerAdded(context: ChannelHandlerContext) {
+        timeout = context.eventLoop.scheduleTask(in: timeoutAmount) {
+            guard !self.settled else { return }; self.settled = true
+            self.onEstablished.fail(NetworkError.proxyFailed("SOCKS handshake timed out")); context.close(promise: nil)
+        }
+    }
+    func handlerRemoved(context: ChannelHandlerContext) { timeout?.cancel() }
+    func channelInactive(context: ChannelHandlerContext) {
+        if !settled { settled = true; timeout?.cancel(); onEstablished.fail(NetworkError.proxyFailed("proxy closed during handshake")) }
+        context.fireChannelInactive()
+    }
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is SOCKSProxyEstablishedEvent, !settled {
+            settled = true; timeout?.cancel(); onEstablished.succeed(())
+            context.pipeline.syncOperations.removeHandler(context: context, promise: nil)
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if !settled { settled = true; timeout?.cancel(); onEstablished.fail(error) }
+        context.close(promise: nil)
+    }
+}
+
+public enum NetworkConnector {
+    /// Returns a connected Channel to host:port, directly or tunneled through a proxy. The caller owns
+    /// the channel and the event-loop group; pass a group you keep alive for the connection's lifetime.
+    public static func connect(host: String, port: Int, proxy: ProxyConfiguration = .direct,
+                               group: EventLoopGroup, connectTimeout: TimeAmount = .seconds(30)) async throws -> Channel {
+        guard !host.isEmpty, port > 0, port <= 65535, connectTimeout.nanoseconds > 0 else { throw NetworkError.invalidTarget("\(host):\(port)") }
+        switch proxy.kind {
+        case .none:
+            do {
+                return try await ClientBootstrap(group: group).connectTimeout(connectTimeout).connect(host: host, port: port).get()
+            } catch { throw NetworkError.connectFailed(String(describing: error)) }
+        case .socks4, .http:
+            guard !proxy.host.isEmpty, proxy.port > 0, proxy.port <= 65535 else { throw NetworkError.invalidTarget("proxy \(proxy.host):\(proxy.port)") }
+            let established = group.any().makePromise(of: Void.self)
+            let channel: Channel
+            do {
+                channel = try await ClientBootstrap(group: group).connectTimeout(connectTimeout)
+                    .channelInitializer { channel in
+                        channel.pipeline.addHandlers(ProxyHandshake.handlers(for: proxy, host: host, port: port, established: established))
+                    }.connect(host: proxy.host, port: proxy.port).get()
+            } catch {
+                established.fail(error); _ = try? await established.futureResult.get()
+                throw NetworkError.proxyFailed("connect to proxy: \(error)")
+            }
+            let timeout = channel.eventLoop.scheduleTask(in: connectTimeout) {
+                established.fail(NetworkError.proxyFailed("The proxy did not answer in time."))
+            }
+            defer { timeout.cancel() }
+            do { try await established.futureResult.get() }
+            catch { try? await channel.close().get(); throw error }
+            return channel
+        case .socks5:
+            guard !proxy.host.isEmpty, proxy.port > 0, proxy.port <= 65535 else { throw NetworkError.invalidTarget("proxy \(proxy.host):\(proxy.port)") }
+            let established = group.any().makePromise(of: Void.self)
+            let channel: Channel
+            do {
+                channel = try await ClientBootstrap(group: group).connectTimeout(connectTimeout)
+                    .channelInitializer { channel in
+                        channel.eventLoop.makeCompletedFuture {
+                            try channel.pipeline.syncOperations.addHandlers([
+                            SOCKSClientHandler(targetAddress: .domain(host, port: port)),
+                            SOCKSEstablishmentHandler(established, timeout: connectTimeout)
+                            ])
+                        }
+                    }.connect(host: proxy.host, port: proxy.port).get()
+            } catch {
+                // No handler may have been installed if TCP setup failed.
+                established.fail(error); _ = try? await established.futureResult.get()
+                throw NetworkError.proxyFailed("connect to proxy: \(error)")
+            }
+            do { try await established.futureResult.get() }
+            catch { try? await channel.close().get(); throw NetworkError.proxyFailed(String(describing: error)) }
+            return channel
+        }
+    }
+}
+
+// Feature entry: a real connection needs a reachable host/proxy, so the self-test reports readiness.
+// {"op":"describe", ...} validates and echoes a target+proxy without connecting.
+public enum NetworkFeature: GloamuxFeature {
+    public static let id = "network"
+    public static let contractSha256 = "54a2df7059c845834cecf1adce9ce597961f66d3f8497ed5ba7a2454aedf247e"
+    public static let dependsOn: [String] = []
+
+    public static func run(_ request: FeatureRequest, dependencies: FeatureOutputs) throws -> FeatureResponse {
+        if request.payload.isEmpty {
+            return FeatureResponse(payload: #"{"ready":true,"proxies":["none","socks5","socks4","http"],"unsupported":["proxy-auth"]}"#)
+        }
+        guard let obj = try JSONSerialization.jsonObject(with: Data(request.payload.utf8)) as? [String: Any], (obj["op"] as? String) == "describe",
+              let host = obj["host"] as? String, let port = obj["port"] as? Int else {
+            throw FeatureError.failed(id, "expected JSON {op:\"describe\", host, port, proxy?}")
+        }
+        guard !host.isEmpty, port > 0, port <= 65535 else { throw FeatureError.failed(id, "invalid target") }
+        var out: [String: Any] = ["host": host, "port": port, "proxy": "none"]
+        if let p = obj["proxy"] as? [String: Any], let kindRaw = p["kind"] as? String {
+            guard let kind = ProxyKind(rawValue: kindRaw) else { throw FeatureError.failed(id, "unknown proxy kind \(kindRaw)") }
+            out["proxy"] = kind.rawValue
+            if kind != .none { out["proxyHost"] = p["host"] as? String ?? ""; out["proxyPort"] = p["port"] as? Int ?? 1080 }
+        }
+        return FeatureResponse(payload: String(decoding: try JSONSerialization.data(withJSONObject: out, options: [.sortedKeys]), as: UTF8.self))
+    }
+}

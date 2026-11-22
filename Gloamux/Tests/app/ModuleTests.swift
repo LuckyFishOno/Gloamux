@@ -1,0 +1,10 @@
+import XCTest
+import GloamuxShared
+@testable import App
+
+final class AppFeatureTests: XCTestCase {
+    func testDeclaresPlannedInterface() {
+        XCTAssertEqual(AppFeature.id, "app")
+        XCTAssertEqual(AppFeature.contractSha256, "0a9316053d6af033417a11379cc7ba4b2046601c90fce3d9f4cea5dec9c8300a")
+    }
+}

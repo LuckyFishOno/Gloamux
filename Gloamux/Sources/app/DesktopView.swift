@@ -1,0 +1,1511 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+import FileTransfer
+import Ssh
+
+public struct DesktopView: View {
+    @StateObject var model: WorkspaceModel
+    @State var masterPassword = ""
+    @State var vaultExpanded = false
+    @State var showingSignIns = false
+    @AppStorage("showsConnectionTree") var showsTree = true
+    @AppStorage("showsComposeBar") var showsCompose = true
+    @AppStorage("sideRailPanel") var railPanel = SideRailPanel.sessions
+    /// The Mac layout's remote file tree on the right, which follows the focused pane.
+    @AppStorage("showsRemoteFilesSidebar") var showsFilesSidebar = true
+    /// Side panel widths, set by dragging their edges.
+    @AppStorage("leftSidebarWidth") var leftSidebarWidth = 254.0
+    @AppStorage("filesSidebarWidth") var rightSidebarWidth = 252.0
+    @State var sidebar: WorkspaceSidebar?
+    @State var importRequest: FolderImportRequest?
+    @State var stripTargeted = false
+    @State var splitRatios: [String: CGFloat] = [:]
+    @Environment(\.openWindow) private var openWindow
+    public init(model: WorkspaceModel) {
+        _model = StateObject(wrappedValue: model)
+    }
+
+    public var body: some View {
+        Group {
+            switch model.layout {
+            case .native: nativeLayout
+            case .terminal: classicLayout
+            case .transfer: workbenchLayout
+            }
+        }
+        .toolbar { workspaceToolbar }
+        // ThemeTitlebar paints the toolbar in the theme's header color without taking its clicks. A SwiftUI
+        // toolbar background would cover the title bar and catch its double-clicks, so the window would no longer fill
+        // the screen or zoom as System Settings says. The content background stops below the toolbar for the same reason.
+        .frame(minWidth: model.layout == .transfer ? 1110 : 1040, minHeight: 700)
+        .background(model.theme.background.color, ignoresSafeAreaEdges: [])
+        .foregroundStyle(model.theme.foreground.color)
+        .tint(model.theme.accent.color)
+        .background(ThemeTitlebar(theme: model.theme))
+        .preferredColorScheme(model.theme.isDark ? .dark : .light)
+        .sheet(item: $importRequest) { request in
+            ProfileImportView(store: model.sessionTree, source: request.url, parent: request.parent, kind: request.source)
+        }
+        .overlay(alignment: .top) {
+            if model.commandPaletteShown {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.12).ignoresSafeArea().onTapGesture { model.commandPaletteShown = false }
+                    CommandPalette(model: model, commands: model.paletteCommands(openWindow: openWindow, extra: paletteExtras))
+                        .padding(.top, 60)
+                }
+                .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .bottom) { recordingBanner }
+        .overlay { WorkspaceLockCover(model: model) }
+        .animation(.easeOut(duration: 0.15), value: model.workspaceLocked)
+        .animation(.easeOut(duration: 0.12), value: model.commandPaletteShown)
+        .task {
+            await model.refreshVault()
+            // A locked vault is the first thing to open after launch: show its unlock field.
+            if model.vaultState == "Locked" { vaultExpanded = true }
+        }
+        .onChange(of: model.filesRequest) { _, request in
+            guard let request, let tab = model.tabs.first(where: { $0.id == request.tab }) else { return }
+            switch model.layout {
+            case .native: setFilesSidebar(true)
+            case .terminal: model.openFileTransfer(for: tab)
+            case .transfer: withAnimation(.easeOut(duration: 0.18)) { railPanel = .files; showsTree = true }
+            }
+        }
+    }
+
+    /// The Mac layout: connection tree, flat tabs over floating panes, and optional right-hand panels.
+    private var nativeLayout: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                if showsTree {
+                    connectionSidebar
+                        .padding(13).frame(width: SidebarWidth.left.clamp(leftSidebarWidth)).background(model.theme.sidebar.color)
+                        .transition(.move(edge: .leading))
+                    resizeDivider($leftSidebarWidth, .left)
+                }
+                VStack(spacing: 0) {
+                    tabStrip()
+                    sessionArea
+                }
+                trailingSidebar
+            }
+            errorBanner
+        }
+    }
+
+    /// The saved-connection tree with the password vault under it.
+    var connectionSidebar: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            SessionTreeView(store: model.sessionTree, model: model, importFrom: chooseImport)
+            Divider().opacity(0.5)
+            if model.savesWithoutUnlock { savedPasswordsSection }
+            vaultSection
+        }
+        .sheet(isPresented: $showingSignIns) { SavedSignInsView(model: model) }
+    }
+
+    private var savedPasswordsButton: some View {
+        Button {
+            Task { if await model.authorizeSavedSignIns() { showingSignIns = true } }
+        } label: {
+            Label(T("Saved passwords…"), systemImage: "key.viewfinder").lineLimit(1).truncationMode(.tail)
+        }
+        .help(T("Asks for Touch ID or the Mac password"))
+        .accessibilityIdentifier("savedPasswordsButton")
+    }
+
+    /// With a Secure Enclave, a password that signs in is remembered on this Mac and connects again without asking.
+    private var savedPasswordsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                savedPasswordsButton.buttonStyle(.plain).font(.system(size: 12))
+                InfoButton(T("Passwords that sign in are remembered on this Mac and connect again without asking, also after a restart."))
+            }
+        }
+    }
+
+    private func submitMasterPassword() {
+        guard !model.vaultBusy, !masterPassword.isEmpty else { return }
+        let password = masterPassword; masterPassword = ""
+        Task { await model.configureVault(password: password, create: model.vaultState == "Not configured") }
+    }
+
+    private var masterPasswordUnlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Return in the field does what the button does.
+            SecureField(T("Master password"), text: $masterPassword)
+                .onSubmit(submitMasterPassword)
+            Button(T(model.vaultState == "Not configured" ? "Create vault" : "Unlock vault"), action: submitMasterPassword)
+                .disabled(model.vaultBusy || masterPassword.isEmpty)
+            if model.vaultHasTouchID {
+                Button { Task { await model.unlockVaultWithTouchID() } } label: {
+                    Label(T("Unlock with Touch ID"), systemImage: "touchid")
+                }.disabled(model.vaultBusy)
+            }
+        }
+    }
+
+    /// The master-password vault: copies the user keeps on purpose with **Add to vault**. On a Mac without a Secure
+    /// Enclave it is also where passwords that sign in are kept.
+    private var vaultSection: some View {
+        DisclosureGroup(isExpanded: $vaultExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                if model.vaultState != "Unlocked" {
+                    masterPasswordUnlock
+                } else { Button(T("Lock vault")) { Task { await model.lockVault() } } }
+                if !model.savesWithoutUnlock { savedPasswordsButton }
+            }.padding(.top, 8)
+        } label: {
+            HStack(spacing: 8) {
+                Label(T("Password vault"), systemImage: "lock.shield").lineLimit(1).truncationMode(.tail)
+                InfoButton(T(!model.savesWithoutUnlock
+                             ? "Unlock once after opening Gloamux. Passwords that sign in are saved here, and every connection fills them in without asking again until you lock the vault or quit."
+                             : model.vaultState == "Not configured"
+                             ? "Create a vault to keep passwords under a master password. While it is unlocked, connections stop asking for Touch ID one by one."
+                             : "Unlock once after opening Gloamux, and connections stop asking for Touch ID one by one. While it is locked, sessions set to ask on every connection ask; the others connect with the password remembered on this Mac."))
+                Spacer()
+                Text(T(model.vaultState)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                // Collapsed and locked: unlock with Touch ID without opening the section.
+                if !vaultExpanded, model.vaultState == "Locked", model.vaultHasTouchID {
+                    Button { Task { await model.unlockVaultWithTouchID() } } label: {
+                        Image(systemName: "touchid").foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(model.vaultBusy)
+                    .help(T("Unlock with Touch ID"))
+                    .accessibilityLabel(T("Unlock with Touch ID"))
+                }
+            }.font(.system(size: 12))
+        }
+    }
+
+    /// In the Mac layout, all three panels share a width and a resize handle.
+    @ViewBuilder var trailingSidebar: some View {
+        if showsTrailingSidebar {
+            HStack(spacing: 0) {
+                if model.layout == .native {
+                    resizeDivider($rightSidebarWidth, .files)
+                } else {
+                    workspaceDivider
+                }
+                trailingSidebarContent.frame(width: trailingSidebarWidth)
+            }
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
+    }
+
+    private var showsTrailingSidebar: Bool {
+        switch sidebar {
+        case .themes: return true
+        case .commands: return model.selected != nil
+        case .collapsed: return false
+        case nil: return filesSidebarOpen
+        }
+    }
+
+    private var canShowFilesSidebar: Bool {
+        // Choosing RDP or VNC in the form keeps the panel available until a remote desktop opens.
+        model.layout == .native && model.workspaceMode == .terminal && model.selected?.desktop == nil
+    }
+
+    private var filesSidebarOpen: Bool {
+        canShowFilesSidebar && sidebar == nil && showsFilesSidebar
+    }
+
+    private var trailingSidebarWidth: CGFloat {
+        if model.layout == .native { return SidebarWidth.files.clamp(rightSidebarWidth) }
+        return sidebar == .themes ? 236 : 260
+    }
+
+    @ViewBuilder private var trailingSidebarContent: some View {
+        switch sidebar {
+        case .themes:
+            themeSidebar
+        case .commands:
+            if let tab = model.selected {
+                QuickCommandPanel(model: model, store: model.quickCommands, tab: tab) { setSidebar(.collapsed) }
+            }
+        case .collapsed:
+            EmptyView()
+        case nil:
+            RemoteFileSidebar(model: model) { setFilesSidebar(false) }
+        }
+    }
+
+    /// The window's own palette commands: its side panels.
+    private var paletteExtras: [PaletteCommand] {
+        var extras = [
+            PaletteCommand(id: "view.tree", title: T(showsTree ? "Hide connection tree" : "Show connection tree"), symbol: "sidebar.left",
+                           section: T("View"), shortcut: "⌃⌘S") { withAnimation(.easeOut(duration: 0.18)) { showsTree.toggle() } },
+            PaletteCommand(id: "view.commands", title: T("Quick commands"), symbol: "command", section: T("View")) { toggleSidebar(.commands) },
+            PaletteCommand(id: "view.themes", title: T("Color theme"), symbol: "paintpalette", section: T("View")) { toggleSidebar(.themes) },
+            PaletteCommand(id: "import.ssh", title: T("Import sessions") + ": " + T(FolderImportRequest.Source.openSSHConfig.menuTitle),
+                           symbol: "square.and.arrow.down", section: T("Session")) { chooseImport(.openSSHConfig) },
+            PaletteCommand(id: "settings.export", title: T("Export all settings"), symbol: "square.and.arrow.up",
+                           section: T("Settings")) { model.exportConfiguration() },
+            PaletteCommand(id: "settings.import", title: T("Import all settings"), symbol: "square.and.arrow.down.on.square",
+                           section: T("Settings")) { model.importConfiguration() },
+        ]
+        if canShowFilesSidebar {
+            extras.append(PaletteCommand(id: "view.files", title: T("Show or hide the focused pane's files on the right"), symbol: "folder",
+                                         section: T("View")) {
+                setFilesSidebar(!filesSidebarOpen)
+            })
+        }
+        return extras
+    }
+
+    /// Shown for a few seconds after a recording is saved.
+    @ViewBuilder private var recordingBanner: some View {
+        if let url = model.recordingSaved {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text(T("Recording saved")).fontWeight(.medium)
+                Text(url.deletingPathExtension().lastPathComponent).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Button(T("Show")) { model.recordingSaved = nil; model.showRecordings() }
+                Button { model.recordingSaved = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+            }
+            .font(.callout)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+            .padding(.bottom, 18)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task(id: url) {
+                try? await Task.sleep(for: .seconds(6))
+                if model.recordingSaved == url { withAnimation { model.recordingSaved = nil } }
+            }
+        }
+    }
+
+    @ViewBuilder var errorBanner: some View {
+        if let error = model.error {
+            HStack { Image(systemName: "exclamationmark.triangle"); Text(T(error)); Spacer(); Button(T("Dismiss")) { model.error = nil } }
+                .foregroundStyle(.red).padding(10)
+        }
+    }
+
+    func toggleSidebar(_ panel: WorkspaceSidebar) {
+        setSidebar(sidebar == panel ? .collapsed : panel)
+    }
+
+    private func setSidebar(_ panel: WorkspaceSidebar) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { sidebar = panel }
+    }
+
+    private func setFilesSidebar(_ open: Bool) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
+            showsFilesSidebar = open
+            sidebar = nil
+        }
+    }
+
+    /// Tab bar entries in tab order. A split group is one entry, placed where its first pane's tab was.
+    var stripItems: [StripItem] {
+        var seen = Set<Int>()
+        return model.tabs.compactMap { tab in
+            guard let index = model.groups.firstIndex(where: { $0.contains(tab.id) }) else { return .tab(tab) }
+            return seen.insert(index).inserted ? .group(model.groups[index]) : nil
+        }
+    }
+
+    func tabStrip(_ chrome: TabChrome = .flat) -> some View {
+        VStack(spacing: 0) {
+            GeometryReader { proxy in
+                let items = stripItems
+                let addWidth: CGFloat = 40
+                // Tabs share the bar evenly and shrink down to an icon instead of scrolling out of view.
+                let width = max(StripTab.minimumWidth, min(StripTab.maximumWidth, (proxy.size.width - addWidth) / CGFloat(max(items.count, 1))))
+                HStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        stripTab(item, width: width, chrome: chrome, number: index + 1)
+                            .transition(.asymmetric(insertion: .scale(scale: 0.6, anchor: .leading).combined(with: .opacity),
+                                                    removal: .opacity))
+                    }
+                    Button { model.newConnectionTab() } label: {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 28, height: min(28, chrome.height)).contentShape(Rectangle())
+                    }
+                    .buttonStyle(StripPlusStyle())
+                    .help(T("New connection"))
+                    .frame(width: addWidth)
+                    Spacer(minLength: 0)
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.86), value: items.map(\.id))
+                .animation(.spring(response: 0.3, dampingFraction: 0.86), value: width)
+            }
+            .frame(height: chrome.height)
+            .padding(.top, chrome == .flat ? 0 : 4)
+            .padding(.horizontal, chrome == .flat ? 0 : 4)
+            .background(model.theme.tabs.color)
+            .overlay {
+                if stripTargeted {
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(model.theme.accent.color, lineWidth: 2)
+                        .background(model.theme.accent.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(2).allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: stripTargeted)
+            // Dropping a pane on the tab bar takes it out of its split and makes it a tab again.
+            .onDrop(of: [.plainText], isTargeted: Binding(get: { stripTargeted }, set: { targeted in
+                stripTargeted = targeted && model.group(containing: PaneDrag.current) != nil
+            })) { providers in
+                guard let provider = providers.first else { return false }
+                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                    guard let text = object as? String, let id = PaneDrag.tabID(from: text) else { return }
+                    DispatchQueue.main.async {
+                        PaneDrag.current = nil
+                        model.detachPane(id)
+                    }
+                }
+                return true
+            }
+            Rectangle().fill(model.theme.foreground.color.opacity(0.08)).frame(height: 1)
+        }
+    }
+
+    @ViewBuilder private func stripTab(_ item: StripItem, width: CGFloat, chrome: TabChrome, number: Int) -> some View {
+        switch item {
+        case .tab(let tab):
+            TabObserver(tab: tab) { tab in
+                StripTab(title: chrome.title(UIStrings.text(tab.title, language: model.language), number: number), chrome: chrome,
+                         symbol: tab.container?.tool.symbol ?? (tab.isLocal ? "terminal" : "network"),
+                         connected: tab.connected, width: width, selected: tab.id == model.selection, theme: model.theme,
+                         environment: tab.environment, attention: tab.attention, bell: tab.bellPending,
+                         activity: tab.outputPending, lost: tab.transportLost,
+                         select: { model.selectTab(tab.id) },
+                         close: { model.requestClose(tab) })
+            }
+            .onDrag { PaneDrag.provider(for: tab.id) }
+            .contextMenu {
+                Button(T("Rename tab…")) { model.renameTab(tab) }
+                Button(T("Duplicate tab")) { model.duplicateTab(tab) }.disabled(!model.canDuplicate(tab))
+                Button(T("Move tab to new window")) { model.moveTabToWindow(tab) }
+                Toggle(T("Read-only"), isOn: Binding(get: { tab.readOnly }, set: { _ in model.toggleReadOnly(tab) }))
+                Divider()
+                Button(T("Move tab left")) { model.moveTab(tab.id, by: -1) }
+                Button(T("Move tab right")) { model.moveTab(tab.id, by: 1) }
+                Divider()
+                Button(T("Close")) { model.requestClose(tab) }
+            }
+            .help(T("Drag onto a pane to split it"))
+        case .group(let layout):
+            let members = layout.tabIDs.compactMap { id in model.tabs.first { $0.id == id } }
+            // Like Termius, a split is a "Workspace"; further splits are numbered. The tooltip lists its panes.
+            let workspaceNumber = (model.groups.firstIndex(of: layout) ?? 0) + 1
+            StripTab(title: chrome.title(T("Workspace") + (workspaceNumber > 1 ? " \(workspaceNumber)" : ""), number: number), chrome: chrome,
+                     detail: members.map { UIStrings.text($0.title, language: model.language) }.joined(separator: "\n"),
+                     symbol: "rectangle.split.2x1", connected: members.contains(where: \.connected), width: width,
+                     selected: layout.contains(model.selection), theme: model.theme,
+                     select: { if !layout.contains(model.selection), let first = layout.tabIDs.first { model.selectTab(first) } },
+                     close: { Task { for tab in members { await model.closeTab(tab) } } })
+        }
+    }
+
+    /// Native window toolbar. The Default layout keeps its actions here; the Classic and Workbench layouts
+    /// draw their own toolbars in the window, so only the sidebar button and the layout menu stay.
+    @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button { withAnimation(.easeOut(duration: 0.18)) { showsTree.toggle() } } label: {
+                Label(T(showsTree ? "Hide connection tree" : "Show connection tree"), systemImage: "sidebar.left")
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            .help(T(showsTree ? "Hide connection tree" : "Show connection tree"))
+            .accessibilityIdentifier("connectionTreeToggle")
+        }
+        // The focused session's environment, so a production session is marked in the window as well as its tab.
+        if let tab = model.selected {
+            ToolbarItem(placement: .navigation) {
+                TabObserver(tab: tab) { tab in
+                    if let environment = tab.environment { EnvironmentBadge(environment: environment) }
+                }
+            }
+        }
+        if model.layout == .native { ToolbarItem(placement: .principal) { workspaceModePicker } }
+        // A flexible space pushes the session actions to the trailing edge, like Finder and Terminal.
+        ToolbarItem(placement: .automatic) { Spacer() }
+        if model.layout == .native {
+            ToolbarItem(placement: .automatic) {
+                newConnectionMenu
+            }
+            ToolbarItem(placement: .automatic) {
+                sidebarPicker
+            }
+        }
+        ToolbarItem(placement: .automatic) { layoutMenu }
+    }
+
+    private var sidebarPicker: some View {
+        HStack(spacing: 5) {
+            Toggle(isOn: Binding(get: { filesSidebarOpen }, set: setFilesSidebar)) {
+                Label(T("Files"), systemImage: "folder")
+            }
+            .disabled(!canShowFilesSidebar)
+            .help(T("Show or hide the focused pane's files on the right"))
+            .accessibilityIdentifier("remoteFilesToggle")
+            Toggle(isOn: Binding(get: { sidebar == .commands }, set: { setSidebar($0 ? .commands : .collapsed) })) {
+                Label(T("Quick commands"), systemImage: "command")
+            }
+            .help(T("Quick commands"))
+            .accessibilityIdentifier("quickCommandsToggle")
+            Toggle(isOn: Binding(get: { sidebar == .themes }, set: { setSidebar($0 ? .themes : .collapsed) })) {
+                Label(T("Color theme"), systemImage: "paintpalette")
+            }
+            .help(T("Color theme"))
+            .accessibilityIdentifier("workspaceThemeToggle")
+        }
+        .labelStyle(.iconOnly)
+        .toggleStyle(.button)
+        .padding(.horizontal, 5)
+    }
+
+    var workspaceModePicker: some View {
+        WorkspaceModeSwitch(mode: model.workspaceMode, theme: model.theme) { mode in
+            switch mode {
+            case .terminal: model.showTerminal()
+            case .files: model.openFileTransfer(for: nil)
+            }
+        }
+        .help(T("Switch between the terminal and two-pane file transfer"))
+        .accessibilityIdentifier("workspaceModePicker")
+    }
+
+    var newConnectionMenu: some View {
+        Menu {
+            newConnectionItems
+        } label: {
+            Label(T("New connection"), systemImage: "plus")
+        } primaryAction: { model.newConnectionTab() }
+        .help(T("New connection"))
+        .accessibilityIdentifier("newConnectionMenu")
+    }
+
+    @ViewBuilder var newConnectionItems: some View {
+        Button { model.newConnectionTab() } label: { Label(T("New connection"), systemImage: "network") }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+        Button { model.addLocalTab() } label: { Label(T("Local terminal"), systemImage: "terminal") }
+            .keyboardShortcut("t", modifiers: .command)
+        Button { model.newConnectionTab(.rdp, remember: true) } label: { Label(T(ContainerSession.Tool.rdp.title), systemImage: ContainerSession.Tool.rdp.symbol) }
+        if model.layout != .terminal {
+            Button { model.newConnectionTab(.vnc, remember: true) } label: { Label(T(ContainerSession.Tool.vnc.title), systemImage: ContainerSession.Tool.vnc.symbol) }
+        }
+        Button { model.newConnectionTab(.other, remember: true) } label: { Label(T("Other connection"), systemImage: "shippingbox") }
+        Button { model.openTool(.discovery) } label: { Label(T("Discover hosts…"), systemImage: "dot.radiowaves.left.and.right") }
+        Divider()
+        Menu(T("Import sessions")) {
+            ForEach(FolderImportRequest.Source.allCases, id: \.self) { source in
+                Button(T(source.menuTitle)) { chooseImport(source) }
+            }
+        }
+    }
+
+    /// Switches between the Default, Classic, and Workbench arrangements. The choice applies at once.
+    private var layoutMenu: some View {
+        Menu {
+            Picker(T("Layout"), selection: Binding(get: { model.layout }, set: { layout in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    do { try model.selectLayout(layout) } catch { model.error = error.localizedDescription }
+                }
+            })) {
+                ForEach(WorkspaceLayout.allCases) { layout in
+                    Label { Text(layout.title); Text(layout.detail) } icon: { Image(systemName: layout.symbol) }.tag(layout)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label(T("Layout"), systemImage: model.layout.symbol)
+        }
+        .help(T("Layout") + ": " + model.layout.title)
+        .accessibilityIdentifier("layoutMenu")
+    }
+
+    /// Panes float as cards over a slightly darker well. Pane frames change without animation: animating
+    /// them would resize and redraw every terminal on each frame.
+    var sessionArea: some View {
+        ZStack {
+            if model.layout == .native && model.workspaceMode == .files {
+                FileTransferView(model: model, local: model.localBrowser, queue: model.transfers, target: model.mainTransferTarget)
+            } else if let split = model.split {
+                if let id = model.maximizedPane, let tab = model.tabs.first(where: { $0.id == id }) {
+                    pane(tab, card: true)
+                } else {
+                    paneTree(split.root)
+                }
+            } else if let tab = model.selected {
+                pane(tab, card: false)
+            }
+        }
+        .padding(model.layout == .native ? 5 : 0)
+        .background(model.theme.tabs.color)
+    }
+
+    private func paneDropTarget(_ target: UUID) -> PaneDropTarget {
+        PaneDropTarget(target: target, accent: model.theme.accent.color,
+                       accepts: { [model] dragged in model.canSplit(dragged) && model.canSplit(target) }) { dragged, edge in
+            model.placeTab(dragged, at: edge, of: target)
+        }
+    }
+
+    /// Draws a split layout recursively; every divider can be dragged, and a double-click evens it out.
+    private func paneTree(_ node: WorkspacePane) -> AnyView {
+        switch node {
+        case .tab(let id):
+            guard let tab = model.tabs.first(where: { $0.id == id }) else { return AnyView(EmptyView()) }
+            return AnyView(pane(tab, card: true))
+        case .split(let axis, let first, let second):
+            // Ratios are kept per pair of panes, so moving one divider leaves the others where they were.
+            let key = "\(first.tabIDs[0])|\(second.tabIDs[0])"
+            let ratio = Binding(get: { splitRatios[key] ?? 0.5 }, set: { splitRatios[key] = $0 })
+            return AnyView(PaneSplitView(axis: axis, ratio: ratio, first: paneTree(first), second: paneTree(second),
+                                         dividerColor: model.theme.accent.color))
+        }
+    }
+
+    /// One session as a floating card. In a split, the focused card gets an accent ring and a deeper shadow.
+    private func pane(_ tab: SessionTab, card inSplit: Bool) -> some View {
+        let focused = inSplit && model.selection == tab.id
+        let classic = model.layout != .native
+        // Classic and Workbench draw square, edge-to-edge panes; the Default layout floats rounded cards.
+        let shape = RoundedRectangle(cornerRadius: classic ? 0 : 10, style: .continuous)
+        return SessionPane(model: model, tab: tab, compact: inSplit, dockedFiles: model.layout == .transfer,
+                           flat: classic, showsHeader: !classic || inSplit)
+            .id(tab.id)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(model.theme.background.color)
+            .clipShape(shape)
+            .overlay {
+                shape.strokeBorder(focused ? model.theme.accent.color.opacity(0.75) : model.theme.foreground.color.opacity(0.08),
+                                   lineWidth: focused ? 1.5 : 1)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                if model.broadcastInput && inSplit {
+                    shape.strokeBorder(Color.orange.opacity(0.85), lineWidth: 2).allowsHitTesting(false)
+                }
+            }
+            .simultaneousGesture(TapGesture().onEnded { model.selectTab(tab.id, focusTerminal: false) })
+            .modifier(paneDropTarget(tab.id))
+    }
+
+    var workspaceDivider: some View {
+        Rectangle().fill(model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16)).frame(width: 1)
+    }
+
+    /// A divider that resizes the panel beside it when dragged.
+    func resizeDivider(_ width: Binding<Double>, _ kind: SidebarWidth) -> some View {
+        SidebarResizeHandle(width: width, kind: kind, color: model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16))
+    }
+
+    var themeSidebar: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(T("Color theme"), systemImage: "paintpalette").font(.headline)
+                Spacer()
+                Button { setSidebar(.collapsed) } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Close theme panel"))
+            }
+            ThemeGallery(themes: model.themes, selectedID: model.displayedThemeID) { id in
+                do { try model.selectTheme(id) }
+                catch { model.error = error.localizedDescription }
+            }
+        }
+        .padding(13)
+        .background(model.theme.sidebar.color)
+    }
+
+    func chooseImportFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = ["xsh", "xfp"].compactMap { UTType(filenameExtension: $0) }
+        panel.canCreateDirectories = false
+        panel.prompt = T("Review profiles")
+        if panel.runModal() == .OK, let url = panel.url {
+            importRequest = FolderImportRequest(url: url, parent: model.sessionTree.destination)
+        }
+    }
+
+    /// Asks for the folder or file to import from, then shows what it holds before saving anything.
+    func chooseImport(_ source: FolderImportRequest.Source) {
+        switch source {
+        case .xshellFolder: chooseImportFolder()
+        case .openSSHConfig: chooseOpenSSHConfig()
+        default:
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = false
+            panel.allowedContentTypes = source.fileExtensions.compactMap { UTType(filenameExtension: $0) }
+            panel.prompt = T("Review profiles")
+            if panel.runModal() == .OK, let url = panel.url {
+                importRequest = FolderImportRequest(url: url, parent: model.sessionTree.destination, source: source)
+            }
+        }
+    }
+
+    /// Opens `~/.ssh/config` for review, or asks for another file when it does not exist.
+    func chooseOpenSSHConfig() {
+        let standard = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh/config")
+        var url: URL? = FileManager.default.isReadableFile(atPath: standard.path) ? standard : nil
+        if url == nil {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = false
+            panel.showsHiddenFiles = true
+            panel.directoryURL = standard.deletingLastPathComponent()
+            panel.prompt = T("Review hosts")
+            if panel.runModal() == .OK { url = panel.url }
+        }
+        if let url {
+            importRequest = FolderImportRequest(url: url, parent: model.sessionTree.destination, source: .openSSHConfig)
+        }
+    }
+
+}
+
+enum WorkspaceSidebar {
+    // A collapsed panel overrides the default file sidebar for the current window.
+    case commands, themes, collapsed
+}
+
+struct FolderImportRequest: Identifiable {
+    /// Where saved sessions come from, in menu order. Each is read into the same preview before anything is saved.
+    enum Source: CaseIterable {
+        case gloamux, xshellFolder, mobaXterm, putty, openSSHConfig, csv
+
+        /// The import menu's item.
+        var menuTitle: String {
+            switch self {
+            case .xshellFolder: return "Xshell config…"
+            case .openSSHConfig: return "OpenSSH config…"
+            case .mobaXterm: return "MobaXterm config…"
+            case .putty: return "PuTTY config…"
+            case .csv: return "CSV file…"
+            case .gloamux: return "Gloamux config…"
+            }
+        }
+
+        /// The preview sheet's title.
+        var title: String {
+            switch self {
+            case .xshellFolder: return "Import Xshell config"
+            case .openSSHConfig: return "Import OpenSSH config"
+            case .mobaXterm: return "Import MobaXterm config"
+            case .putty: return "Import PuTTY config"
+            case .csv: return "Import CSV file"
+            case .gloamux: return "Import Gloamux config"
+            }
+        }
+
+        var symbol: String { self == .xshellFolder ? "folder.badge.plus" : self == .csv ? "tablecells" : "doc.text" }
+
+        /// File name extensions offered in the open panel.
+        var fileExtensions: [String] {
+            switch self {
+            case .xshellFolder, .openSSHConfig: return []
+            case .mobaXterm: return ["mxtsessions", "ini"]
+            case .putty: return ["reg"]
+            case .csv: return ["csv", "txt", "tsv"]
+            case .gloamux: return [SessionsFile.fileExtension] + LegacyName.sessionsExtensions + ["json"]
+            }
+        }
+
+        func scan(_ url: URL) throws -> ProfileImport {
+            switch self {
+            case .xshellFolder: return try ProfileImport.scan(url)
+            case .openSSHConfig: return try OpenSSHConfigImport.scan(url)
+            case .mobaXterm: return try MobaXtermImport.scan(url)
+            case .putty: return try PuTTYImport.scan(url)
+            case .csv: return try CSVSessionImport.scan(url)
+            case .gloamux: return try SessionsFile.scan(url)
+            }
+        }
+    }
+    let id = UUID()
+    let url: URL
+    let parent: UUID?
+    var source: Source = .xshellFolder
+}
+
+/// Drag payload for a tab chip. The prefix keeps ordinary dragged text from being read as a tab.
+enum PaneDrag {
+    static let prefix = "gloamux-tab:"
+    /// The tab being dragged, so a pane does not offer to split around itself.
+    @MainActor static var current: UUID?
+
+    @MainActor static func provider(for id: UUID) -> NSItemProvider {
+        current = id
+        return NSItemProvider(object: (prefix + id.uuidString) as NSString)
+    }
+
+    static func tabID(from text: String) -> UUID? {
+        guard text.hasPrefix(prefix) else { return nil }
+        return UUID(uuidString: String(text.dropFirst(prefix.count)))
+    }
+}
+
+/// Lets a tab chip be dropped on a pane: near an edge splits toward that edge, the middle replaces the pane.
+private struct PaneDropTarget: ViewModifier {
+    let target: UUID
+    let accent: Color
+    /// Whether the tab being dragged may join this pane. Only connected sessions can be split.
+    let accepts: (UUID?) -> Bool
+    let place: (UUID, PaneDropEdge) -> Void
+    @State private var size = CGSize.zero
+    @State private var hover: PaneDropEdge?
+
+    func body(content: Content) -> some View {
+        content
+            .background(GeometryReader { proxy in
+                Color.clear.onAppear { size = proxy.size }.onChange(of: proxy.size) { _, new in size = new }
+            })
+            .overlay { if let hover { PaneDropHighlight(edge: hover, accent: accent).transition(.opacity) } }
+            .animation(.easeOut(duration: 0.12), value: hover)
+            .onDrop(of: [.plainText], delegate: PaneDropDelegate(target: target, size: size, hover: $hover, accepts: accepts, place: place))
+    }
+}
+
+private struct PaneDropDelegate: DropDelegate {
+    let target: UUID
+    let size: CGSize
+    @Binding var hover: PaneDropEdge?
+    let accepts: (UUID?) -> Bool
+    let place: (UUID, PaneDropEdge) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.plainText]) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let dragged = MainActor.assumeIsolated { PaneDrag.current }
+        guard dragged != target, MainActor.assumeIsolated({ accepts(dragged) }) else {
+            hover = nil
+            return DropProposal(operation: .forbidden)
+        }
+        hover = PaneDropEdge.at(info.location, in: size)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { hover = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let edge = PaneDropEdge.at(info.location, in: size)
+        hover = nil
+        guard let provider = info.itemProviders(for: [.plainText]).first else { return false }
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            guard let text = object as? String, let id = PaneDrag.tabID(from: text) else { return }
+            DispatchQueue.main.async { PaneDrag.current = nil; place(id, edge) }
+        }
+        return true
+    }
+}
+
+/// Shows where a dropped tab will go: the half of the pane at that edge, or the whole pane.
+private struct PaneDropHighlight: View {
+    let edge: PaneDropEdge
+    let accent: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let area = region(in: proxy.size)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(accent.opacity(0.18))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(accent, lineWidth: 2))
+                .frame(width: area.width, height: area.height)
+                .offset(x: area.minX, y: area.minY)
+                .animation(.easeOut(duration: 0.12), value: edge)
+        }
+        .padding(4)
+        .allowsHitTesting(false)
+    }
+
+    private func region(in size: CGSize) -> CGRect {
+        let halfWidth = size.width / 2, halfHeight = size.height / 2
+        switch edge {
+        case .left: return CGRect(x: 0, y: 0, width: halfWidth, height: size.height)
+        case .right: return CGRect(x: halfWidth, y: 0, width: halfWidth, height: size.height)
+        case .top: return CGRect(x: 0, y: 0, width: size.width, height: halfHeight)
+        case .bottom: return CGRect(x: 0, y: halfHeight, width: size.width, height: halfHeight)
+        case .center: return CGRect(origin: .zero, size: size)
+        }
+    }
+}
+
+enum StripItem: Identifiable {
+    case tab(SessionTab)
+    case group(WorkspaceSplit)
+    var id: UUID {
+        switch self {
+        case .tab(let tab): return tab.id
+        case .group(let layout): return layout.tabIDs[0]
+        }
+    }
+}
+
+private struct StripPlusStyle: ButtonStyle {
+    @State private var hovering = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(hovering ? Color.primary : Color.secondary)
+            .background(Color.primary.opacity(configuration.isPressed ? 0.14 : hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 6))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// A flat tab: the selected tab takes the content background. Narrow tabs drop the title, then the
+/// status dot, and finally show only the icon. The close button lights up only under the pointer.
+/// How tabs are drawn: flat Mac tabs, Classic boxed tabs, or Workbench rounded, numbered tabs.
+enum TabChrome: Equatable {
+    case flat, boxed, rounded
+    var height: CGFloat { self == .flat ? 34 : 28 }
+    func title(_ title: String, number: Int) -> String { self == .rounded ? "\(number). \(title)" : title }
+}
+
+struct StripTab: View {
+    static let minimumWidth: CGFloat = 38
+    static let maximumWidth: CGFloat = 200
+    let title: String
+    var chrome: TabChrome = .flat
+    var detail: String? = nil
+    let symbol: String
+    let connected: Bool
+    let width: CGFloat
+    let selected: Bool
+    let theme: WorkspaceTheme
+    var environment: SessionEnvironment? = nil
+    /// A command finished in this tab while it was not shown.
+    var attention = false
+    /// The bell rang in this tab while it was not shown.
+    var bell = false
+    /// New output arrived in this tab while it was not shown.
+    var activity = false
+    /// The connection dropped; the tab stays open with Reconnect.
+    var lost = false
+    let select: () -> Void
+    let close: () -> Void
+    @State private var hovering = false
+    @State private var hoveringClose = false
+
+    var body: some View {
+        let wide = width >= 64, showsTitle = width >= 70, showsDot = width >= 110
+        // Workbench keeps a close button on every wide tab; the other styles show it under the pointer.
+        let fixedClose = chrome == .rounded && showsTitle
+        // A tap gesture rather than a Button: a Button keeps the mouse and stops the tab from being dragged.
+        HStack(spacing: 6) {
+            // The close button takes the icon's place under the pointer, so it costs no width.
+            ZStack {
+                icon.opacity(hovering && !fixedClose ? 0 : 1)
+                if hovering && !fixedClose { closeButton.transition(.opacity) }
+            }
+            .frame(width: 16, height: 16)
+            if showsTitle {
+                Text(title).font(.system(size: chrome == .flat ? 12 : 11.5, weight: selected ? .medium : .regular))
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 0)
+                if let environment, width >= 130 { EnvironmentBadge(environment: environment, compact: true) }
+                if lost {
+                    Image(systemName: "bolt.horizontal.circle.fill").font(.system(size: 10)).foregroundStyle(.red)
+                        .help(T("Connection lost"))
+                } else if bell && !attention {
+                    Image(systemName: "bell.fill").font(.system(size: 9)).foregroundStyle(theme.accent.color).help(T("The bell rang"))
+                } else if attention {
+                    Circle().fill(theme.accent.color).frame(width: 7, height: 7).help(T("A command finished"))
+                } else if activity {
+                    Circle().stroke(theme.accent.color, lineWidth: 1.5).frame(width: 7, height: 7).help(T("New output"))
+                } else if showsDot && chrome != .rounded {
+                    Circle().fill(connected ? Color.green.opacity(0.85) : Color.secondary.opacity(0.35)).frame(width: 6, height: 6)
+                }
+                if fixedClose { closeButton }
+            }
+        }
+        .padding(.horizontal, wide ? 8 : 0)
+        .frame(width: chrome == .flat ? width : max(width - 2, 30), height: chrome.height, alignment: showsTitle ? .leading : .center)
+        .background { tabBackground }
+        .overlay(alignment: .top) {
+            if let environment { Rectangle().fill(environment.color).frame(height: selected ? 3 : 2) }
+            else if selected && chrome != .rounded { Rectangle().fill(theme.accent.color).frame(height: 2) }
+        }
+        .overlay(alignment: .trailing) {
+            if !selected && chrome == .flat { Rectangle().fill(theme.foreground.color.opacity(0.1)).frame(width: 1, height: 16) }
+        }
+        .frame(width: width, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: select)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.14), value: hovering)
+        .animation(.easeOut(duration: 0.18), value: selected)
+        .help(detail ?? title)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { select() }
+    }
+
+    @ViewBuilder private var tabBackground: some View {
+        switch chrome {
+        case .flat:
+            if selected { theme.background.color.shadow(color: .black.opacity(0.18), radius: 3, y: -1) }
+            else if hovering { Color.primary.opacity(0.05) }
+        case .boxed, .rounded:
+            let radius: CGFloat = chrome == .boxed ? 3 : 7
+            let shape = UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous)
+            shape.fill(selected ? theme.background.color : hovering ? theme.header.color.opacity(0.9) : theme.header.color.opacity(0.55))
+                .overlay(shape.stroke(theme.foreground.color.opacity(selected ? 0.18 : 0.1), lineWidth: 1))
+                // The selected tab joins the pane below it.
+                .overlay(alignment: .bottom) { if selected { theme.background.color.frame(height: 1.5).padding(.horizontal, 1) } }
+        }
+    }
+
+    private var icon: some View {
+        Group {
+            if lost {
+                // Narrow tabs have no room for the badge, so the icon itself turns red.
+                Image(systemName: symbol).foregroundStyle(.red)
+            } else if chrome == .flat {
+                Image(systemName: symbol).foregroundStyle(selected ? theme.accent.color : .secondary)
+            } else {
+                // Classic tabs color the icon by state: green when connected, gray otherwise.
+                Image(systemName: symbol).foregroundStyle(connected ? Color.green : Color.secondary)
+            }
+        }
+        .font(.system(size: 11))
+    }
+
+    private var closeButton: some View {
+        Button(action: close) {
+            Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                .foregroundStyle(hoveringClose ? Color.primary : Color.secondary)
+                .frame(width: 16, height: 16)
+                .background(Color.primary.opacity(hoveringClose ? 0.14 : 0), in: RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveringClose = $0 }
+        .help(T("Close connection"))
+    }
+}
+
+/// A small borderless icon button that lights up only while the pointer is over it.
+/// The limits of each resizable side panel, and which way dragging widens it.
+enum SidebarWidth {
+    case left, files
+
+    var range: ClosedRange<Double> {
+        switch self {
+        case .left: return 200...520
+        case .files: return 220...560
+        }
+    }
+    /// A left panel widens when its right edge moves right; a right panel when its left edge moves left.
+    var direction: Double { self == .left ? 1 : -1 }
+
+    func clamp(_ width: Double) -> Double { min(max(width, range.lowerBound), range.upperBound) }
+}
+
+/// A one-point line with a wider grab area: dragging it resizes the panel beside it within its limits.
+struct SidebarResizeHandle: View {
+    @Binding var width: Double
+    let kind: SidebarWidth
+    let color: Color
+    @State private var startWidth: Double?
+    @State private var hovering = false
+
+    var body: some View {
+        Rectangle().fill(hovering || startWidth != nil ? Color.accentColor.opacity(0.6) : color).frame(width: 1)
+            .overlay {
+                Color.clear.frame(width: 9).contentShape(Rectangle())
+                    .onHover { inside in
+                        hovering = inside
+                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                    }
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { drag in
+                            let start = startWidth ?? kind.clamp(width)
+                            if startWidth == nil { startWidth = start }
+                            width = kind.clamp(start + drag.translation.width * kind.direction)
+                        }
+                        .onEnded { _ in startWidth = nil })
+            }
+            .zIndex(1)
+            .help(T("Drag to resize"))
+    }
+}
+
+struct PaneIconButton: View {
+    let symbol: String
+    var active = false
+    var activeColor: Color = .accentColor
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 11, weight: .medium))
+                .foregroundStyle(active ? activeColor : hovering ? Color.primary : Color.secondary)
+                .frame(width: 22, height: 22)
+                .background(Color.primary.opacity(hovering ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .help(T(help))
+        .accessibilityLabel(T(help))
+    }
+}
+
+/// A remote desktop's part of the pane header: a spinner while it signs in, then a disconnect button.
+private struct DesktopHeaderControls: View {
+    @ObservedObject var connection: RemoteDesktopSession
+    @State private var fullScreen = NSApp?.keyWindow?.styleMask.contains(.fullScreen) == true
+
+    var body: some View {
+        Group { controls }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in fullScreen = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in fullScreen = false }
+    }
+
+    @ViewBuilder private var controls: some View {
+        if connection.phase == .connecting { ProgressView().controlSize(.mini).padding(.horizontal, 4) }
+        if connection.phase == .connected {
+            // The desktop follows the view's size, so full screen gives it the whole display.
+            PaneIconButton(symbol: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                           help: fullScreen ? "Exit full screen" : "Full screen") { NSApp.keyWindow?.toggleFullScreen(nil) }
+                .accessibilityIdentifier("desktopFullScreenButton")
+        }
+        if connection.phase != .idle {
+            PaneIconButton(symbol: "bolt.horizontal.circle", help: "Disconnect") { connection.disconnect() }
+                .accessibilityIdentifier("desktopDisconnectButton")
+        }
+    }
+}
+
+struct SessionPane: View {
+    @ObservedObject var model: WorkspaceModel
+    @ObservedObject var tab: SessionTab
+    let compact: Bool
+    let dockedFiles: Bool
+    /// Square, edge-to-edge drawing for the Classic and Workbench layouts.
+    let flat: Bool
+    /// Classic layouts drop the pane header for a lone connected pane: the tab and status bar say the same.
+    let showsHeader: Bool
+    /// A session in its own window has no file sidebar, so its header opens the transfer window instead.
+    var transferButton = false
+    @State private var forwarding = false
+    @AppStorage(TerminalPreferences.opacityKey) private var terminalOpacity = 1.0
+    @State private var reviewedHostKey: HostKeyChange?
+    @State private var confirmingVaultRemoval = false
+    @State private var keyNeedsPassphrase = true
+    @State private var jumpKeyNeedsPassphrase = true
+    init(model: WorkspaceModel, tab: SessionTab, compact: Bool = false, dockedFiles: Bool = false, flat: Bool = false, showsHeader: Bool = true,
+         transferButton: Bool = false) {
+        self.model = model; self.tab = tab; self.compact = compact
+        self.dockedFiles = dockedFiles; self.flat = flat; self.showsHeader = showsHeader; self.transferButton = transferButton
+    }
+    private var live: Bool { tab.connected || tab.isLocal }
+    var body: some View {
+        if let desktop = tab.desktop {
+            // The same slim header as a terminal, so every kind of session reads alike.
+            VStack(spacing: 0) {
+                if showsHeader || !live { header }
+                RemoteDesktopPane(model: model, tab: tab, connection: desktop)
+            }
+        } else {
+            terminalPane
+        }
+    }
+
+    private var terminalPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if showsHeader || !live || tab.busy { header }
+            VStack(alignment: .leading, spacing: 10) {
+                if live {
+                    status
+                } else {
+                    // A split pane can be short and narrow: the sign-in form scrolls rather than being cut off, and
+                    // the terminal below only appears when it still holds output from before the connection dropped.
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            connectionForm
+                            status
+                        }
+                        .padding(1)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(maxHeight: tab.transportLost ? 260 : .infinity, alignment: .top)
+                    .layoutPriority(1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                if live || tab.transportLost { content }
+            }
+            .padding(flat ? (live ? 0 : 10) : compact ? 6 : 10)
+        }
+        .animation(.easeOut(duration: 0.2), value: tab.connected)
+        .overlay {
+            // A tagged environment frames the pane in its color, so production stands out in a split.
+            if let environment = tab.environment {
+                RoundedRectangle(cornerRadius: flat ? 0 : 10, style: .continuous)
+                    .strokeBorder(environment.color.opacity(environment == .production ? 0.85 : 0.6), lineWidth: environment == .production ? 2 : 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .modifier(AgentReview(model: model, tab: tab, visible: model.split?.contains(tab.id) != true || model.selection == tab.id))
+        .alert(T("Run this command?"), isPresented: Binding(get: { tab.riskyCommand != nil }, set: { _ in }), presenting: tab.riskyCommand) { _ in
+            Button(T("Cancel"), role: .cancel) { model.confirmRiskyCommand(tab, run: false) }
+            Button(T("Run"), role: .destructive) { model.confirmRiskyCommand(tab, run: true) }
+        } message: { prompt in
+            Text(String(format: T("This session is tagged %@, and the command matches a pattern in Settings > Safety.\n\n%@"),
+                        T(prompt.environment.title), prompt.command))
+        }
+        .textFieldStyle(.roundedBorder)
+        .loginChallengeSheet(model: model, tab: tab, visible: model.split?.contains(tab.id) != true || model.selection == tab.id)
+        .sheet(item: visibleHostKey, onDismiss: { model.answerHostKey(tab, approve: false) }) { prompt in
+            VStack(alignment: .leading, spacing: 18) {
+                Label(T("Verify this server"), systemImage: "key.horizontal").font(.title2.bold())
+                Text(prompt.endpoint).font(.headline)
+                Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
+                Text(prompt.fingerprint).font(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier("hostFingerprint")
+                HStack { Button(T("Cancel")) { model.answerHostKey(tab, approve: false) }; Spacer(); Button(T("Trust and connect")) { model.answerHostKey(tab, approve: true) }.buttonStyle(.borderedProminent).accessibilityIdentifier("trustHostButton") }
+            }.padding(24).frame(width: 530)
+        }
+        .sheet(item: $reviewedHostKey) { change in
+            VStack(alignment: .leading, spacing: 14) {
+                Label(T("Host key changed"), systemImage: "exclamationmark.shield").font(.title2.bold())
+                Text(change.endpoint).font(.headline).textSelection(.enabled)
+                Text(T("Confirm the new fingerprint from the server console or with your administrator before updating the saved key."))
+                    .fixedSize(horizontal: false, vertical: true)
+                fingerprint(T("Saved fingerprint"), value: change.savedFingerprint)
+                fingerprint(T("New fingerprint"), value: change.receivedFingerprint)
+                HStack {
+                    Spacer()
+                    Button(T("Cancel")) { reviewedHostKey = nil }.keyboardShortcut(.cancelAction)
+                    Button(T("Update key and reconnect"), role: .destructive) {
+                        reviewedHostKey = nil
+                        Task { await model.updateHostKeyAndReconnect(tab, change: change) }
+                    }
+                    .accessibilityIdentifier("updateHostKeyButton")
+                }
+            }
+            .padding(24).frame(width: 555)
+        }
+        .sheet(isPresented: $forwarding) { PortForwardingView(model: model, tab: tab) }
+        .task { if CommandLine.arguments.contains("--capture-files") { tab.showsFiles = true } }
+        .task(id: tab.connected) { if tab.connected { await showSelectedPanel() } }
+        .onChange(of: tab.identityPath) { _, _ in tab.password = ""; tab.keyPassphrase = ""; tab.error = nil }
+        .task(id: tab.identityPath) { keyNeedsPassphrase = await Self.needsPassphrase(tab.identityPath) }
+        .task(id: model.sessionTree.node(tab.jumpSessionID)?.connection?.identityPath) {
+            jumpKeyNeedsPassphrase = await Self.needsPassphrase(model.sessionTree.node(tab.jumpSessionID)?.connection?.identityPath)
+        }
+        .onChange(of: tab.useAgent) { _, _ in tab.password = "" }
+        .onChange(of: tab.jumpSessionID) { _, id in
+            tab.jumpSecret = ""
+            if id != nil { tab.useProxy = false }
+        }
+    }
+
+    /// Connection progress and the last error, shown above the terminal or under the sign-in form.
+    @ViewBuilder private var status: some View {
+        if let progress = tab.progress { ProgressView(value: progress).tint(model.theme.accent.color) }
+        if let error = tab.error {
+            HStack(alignment: .top) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text(T(error)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if let change = tab.hostKeyChange, !tab.busy {
+                    Button(T("Review host key…")) { reviewedHostKey = change }
+                        .foregroundStyle(model.theme.foreground.color)
+                        .accessibilityIdentifier("reviewHostKeyButton")
+                }
+                Button { tab.error = nil; tab.hostKeyChange = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+            }.font(.callout).foregroundStyle(.red).padding(8).background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    /// Remote files live in the file sidebar, the SFTP rail, or the transfer window, so a pane always shows its terminal.
+    @ViewBuilder private var content: some View {
+        if tab.connected && !tab.terminalReady && !tab.terminalStarting && tab.ftpSecurity == nil {
+            Button(T("Open terminal")) { Task { await model.startTerminal(tab) } }
+        }
+        TerminalDisplay(tab: tab, model: model)
+            .background { if terminalOpacity < 1 { TerminalBackdrop() } }
+            .overlay(alignment: .topTrailing) { TerminalFindBar(model: model, tab: tab) }
+            .clipShape(RoundedRectangle(cornerRadius: flat ? 0 : 8)).accessibilityIdentifier("terminalOutput")
+    }
+
+    private static func needsPassphrase(_ path: String?) async -> Bool {
+        guard let path else { return false }
+        return await Task.detached { SSHPrivateKeyFile.needsPassphrase(at: URL(fileURLWithPath: path)) }.value
+    }
+
+    /// A thin Termius-style bar: what the pane is, and a few icon actions. Drag it to move the pane.
+    private var header: some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 7) {
+                Circle().fill(tab.connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+                Image(systemName: tab.container?.tool.symbol ?? (tab.isLocal ? "apple.logo" : "network")).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(tab.container != nil ? tab.host : tab.isLocal ? "127.0.0.1" : tab.host.isEmpty ? T("New connection") : tab.host)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced)).lineLimit(1)
+                Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                if let title = tab.programTitle {
+                    Text(title).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        .help(title)
+                }
+                if tab.busy || tab.terminalStarting { ProgressView().controlSize(.mini) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onDrag { PaneDrag.provider(for: tab.id) }
+            .help(T("Drag onto a pane to split it"))
+
+            if let environment = tab.environment { EnvironmentBadge(environment: environment) }
+            RecordingIndicator(model: model, tab: tab)
+            LogIndicator(model: model, tab: tab, logs: model.logs)
+            if tab.readOnly {
+                PaneIconButton(symbol: "lock.fill", active: true, activeColor: .orange, help: "Read-only: click to allow typing") {
+                    model.toggleReadOnly(tab)
+                }
+                .accessibilityIdentifier("readOnlyButton")
+            }
+            if let desktop = tab.desktop { DesktopHeaderControls(connection: desktop) }
+            else { CommandStatusButton(model: model, tab: tab) }
+            if transferButton && tab.connected && !tab.isLocal {
+                PaneIconButton(symbol: "folder", help: "Show this server's files in the main window") { model.openFileTransfer(for: tab) }
+                    .accessibilityIdentifier("fileTransferButton")
+            }
+            if !tab.isLocal && tab.desktop == nil {
+                PaneIconButton(symbol: "arrow.left.arrow.right", help: "Port forwarding") { forwarding = true }
+                    .accessibilityIdentifier("portForwardingButton")
+            }
+            if model.split?.contains(tab.id) == true {
+                PaneIconButton(symbol: "dot.radiowaves.left.and.right", active: model.broadcastInput, activeColor: .orange,
+                               help: model.broadcastInput ? "Stop typing into all panes" : "Type into all panes") { model.toggleBroadcastInput() }
+                    .accessibilityIdentifier("broadcastInputButton")
+                let maximized = model.maximizedPane == tab.id
+                PaneIconButton(symbol: maximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                               help: maximized ? "Restore pane" : "Maximize pane") {
+                    model.toggleMaximizedPane(tab.id)
+                }
+                .accessibilityIdentifier("maximizePaneButton")
+            }
+            PaneIconButton(symbol: "xmark", help: tab.connected || tab.busy ? "Disconnect and close this session" : "Close connection") {
+                model.requestClose(tab)
+            }
+            .accessibilityIdentifier("disconnectButton")
+        }
+        .padding(.leading, 10).padding(.trailing, 6)
+        .frame(height: 30)
+        .background(model.theme.header.color.opacity(0.6))
+        .overlay(alignment: .bottom) { Rectangle().fill(model.theme.foreground.color.opacity(0.07)).frame(height: 1) }
+    }
+
+    private var subtitle: String {
+        // "rdp, alice" like "ssh, alice".
+        if let desktop = tab.desktop {
+            return ([desktop.profile.tool.rawValue] + [desktop.profile.user].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: ", ")
+        }
+        if !tab.connected && !tab.busy { return T(tab.status) }
+        if let container = tab.container { return container.tool.title }
+        if tab.isLocal { return "local, \(tab.username)" }
+        return "ssh, \(tab.username)"
+    }
+
+    private var isNewConnection: Bool { tab.newConnectionType != nil && tab.savedSessionID == nil && !tab.transportLost }
+
+    @ViewBuilder private var connectionForm: some View {
+        if isNewConnection { newConnectionSections } else { sshForm.padding(14).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10)) }
+    }
+
+    /// A new connection lists SSH, RDP, VNC, and other connections from top to bottom; the chosen one is open for filling in.
+    private var newConnectionSections: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(NewConnectionType.allCases, id: \.self) { type in
+                let open = (tab.newConnectionType ?? .ssh) == type
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        NewConnectionType.last = type   // The next new connection opens here.
+                        withAnimation(.easeOut(duration: 0.15)) { tab.newConnectionType = type }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 12)
+                            Image(systemName: type.editorTool?.symbol ?? "terminal").frame(width: 18)
+                                .foregroundStyle(open ? Color.accentColor : .secondary)
+                            Text(T(type.shortTitle)).font(.system(size: 13, weight: .semibold))
+                            Text(T(type.subtitle)).font(.system(size: 12)).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(tab.busy)
+                    .accessibilityIdentifier("newConnection-" + type.rawValue)
+                    if open {
+                        if let tool = type.editorTool {
+                            ContainerSessionEditor(model: model, editing: nil, tool: tool.opensDesktop ? tool : NewConnectionType.lastOtherTool,
+                                                   draftTab: tab).id(tool)
+                        } else {
+                            sshForm
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, open ? 14 : 10)
+                .background(.quaternary.opacity(open ? 0.4 : 0.2), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private var sshForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            let credentialLayout = compact ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) :
+                AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+            credentialLayout {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    field("Host") { TextField("server.example.com", text: $tab.host).accessibilityIdentifier("hostField") }
+                    field("Port") { TextField("22", text: $tab.port).accessibilityIdentifier("portField") }.frame(width: 55)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    field("Username") { TextField(T("Username"), text: $tab.username).accessibilityIdentifier("usernameField") }
+                    if tab.identityPath == nil && tab.useAgent {
+                        field("Authentication") {
+                            Label(T("Keys from the SSH agent"), systemImage: "key.horizontal").foregroundStyle(.secondary)
+                        }
+                    } else if tab.identityPath == nil {
+                        field("Password or vault entry") { SecureField(T("Password or vault entry"), text: $tab.password).accessibilityIdentifier("passwordField") }
+                    } else if keyNeedsPassphrase {
+                        // Only an encrypted key file has a passphrase; the Gloamux key and unencrypted keys do not.
+                        field("Key passphrase") { SecureField(T("Key passphrase"), text: $tab.keyPassphrase) }
+                    }
+                }
+            }.onSubmit { Task { await model.connect(tab) } }
+            // One row when the pane is wide enough; in a narrow split pane, the proxy settings move to a second row.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    keyOptions
+                    if tab.jumpSessionID == nil {
+                        Divider().frame(height: 16)
+                        proxyOptions(hostWidth: 170)
+                    }
+                    Spacer(minLength: 8)
+                    savePasswordButton
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack { keyOptions; Spacer(minLength: 8); savePasswordButton }
+                        VStack(alignment: .leading, spacing: 8) { keyOptions; savePasswordButton }
+                    }
+                    if tab.jumpSessionID == nil {
+                        HStack { proxyOptions(hostWidth: nil) }
+                    }
+                }
+            }
+            HStack {
+                JumpHostPicker(store: model.sessionTree, excluding: tab.savedSessionID, selection: $tab.jumpSessionID)
+                    .frame(maxWidth: 290)
+                if let jump = model.sessionTree.node(tab.jumpSessionID)?.connection,
+                   jump.identityPath == nil ? jump.usesAgent != true : jumpKeyNeedsPassphrase {
+                    let title = jump.identityPath == nil ? "Jump host password" : "Jump host key passphrase"
+                    SecureField(T(title), text: $tab.jumpSecret).frame(maxWidth: 220)
+                }
+                // The main button sits where filling in ends, as in a macOS dialog; Return does the same.
+                Spacer(minLength: 8)
+                if !tab.busy {
+                    Button(T(tab.transportLost ? "Reconnect" : "Connect")) { Task { await model.connect(tab) } }
+                        .buttonStyle(.borderedProminent).tint(model.theme.accent.color)
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("connectButton")
+                }
+            }
+        }
+        .disabled(tab.busy)
+    }
+
+    @ViewBuilder private var keyOptions: some View {
+        IdentityFilePicker(path: $tab.identityPath) { Task { await model.removeKey(from: tab) } }
+        Toggle(T("SSH agent"), isOn: $tab.useAgent).toggleStyle(.checkbox).fixedSize()
+            .help(T("Offer the SSH agent's keys before the key file"))
+    }
+
+    @ViewBuilder private func proxyOptions(hostWidth: CGFloat?) -> some View {
+        Toggle(T("Proxy"), isOn: $tab.useProxy).toggleStyle(.checkbox).fixedSize()
+        if tab.useProxy {
+            ProxyKindPicker(kind: $tab.proxyKind).frame(width: 92)
+            TextField(T("Proxy host"), text: $tab.proxyHost).frame(width: hostWidth).frame(minWidth: 90)
+            TextField(T("Port"), text: $tab.proxyPort).frame(width: 65)
+        }
+    }
+
+    @ViewBuilder private var savePasswordButton: some View {
+        // Without a vault there is nothing to add to: passwords that sign in are remembered on this Mac.
+        if tab.identityPath == nil && !tab.useAgent && model.vaultState != "Not configured" {
+            let stored = model.vaultEntries.contains(tab.credentialID)
+            if stored {
+                // Already in the vault: a mark that opens update and remove.
+                let unlocked = model.vaultState == "Unlocked"
+                Menu {
+                    Button(T("Update vault")) { Task { await model.savePassword(tab) } }
+                        .disabled(!unlocked || tab.password.isEmpty)
+                    Button(T("Remove from vault…"), role: .destructive) { confirmingVaultRemoval = true }
+                        .disabled(!unlocked)
+                    if !unlocked { Text(T("Unlock the password vault to change it.")) }
+                } label: {
+                    Label(T("In vault"), systemImage: "checkmark.shield.fill")
+                }
+                .menuStyle(.button).fixedSize()
+                .tint(.green).foregroundStyle(.green)
+                .help(T("This account's password is saved in the password vault."))
+                .accessibilityIdentifier("inVaultMark")
+                .confirmationDialog(T("Remove this password from the vault?"), isPresented: $confirmingVaultRemoval) {
+                    Button(T("Remove"), role: .destructive) { Task { await model.removeFromVault(tab) } }
+                    Button(T("Cancel"), role: .cancel) {}
+                } message: {
+                    Text(T("The next connection to this account asks for the password."))
+                }
+            } else {
+                // Not "save password": signing in already saves it while the vault is unlocked.
+                Button {
+                    Task { await model.savePassword(tab) }
+                } label: {
+                    Label(T("Add to vault"), systemImage: "lock.shield")
+                }
+                .disabled(model.vaultState != "Unlocked")
+                .help(T(model.vaultState != "Unlocked"
+                        ? "Unlock the password vault to keep a copy of this password there."
+                        : "Keeps a copy of this password in the master-password vault. Passwords that sign in are remembered on this Mac without it."))
+                .accessibilityIdentifier("addToVaultButton")
+            }
+        }
+    }
+
+    private var visibleHostKey: Binding<HostKeyPrompt?> {
+        Binding(get: {
+            let inSplit = model.split?.contains(tab.id) == true
+            return !inSplit || model.selection == tab.id ? tab.hostKeyPrompt : nil
+        }, set: { _ in })
+    }
+
+    private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) { Text(T(title)).font(.caption).foregroundStyle(.secondary); content() }
+    }
+    private func fingerprint(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.body.monospaced()).textSelection(.enabled)
+        }
+    }
+    private func showSelectedPanel() async {
+        guard tab.connected else { return }
+        // A session that opened to its files waits for Open terminal instead of asking for one.
+        if (!tab.showsFiles || dockedFiles) && !tab.terminalReady { await model.startTerminal(tab) }
+    }
+}
+
+
+/// Redraws its content when the tab changes, for views drawn by a parent that observes only the workspace.
+struct TabObserver<Content: View>: View {
+    @ObservedObject var tab: SessionTab
+    @ViewBuilder let content: (SessionTab) -> Content
+    var body: some View { content(tab) }
+}

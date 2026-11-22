@@ -1,0 +1,31 @@
+# Local research, diagnostics, and agent workspace configuration
+/analysis/
+/.agent-memory/
+/.agents/
+/.claude/
+/.trail/
+/AGENTS.md
+/CLAUDE.md
+
+# SwiftPM, Xcode, and app build output
+.build/
+Gloamux/RDP/target/
+.swiftpm/
+DerivedData/
+xcuserdata/
+build/
+*.app/
+*.dmg
+
+# Machine and connection data
+.DS_Store
+.env
+.env.*
+sessions.json
+known-hosts.json
+password-vault.json
+appearance.json
+quick-commands.json
+layout.json
+*.pem
+*.key
