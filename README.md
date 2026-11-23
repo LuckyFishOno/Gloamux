@@ -13,7 +13,7 @@ Gloamux is a native macOS client for SSH, file transfer, and remote desktops. Ke
 - **Sign in once** · Passwords stay on this Mac behind the Secure Enclave, with an optional password vault.
 - **Safety** · Environment tags for production servers and confirmation before risky commands.
 - **Bring your sessions** · Import from Xshell, MobaXterm, PuTTY, OpenSSH, or CSV, and export without passwords.
-- **Three layouts** · Default, Classic, or Workbench, in English or Traditional Chinese.
+- **Three layouts** · Default, Classic, or Workbench. The interface is available in English, Traditional Chinese, Simplified Chinese, Japanese, and Spanish.
 
 The [feature guide](FEATURES.md) explains every feature in detail.
 

@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import App
 
@@ -61,6 +62,49 @@ import XCTest
         model.selectTab(local.id)
         XCTAssertEqual(model.currentOpenTabs(), WorkspaceModel.OpenTabs(entries: [.saved(node), .local], selected: 1),
                        "an unsaved connection is left out")
+    }
+
+    func testNewTabsOpenALocalTerminalWhenSetAndNewConnectionKeepsTheForm() async throws {
+        let key = TerminalPreferences.newTabLocalKey
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
+        let model = try WorkspaceModel(storage: storage())
+
+        UserDefaults.standard.removeObject(forKey: key)
+        let form = model.newTab()
+        XCTAssertFalse(form.isLocal, "By default a new tab is the New connection form")
+        XCTAssertNotNil(form.newConnectionType)
+
+        UserDefaults.standard.set(true, forKey: key)
+        let local = model.newTab()
+        XCTAssertTrue(local.isLocal)
+        XCTAssertEqual(model.selection, local.id)
+        XCTAssertFalse(model.newConnectionTab().isLocal, "New connection still opens the form")
+        for tab in model.tabs where tab.isLocal { await model.closeTab(tab) }
+    }
+
+    func testSelectingLocalTabPublishesItsKindBeforeFileSidebarRefresh() async throws {
+        let model = try WorkspaceModel(storage: storage())
+        var selectedKinds: [Bool] = []
+        let selection = model.$selection.dropFirst().sink { id in
+            if let tab = model.tabs.first(where: { $0.id == id }) { selectedKinds.append(tab.isLocal) }
+        }
+        _ = model.addLocalTab()
+        XCTAssertEqual(selectedKinds, [true])
+        selection.cancel()
+
+        let connectionForm = model.newConnectionTab()
+        XCTAssertFalse(connectionForm.isLocal)
+        var sidebarRefreshes = 0
+        let workspace = model.objectWillChange.sink {
+            if model.selected === connectionForm, connectionForm.isLocal { sidebarRefreshes += 1 }
+        }
+        model.openLocalTerminal(in: connectionForm)
+        XCTAssertEqual(model.selection, connectionForm.id)
+        XCTAssertTrue(connectionForm.isLocal)
+        XCTAssertGreaterThan(sidebarRefreshes, 0, "The existing selection must refresh from remote to local files")
+        workspace.cancel()
+        await model.closeAll()
     }
 
     func testWindowsShareSavedSessionsAndKeepIndependentTabs() async throws {

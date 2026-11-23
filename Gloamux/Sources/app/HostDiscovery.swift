@@ -245,7 +245,7 @@ struct HostDiscoveryView: View {
                 }
             }
             if let error = discovery.error {
-                Label(T(error), systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout).textSelection(.enabled)
+                Label(T(error), systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).appFont(.callout).textSelection(.enabled)
             }
             Table(discovery.hosts) {
                 TableColumn("") { host in
@@ -259,7 +259,7 @@ struct HostDiscoveryView: View {
                         Text(host.name)
                     }
                 }
-                TableColumn(T("Address")) { host in Text(host.port == 22 ? host.host : "\(host.host):\(host.port)").font(.system(.body, design: .monospaced)) }
+                TableColumn(T("Address")) { host in Text(host.port == 22 ? host.host : "\(host.host):\(host.port)").appFont(.system(.body, design: .monospaced)) }
                 TableColumn(T("Details")) { host in Text(host.detail).foregroundStyle(.secondary) }
             }
             .overlay {
@@ -276,7 +276,7 @@ struct HostDiscoveryView: View {
                     TextField(T("Username"), text: $discovery.username).frame(width: 160)
                 }
                 Spacer()
-                if let added { Text(added).foregroundStyle(.secondary).font(.callout) }
+                if let added { Text(added).foregroundStyle(.secondary).appFont(.callout) }
                 Button(String(format: T("Add %d sessions"), discovery.chosen.count)) { add() }
                     .buttonStyle(.borderedProminent)
                     .disabled(discovery.chosen.isEmpty)
@@ -332,7 +332,7 @@ struct HostKeyHistoryView: View {
                     Button(T("Clear history…")) { confirmingClear = true }.disabled(hosts.history.isEmpty)
                 }
             }
-            if let error { Text(T(error)).foregroundStyle(.red).font(.callout) }
+            if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
             if page == .trusted { trustedTable } else { historyTable }
         }
         .padding(16)
@@ -363,10 +363,10 @@ struct HostKeyHistoryView: View {
                        fingerprint: (try? KnownHosts.fingerprint(entry.key)) ?? "")
         }.filter { query.isEmpty || $0.endpoint.localizedCaseInsensitiveContains(query) || $0.fingerprint.contains(query) }
         return Table(rows) {
-            TableColumn(T("Host")) { row in Text(row.endpoint).font(.system(.body, design: .monospaced)) }
-            TableColumn(T("Type")) { row in Text(row.type).font(.system(size: 11, design: .monospaced)) }.width(min: 90, ideal: 120)
+            TableColumn(T("Host")) { row in Text(row.endpoint).appFont(.system(.body, design: .monospaced)) }
+            TableColumn(T("Type")) { row in Text(row.type).appFont(.system(size: 11, design: .monospaced)) }.width(min: 90, ideal: 120)
             TableColumn(T("Fingerprint")) { row in
-                Text(row.fingerprint).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                Text(row.fingerprint).appFont(.system(size: 11, design: .monospaced)).textSelection(.enabled)
             }
             TableColumn("") { row in
                 Button(T("Remove")) { removing = row.endpoint }.buttonStyle(.borderless)
@@ -379,15 +379,15 @@ struct HostKeyHistoryView: View {
         let events = hosts.history.reversed().filter { query.isEmpty || $0.endpoint.localizedCaseInsensitiveContains(query) || $0.fingerprint.contains(query) }
         return Table(Array(events)) {
             TableColumn(T("Date")) { event in Text(event.date, format: .dateTime.year().month().day().hour().minute()) }.width(min: 120, ideal: 140)
-            TableColumn(T("Host")) { event in Text(event.endpoint).font(.system(.body, design: .monospaced)) }
+            TableColumn(T("Host")) { event in Text(event.endpoint).appFont(.system(.body, design: .monospaced)) }
             TableColumn(T("Action")) { event in
                 Label(T(title(event.action)), systemImage: symbol(event.action)).foregroundStyle(color(event.action))
             }.width(min: 90, ideal: 110)
             TableColumn(T("Fingerprint")) { event in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(event.fingerprint).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                    Text(event.fingerprint).appFont(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                     if let previous = event.previousFingerprint {
-                        Text(T("Before:") + " " + previous).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                        Text(T("Before:") + " " + previous).appFont(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
             }
@@ -456,90 +456,116 @@ struct ContainerSessionEditor: View {
     }
 
     var body: some View {
-        Form {
+        EditorContainer(inline: draftTab != nil) {
             if draftTab == nil || !tool.opensDesktop {
-                Picker(T("Type"), selection: $tool) {
-                    ForEach(availableTools) { tool in Label(T(tool.title), systemImage: tool.symbol).tag(tool) }
+                sizedRow("Type", width: 240) {
+                    Picker(T("Type"), selection: $tool) {
+                        ForEach(availableTools) { tool in Label(T(tool.title), systemImage: tool.symbol).tag(tool) }
+                    }
+                    .disabled(editing != nil && !tool.opensDesktop)
                 }
-                .disabled(editing != nil && !tool.opensDesktop)
             }
-            HStack {
-                TextField(T(targetLabel), text: $target)
-                if !tool.usesHost {
-                    Menu {
-                        if choices.isEmpty { Text(T(listing ? "Loading…" : "Nothing found")) }
-                        ForEach(choices, id: \.self) { choice in Button(choice) { target = choice; if name.isEmpty { name = (choice as NSString).lastPathComponent } } }
-                    } label: { Image(systemName: "list.bullet") }
-                    .menuStyle(.borderlessButton).fixedSize()
-                    .help(T(tool == .serial ? "Choose a connected device" : "Choose a running one"))
-                    .simultaneousGesture(TapGesture().onEnded { list() })
+            sizedRow(targetLabel) {
+                HStack {
+                    TextField(T(targetLabel), text: $target)
+                    if !tool.usesHost {
+                        Menu {
+                            if choices.isEmpty { Text(T(listing ? "Loading…" : "Nothing found")) }
+                            ForEach(choices, id: \.self) { choice in Button(choice) { target = choice; if name.isEmpty { name = (choice as NSString).lastPathComponent } } }
+                        } label: { Image(systemName: "list.bullet") }
+                        .menuStyle(.borderlessButton).fixedSize()
+                        .help(T(tool == .serial ? "Choose a connected device" : "Choose a running one"))
+                        .simultaneousGesture(TapGesture().onEnded { list() })
+                    }
                 }
             }
             switch tool {
             case .mosh, .telnet, .rdp, .vnc:
                 if tool == .mosh || tool == .rdp {
-                    TextField(T("User"), text: $user, prompt: tool == .mosh ? Text(NSUserName()) : nil)
+                    sizedRow("User", width: 240) {
+                        TextField(T("User"), text: $user, prompt: tool == .mosh ? Text(NSUserName()) : nil)
+                    }
                 }
-                TextField(T(tool == .mosh ? "SSH port" : "Port"), text: $port, prompt: Text(String(tool.defaultPort)))
+                let portLabel = tool == .mosh ? "SSH port" : "Port"
+                sizedRow(portLabel, width: 104) {
+                    TextField(T(portLabel), text: $port, prompt: Text(String(tool.defaultPort)))
+                }
                 if tool.opensDesktop {
-                    HStack(spacing: 6) {
-                        Picker(T("Through SSH"), selection: $gateway) {
-                            Text(T("Direct")).tag(UUID?.none)
-                            ForEach(sshSessions) { node in Text(node.name).tag(Optional(node.id)) }
+                    sizedRow("Through SSH", width: 270) {
+                        HStack(spacing: 8) {
+                            Picker(T("Through SSH"), selection: $gateway) {
+                                Text(T("Direct")).tag(UUID?.none)
+                                ForEach(sshSessions) { node in Text(node.name).tag(Optional(node.id)) }
+                            }
+                            InfoButton(T("Connects to the desktop through an SSH tunnel from this saved session. The SSH connection encrypts the traffic, which plain VNC does not, and reaches desktops only that server can reach. Enter the desktop's address as that server sees it."))
                         }
-                        InfoButton(T("Connects to the desktop through an SSH tunnel from this saved session. The SSH connection encrypts the traffic, which plain VNC does not, and reaches desktops only that server can reach. Enter the desktop's address as that server sees it."))
                     }
                 }
             case .serial:
-                Picker(T("Speed"), selection: $baud) {
-                    ForEach(SerialPort.Settings.speeds, id: \.self) { Text(String($0)).tag($0) }
+                sizedRow("Speed", width: 140) {
+                    Picker(T("Speed"), selection: $baud) {
+                        ForEach(SerialPort.Settings.speeds, id: \.self) { Text(String($0)).tag($0) }
+                    }
                 }
-                Picker(T("Data bits"), selection: formatPart(0)) {
-                    ForEach(["8", "7", "6", "5"], id: \.self) { Text($0).tag(Character($0)) }
+                sizedRow("Data bits", width: 200) {
+                    Picker(T("Data bits"), selection: formatPart(0)) {
+                        ForEach(["8", "7", "6", "5"], id: \.self) { Text($0).tag(Character($0)) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                Picker(T("Parity"), selection: formatPart(1)) {
-                    Text(T("None")).tag(Character("N"))
-                    Text(T("Odd")).tag(Character("O"))
-                    Text(T("Even")).tag(Character("E"))
+                sizedRow("Parity", width: 224) {
+                    Picker(T("Parity"), selection: formatPart(1)) {
+                        Text(T("None")).tag(Character("N"))
+                        Text(T("Odd")).tag(Character("O"))
+                        Text(T("Even")).tag(Character("E"))
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                Picker(T("Stop bits"), selection: formatPart(2)) {
-                    Text("1").tag(Character("1"))
-                    Text("2").tag(Character("2"))
+                sizedRow("Stop bits", width: 124) {
+                    Picker(T("Stop bits"), selection: formatPart(2)) {
+                        Text("1").tag(Character("1"))
+                        Text("2").tag(Character("2"))
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                Picker(T("Flow control"), selection: $flow) {
-                    Text(T("None")).tag(SerialPort.Settings.Flow.none)
-                    Text("RTS/CTS").tag(SerialPort.Settings.Flow.hardware)
-                    Text("DTR/DSR").tag(SerialPort.Settings.Flow.dtrDsr)
-                    Text("XON/XOFF").tag(SerialPort.Settings.Flow.software)
+                sizedRow("Flow control", width: 320) {
+                    Picker(T("Flow control"), selection: $flow) {
+                        Text(T("None")).tag(SerialPort.Settings.Flow.none)
+                        Text("RTS/CTS").tag(SerialPort.Settings.Flow.hardware)
+                        Text("DTR/DSR").tag(SerialPort.Settings.Flow.dtrDsr)
+                        Text("XON/XOFF").tag(SerialPort.Settings.Flow.software)
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                Picker(T("Text encoding"), selection: $encoding) {
-                    ForEach(TerminalEncoding.allCases, id: \.self) { Text($0.title).tag($0) }
+                sizedRow("Text encoding", width: 180) {
+                    Picker(T("Text encoding"), selection: $encoding) {
+                        ForEach(TerminalEncoding.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
             default:
-                TextField(T(tool == .ssm ? "AWS profile" : "Context"), text: $context)
-                if tool != .docker { TextField(T(tool == .ssm ? "Region" : "Namespace"), text: $namespace) }
-                if tool == .kubectl { TextField(T("Container in the pod"), text: $container) }
-                if tool != .ssm { TextField(T("Shell"), text: $shell, prompt: Text("/bin/sh")) }
-                if tool == .docker { TextField(T("User"), text: $user) }
+                let contextLabel = tool == .ssm ? "AWS profile" : "Context"
+                sizedRow(contextLabel) { TextField(T(contextLabel), text: $context) }
+                if tool != .docker {
+                    let namespaceLabel = tool == .ssm ? "Region" : "Namespace"
+                    sizedRow(namespaceLabel) { TextField(T(namespaceLabel), text: $namespace) }
+                }
+                if tool == .kubectl { sizedRow("Container in the pod") { TextField(T("Container in the pod"), text: $container) } }
+                if tool != .ssm { sizedRow("Shell") { TextField(T("Shell"), text: $shell, prompt: Text("/bin/sh")) } }
+                if tool == .docker { sizedRow("User") { TextField(T("User"), text: $user) } }
             }
-            TextField(T("Name"), text: $name)
-            Picker(T("Environment"), selection: $environment) {
-                Text(T("None")).tag(SessionEnvironment?.none)
-                ForEach(SessionEnvironment.allCases) { Text(T($0.title)).tag(Optional($0)) }
-            }
-            if let session = draft, session.tool.runsCommand { LabeledContent(T("Command")) { Text(session.commandLine).font(.system(size: 11, design: .monospaced)).textSelection(.enabled) } }
-            if let error { Text(T(error)).foregroundStyle(.red).font(.callout) }
+            sizedRow("Name") { TextField(T("Name"), text: $name) }
+            if draftTab == nil { environmentPicker }
+            if let session = draft, session.tool.runsCommand { LabeledContent(T("Command")) { Text(session.commandLine).appFont(.system(size: 11, design: .monospaced)).textSelection(.enabled) } }
+            if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
             if draftTab != nil {
-                // A new connection: connect is the main step, saving is optional.
-                HStack {
-                    Spacer()
-                    Button(T("Save")) { save() }.disabled(draft == nil || Optional(name).nonEmpty == nil)
-                    Button(T("Connect")) { open() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                        .disabled(draft == nil)
+                LabeledContent(T("Environment")) {
+                    // One row: the picker gives up width before the buttons do. ViewThatFits measured both arrangements.
+                    HStack {
+                        environmentPicker.labelsHidden().frame(minWidth: 120, maxWidth: 200)
+                        Spacer(minLength: 12)
+                        inlineActions
+                    }
+                    .padding(.vertical, 2)
                 }
             } else {
                 HStack {
@@ -558,6 +584,37 @@ struct ContainerSessionEditor: View {
             if draftTab != nil { NewConnectionType.lastOtherTool = current }
             choices = []
             if previous.opensDesktop, Int(port) == previous.defaultPort { port = "" }
+        }
+    }
+
+    private var environmentPicker: some View {
+        Picker(T("Environment"), selection: $environment) {
+            Text(T("None")).tag(SessionEnvironment?.none)
+            ForEach(SessionEnvironment.allCases) { Text(T($0.title)).tag(Optional($0)) }
+        }
+    }
+
+    private var inlineActions: some View {
+        HStack {
+            Button(T("Save")) { save() }.disabled(draft == nil || Optional(name).nonEmpty == nil)
+            Button(T("Connect")) { open() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                .disabled(draft == nil)
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder private func sizedRow<Content: View>(_ title: String, width: CGFloat = 400,
+                                                      @ViewBuilder content: () -> Content) -> some View {
+        if draftTab != nil {
+            LabeledContent(T(title)) {
+                content()
+                    .labelsHidden()
+                    .padding(.vertical, 2)
+                    .frame(maxWidth: width)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
+            content()
         }
     }
 
@@ -678,8 +735,38 @@ private struct EditorFormStyle: ViewModifier {
     let inline: Bool
 
     func body(content: Content) -> some View {
-        if inline { content.formStyle(.columns).frame(maxWidth: 520, alignment: .leading) }
+        if inline { content.formStyle(.columns).controlSize(.large) }
         else { content.formStyle(.grouped).scrollContentBackground(.hidden) }
+    }
+}
+
+/// The editor's fields: a plain column of labeled rows in the new-connection form, a grouped form elsewhere.
+/// A SwiftUI form measures every row again for its label column, which held up opening a new-connection section.
+private struct EditorContainer<Content: View>: View {
+    let inline: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if inline {
+            VStack(alignment: .leading, spacing: 8) { content }
+                .labeledContentStyle(InlineRowStyle())
+        } else {
+            Form { content }
+        }
+    }
+}
+
+/// A label in a fixed column at the leading side, ending at its field, as in a columns form.
+private struct InlineRowStyle: LabeledContentStyle {
+    @Environment(\.appTextScale) private var scale
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            configuration.label
+                .multilineTextAlignment(.trailing)
+                .frame(width: (130 * scale).rounded(), alignment: .trailing)
+            configuration.content
+        }
     }
 }
 

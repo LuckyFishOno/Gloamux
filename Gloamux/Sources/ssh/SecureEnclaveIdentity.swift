@@ -11,7 +11,8 @@ import Security
 public enum SecureEnclaveSSHIdentity {
     static let prefix = "Gloamux-Secure-Enclave-P256-v1:"
 
-    public static var isAvailable: Bool { SecureEnclave.isAvailable }
+    /// Asked once: views read it on every update.
+    public static let isAvailable: Bool = SecureEnclave.isAvailable
 
     public static func create() throws -> (fileContents: Data, publicKey: String) {
         guard isAvailable,

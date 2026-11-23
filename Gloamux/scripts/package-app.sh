@@ -17,6 +17,7 @@ mkdir -p "$app/Contents/Resources/RemoteDesktopLicenses"
 cp "$bin_dir/GloamuxApp" "$app/Contents/MacOS/Gloamux"
 cp "$rdp_target/release/gloamux-rdp" "$app/Contents/Helpers/gloamux-rdp"
 cp RDP/licenses/*.txt "$app/Contents/Resources/RemoteDesktopLicenses/"
+cp assets/Gloamux.icns "$app/Contents/Resources/Gloamux.icns"
 codesign --force --sign - "$app/Contents/Helpers/gloamux-rdp"
 ln -sf ../../MacOS/Gloamux "$app/Contents/Resources/bin/gloamux"
 ln -sf ../../MacOS/Gloamux "$app/Contents/Resources/bin/gloam"
@@ -45,7 +46,7 @@ else
 fi
 # Empty language folders tell macOS which languages the app has, so its own menus (About, Hide, Quit) and
 # System Settings' per-app language list match the interface text in the resource bundle.
-for language in en zh-Hant; do mkdir -p "$app/Contents/Resources/$language.lproj"; done
+for language in en zh-Hant zh-Hans ja es; do mkdir -p "$app/Contents/Resources/$language.lproj"; done
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,8 +55,9 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>Gloamux</string>
 <key>CFBundleDisplayName</key><string>Gloamux</string>
 <key>CFBundleExecutable</key><string>Gloamux</string>
+<key>CFBundleIconFile</key><string>Gloamux.icns</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
-<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string></array>
+<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>zh-Hans</string><string>ja</string><string>es</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.13.0</string>
 <key>CFBundleVersion</key><string>19</string>

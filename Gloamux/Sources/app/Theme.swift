@@ -36,6 +36,8 @@ public struct WorkspaceTheme: Identifiable, Sendable {
     public var sidebar: ThemeColor { colors["sideBar.background"] ?? background }
     public var header: ThemeColor { colors["titleBar.activeBackground"] ?? sidebar }
     public var tabs: ThemeColor { colors["editorGroupHeader.tabsBackground"] ?? sidebar }
+    /// Right-click and pop-up menus; themes without a menu color use the editor's.
+    public var menu: ThemeColor { colors["menu.background"] ?? background }
     /// Some themes use a faint focus border; the accent marks controls, so it must stay visible.
     public var accent: ThemeColor {
         [colors["focusBorder"], colors["button.background"]].compactMap { $0 }.first { $0.alpha >= 0.5 }
@@ -56,8 +58,8 @@ public struct WorkspaceTheme: Identifiable, Sendable {
         return colors["terminal.ansi" + keys[index]] ?? fallback("#" + (isDark ? dark : light)[index])
     }
     private func fallback(_ hex: String) -> ThemeColor { ThemeColor(hex: hex)! }
-    /// Default and fallback theme: the first preset (Midnight). The former "gloamux" theme was removed;
-    /// a saved "gloamux" preference is treated as stale and falls back to this theme.
+    /// Default and fallback theme: the first preset (Gloam, drawn from the app icon). The former "gloamux" theme was
+    /// removed; a saved "gloamux" preference is treated as stale and falls back to this theme.
     public static let native: WorkspaceTheme = presets[0]
 }
 

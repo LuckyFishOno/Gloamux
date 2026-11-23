@@ -4,86 +4,104 @@ import Terminal
 
 /// The Terminal menu: prompt navigation, shell integration, and recording for the focused session.
 public struct TerminalCommands: Commands {
-    @ObservedObject private var model: WorkspaceModel
-    public init(model: WorkspaceModel) { self.model = model }
+    private let model: WorkspaceModel
+    /// Observed in place of the whole workspace, so these menus rebuild only when what they show changes.
+    @ObservedObject private var state: WorkspaceCommandState
+    public init(model: WorkspaceModel) { self.model = model; state = model.commandState }
 
     public var body: some Commands {
+        let menu = state.snapshot
+        // The toolbar's New menu also lives in the File menu, so its shortcuts work from anywhere in the window.
+        CommandGroup(after: .newItem) {
+            Button(T("New connection")) { model.newConnectionTab() }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            Button(T("New local terminal")) { model.addLocalTab() }
+                .keyboardShortcut("t", modifiers: .command)
+        }
         // Find in the Edit menu, where macOS apps keep it, for the focused terminal.
         CommandGroup(replacing: .textEditing) {
             Button(T("Find…")) { model.showFind() }
                 .keyboardShortcut("f", modifiers: .command)
-                .disabled(model.selected == nil)
+                .disabled(!menu.hasSelection)
             Button(T("Find next")) { model.findAgain(backwards: false) }
                 .keyboardShortcut("g", modifiers: .command)
-                .disabled(model.selected == nil)
+                .disabled(!menu.hasSelection)
             Button(T("Find previous")) { model.findAgain(backwards: true) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
-                .disabled(model.selected == nil)
+                .disabled(!menu.hasSelection)
         }
         CommandGroup(after: .toolbar) {
-            Button(T("Bigger text")) { TerminalPreferences.zoom(1) }
+            // In a session these change its font, as in other terminals; anywhere else, the app's text.
+            Button(T("Bigger text")) { AppTextSize.zoomFocused(1) }
                 .keyboardShortcut("+", modifiers: .command)
-            Button(T("Smaller text")) { TerminalPreferences.zoom(-1) }
+            Button(T("Smaller text")) { AppTextSize.zoomFocused(-1) }
                 .keyboardShortcut("-", modifiers: .command)
-            Button(T("Actual size")) { TerminalPreferences.zoom(0) }
+            Button(T("Actual size")) { AppTextSize.zoomFocused(0) }
                 .keyboardShortcut("0", modifiers: .command)
+            Divider()
+            // The app's text from anywhere, a session included.
+            Button(T("Bigger app text")) { AppTextSize.zoom(1) }
+                .keyboardShortcut("+", modifiers: [.command, .option])
+            Button(T("Smaller app text")) { AppTextSize.zoom(-1) }
+                .keyboardShortcut("-", modifiers: [.command, .option])
+            Button(T("App text actual size")) { AppTextSize.zoom(0) }
+                .keyboardShortcut("0", modifiers: [.command, .option])
             Divider()
         }
         CommandGroup(before: .windowList) {
-            TabCommands(model: model)
+            TabCommands(model: model, menu: menu)
             Divider()
             Button(T("Lock workspace")) { model.lockWorkspace() }
                 .keyboardShortcut("l", modifiers: [.command, .control])
-                .disabled(model.workspaceLocked)
+                .disabled(menu.workspaceLocked)
             Divider()
         }
         CommandMenu(T("Terminal")) {
-            let tab = model.selected
-            let live = tab?.terminalReady == true
+            let live = menu.terminalReady
             Button(T("Command palette…")) { model.showCommandPalette() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             Divider()
             Button(T("Previous prompt")) { model.navigate(.previousPrompt) }
                 .keyboardShortcut(.upArrow, modifiers: .command)
-                .disabled(tab.map { !model.hasShellIntegration($0) } ?? true)
+                .disabled(!menu.hasShellIntegration)
             Button(T("Next prompt")) { model.navigate(.nextPrompt) }
                 .keyboardShortcut(.downArrow, modifiers: .command)
-                .disabled(tab.map { !model.hasShellIntegration($0) } ?? true)
+                .disabled(!menu.hasShellIntegration)
             Button(T("Select output of last command")) { model.navigate(.selectLastOutput) }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-                .disabled(tab?.lastCommand == nil)
-            Button(T("Share with Agents")) { if let tab { model.shareWithAgents(tab, selection: WorkspaceModel.terminalSelection()) } }
-                .disabled(tab == nil || tab?.desktop != nil || !model.agents.enabled)
+                .disabled(!menu.hasLastCommand)
+            Button(T("Share with Agents")) { if let tab = model.selected { model.shareWithAgents(tab, selection: WorkspaceModel.terminalSelection()) } }
+                .disabled(!menu.hasSelection || menu.isDesktop || !menu.agentsEnabled)
             Divider()
-            Button(T("Enable shell integration")) { if let tab { model.installShellIntegration(tab) } }
-                .disabled(!live || tab.map(model.hasShellIntegration) == true)
-            Button(T(tab.map(model.recordings.isRecording) == true ? "Stop recording" : "Start recording")) { model.toggleRecording() }
+            Button(T("Enable shell integration")) { if let tab = model.selected { model.installShellIntegration(tab) } }
+                .disabled(!live || menu.hasShellIntegration)
+            Button(T(menu.recording ? "Stop recording" : "Start recording")) { model.toggleRecording() }
                 .keyboardShortcut("r", modifiers: [.command, .option])
-                .disabled(!live && tab.map(model.recordings.isRecording) != true)
+                .disabled(!live && !menu.recording)
             Button(T("Recordings…")) { model.showRecordings() }
-            Button(T(tab.map(model.logs.isLogging) == true ? "Stop session log" : "Start session log")) { model.toggleLogging() }
+            Button(T(menu.logging ? "Stop session log" : "Start session log")) { model.toggleLogging() }
                 .keyboardShortcut("l", modifiers: [.command, .option])
-                .disabled(!live && tab.map(model.logs.isLogging) != true)
+                .disabled(!live && !menu.logging)
             Button(T("Show session logs")) { model.logs.revealFolder() }
             Button(T("Save output…")) { model.saveOutput() }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-                .disabled(tab == nil)
+                .disabled(!menu.hasSelection)
             Button(T("Open output in text editor")) { model.openOutputInEditor() }
-                .disabled(tab == nil)
+                .disabled(!menu.hasSelection)
             Divider()
-            Toggle(T("Read-only"), isOn: Binding(get: { tab?.readOnly ?? false }, set: { _ in model.toggleReadOnly() }))
-                .disabled(tab == nil)
+            Toggle(T("Read-only"), isOn: Binding(get: { menu.readOnly }, set: { _ in model.toggleReadOnly() }))
+                .disabled(!menu.hasSelection)
             Button(T("Import color scheme…")) { model.chooseColorScheme() }
-                .disabled(tab == nil)
+                .disabled(!menu.hasSelection)
             Button(T("Import highlight set…")) { model.chooseHighlightSet() }
-                .disabled(tab == nil)
+                .disabled(!menu.hasSelection)
             Button(T("Use default colors")) { model.resetTerminalColors() }
-                .disabled(tab == nil || (tab?.colorScheme == nil && tab?.highlights == nil))
+                .disabled(!menu.hasSelection || !menu.hasCustomColors)
             Divider()
-            Picker(T("Text encoding"), selection: Binding(get: { tab?.encoding ?? .utf8 }, set: { model.setEncoding($0) })) {
+            Picker(T("Text encoding"), selection: Binding(get: { menu.encoding }, set: { model.setEncoding($0) })) {
                 ForEach(TerminalEncoding.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            .disabled(tab == nil)
+            .disabled(!menu.hasSelection)
             Button(T("Runbooks…")) { model.showRunbooks() }
         }
     }
@@ -116,7 +134,7 @@ struct CommandStatusButton: View {
                     if failed, let code = last.exitCode { Text("\(code)").monospacedDigit() }
                     if let duration = last.duration { Text(formatDuration(duration)).foregroundStyle(.secondary) }
                 }
-                .font(.system(size: 10.5, weight: .medium))
+                .appFont(.system(size: 10.5, weight: .medium))
                 .padding(.horizontal, 6).frame(height: 20)
                 .background(Color.primary.opacity(0.06), in: Capsule())
             }
@@ -139,7 +157,7 @@ struct CommandHistoryList: View {
     var body: some View {
         let marks = Array(tab.screen.commandMarks.filter { $0.command != nil }.suffix(40).reversed())
         VStack(alignment: .leading, spacing: 0) {
-            Text(T("Command history")).font(.headline).padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+            Text(T("Command history")).appFont(.headline).padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
             Divider()
             if marks.isEmpty {
                 Text(T("No commands yet.")).foregroundStyle(.secondary).padding(12)
@@ -165,10 +183,10 @@ struct CommandHistoryList: View {
             HStack(spacing: 8) {
                 Image(systemName: mark.finishedAt == nil ? "clock" : failed ? "xmark.circle.fill" : "checkmark.circle.fill")
                     .foregroundStyle(mark.finishedAt == nil ? Color.secondary : failed ? Color.red : Color.green)
-                Text(mark.command ?? "").font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                Text(mark.command ?? "").appFont(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 6)
-                if failed, let code = mark.exitCode { Text("\(code)").font(.caption.monospacedDigit()).foregroundStyle(.red) }
-                if let duration = mark.duration { Text(formatDuration(duration)).font(.caption).foregroundStyle(.secondary) }
+                if failed, let code = mark.exitCode { Text("\(code)").appFont(.caption.monospacedDigit()).foregroundStyle(.red) }
+                if let duration = mark.duration { Text(formatDuration(duration)).appFont(.caption).foregroundStyle(.secondary) }
             }
             .padding(.horizontal, 12).padding(.vertical, 5)
             .contentShape(Rectangle())
@@ -204,8 +222,8 @@ struct LogIndicator: View {
                 Button(T("Show session logs")) { logs.revealFolder() }
             } label: {
                 HStack(spacing: 3) {
-                    Image(systemName: "doc.text").font(.system(size: 9, weight: .semibold))
-                    Text(T("LOG")).font(.system(size: 10, weight: .bold))
+                    Image(systemName: "doc.text").appFont(.system(size: 9, weight: .semibold))
+                    Text(T("LOG")).appFont(.system(size: 10, weight: .bold))
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 6).frame(height: 20)
@@ -229,7 +247,7 @@ struct RecordingIndicator: View {
             Button { model.toggleRecording(tab) } label: {
                 HStack(spacing: 4) {
                     Circle().fill(Color.red).frame(width: 7, height: 7).opacity(pulse ? 0.35 : 1)
-                    Text(T("REC")).font(.system(size: 10, weight: .bold))
+                    Text(T("REC")).appFont(.system(size: 10, weight: .bold))
                 }
                 .foregroundStyle(.red)
                 .padding(.horizontal, 6).frame(height: 20)

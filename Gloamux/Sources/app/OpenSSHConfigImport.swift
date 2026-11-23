@@ -354,8 +354,10 @@ enum OpenSSHConfigImport {
             var next = entry.jump
             while let current = next {
                 guard seen.insert(current).inserted, seen.count <= SessionTreeStore.maximumJumpHops + 1 else {
-                    return ProfileImport.Entry(components: entry.components, name: entry.name, connection: entry.connection,
-                                               notes: entry.notes + ["The jump hosts loop or are nested too deeply. Set the jump host in Gloamux."])
+                    var broken = entry
+                    broken.jump = nil
+                    broken.notes.append("The jump hosts loop or are nested too deeply. Set the jump host in Gloamux.")
+                    return broken
                 }
                 next = links[current] ?? nil
             }

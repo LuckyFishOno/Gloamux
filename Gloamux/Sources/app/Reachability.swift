@@ -97,12 +97,16 @@ struct ReachabilityDot: View {
 
     var body: some View {
         switch monitor.states[id] {
+        // The color is backed by the tooltip and by a VoiceOver label, so the state never rests on color alone.
         case .reachable?:
             Circle().fill(Color.green.opacity(0.85)).frame(width: 6, height: 6).help(T("The SSH port answered"))
+                .accessibilityLabel(T("The SSH port answered"))
         case .unreachable?:
             Circle().fill(Color.red.opacity(0.8)).frame(width: 6, height: 6).help(T("The SSH port did not answer"))
+                .accessibilityLabel(T("The SSH port did not answer"))
         case .checking?:
             Circle().strokeBorder(Color.secondary.opacity(0.5), lineWidth: 1).frame(width: 6, height: 6).help(T("Checking…"))
+                .accessibilityLabel(T("Checking…"))
         case nil:
             EmptyView()
         }

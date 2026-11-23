@@ -319,6 +319,7 @@
 "Match blocks are not imported. Review those hosts in Gloamux." = "已略過 Match 區塊。請在 Gloamux 內檢查相關主機的設定。";
 "Match case" = "區分大小寫";
 "Maximize pane" = "放大窗格";
+"Gloam" = "暮光";
 "Midnight" = "午夜";
 "MobaXterm config…" = "MobaXterm 設定檔";
 "MobaXterm used the Windows sign-in name for this session. Check the user name." = "這條連線在 MobaXterm 使用 Windows 登入名稱。請確認帳號是否正確。";
@@ -343,6 +344,7 @@
 "Native SSH workspace" = "原生 SSH 工作區";
 "Needs Touch ID" = "需要 Touch ID";
 "New connection" = "新連線";
+"New local terminal" = "新本機終端";
 "New container session…" = "新增容器連線";
 "New fingerprint" = "新指紋";
 "New folder" = "新增資料夾";
@@ -367,6 +369,7 @@
 "No matching sessions" = "找不到相符的連線";
 "No matching themes" = "找不到相符的主題";
 "No MobaXterm sessions were found in this file." = "這個檔案裡找不到 MobaXterm 連線。";
+"No Xshell sessions were found in this backup." = "這個備份檔裡找不到 Xshell 連線。";
 "No open terminal" = "沒有開啟的終端機";
 "No password is saved for this account. Enter a connection password." = "找不到這個帳號的已存密碼。請輸入連線密碼。";
 "No PuTTY sessions were found in this file." = "這個檔案裡找不到 PuTTY 連線。";
@@ -391,6 +394,7 @@
 "Only for tabs you are not looking at. Needs shell integration." = "只通知你沒在看的分頁，需要 Shell 整合。";
 "Only SSH and SFTP profiles can be imported." = "僅支援匯入 SSH 或 SFTP 設定。";
 "Only SSH and SFTP sessions can be imported." = "只能匯入 SSH 和 SFTP 連線。";
+"Only SSH, SFTP, and serial sessions can be imported." = "只能匯入 SSH、SFTP 和序列埠連線。";
 "Only SSH sessions can be imported." = "只能匯入 SSH 連線。";
 "Only the copy in the password vault is deleted." = "只會刪除密碼庫裡的這份副本。";
 "Open" = "開啟";
@@ -450,6 +454,7 @@
 "Proxy type" = "代理類型";
 "ProxyCommand is not supported. Set a jump host or proxy in Gloamux." = "無法匯入這個 ProxyCommand。請在 Gloamux 設定跳板或代理。";
 "PuTTY asks for the user name when this session connects. Check the user name." = "PuTTY 會在這條連線建立時詢問帳號。請確認帳號是否正確。";
+"Xshell asks for the user name when this session connects. Check the user name." = "Xshell 會在這條連線建立時詢問帳號。請確認帳號是否正確。";
 "PuTTY config…" = "PuTTY 設定檔";
 "Quick commands" = "常用指令";
 "Quick connect" = "快速連線";
@@ -547,7 +552,7 @@
 "Select a tab connected over SSH to show its server here." = "選取已連線的 SSH 分頁，即可查看該伺服器上的檔案。";
 "Select all" = "全選";
 "Select an open terminal to use a command." = "請選取已開啟的終端，再使用指令。";
-"Select an Xshell session file or folder." = "請選擇 Xshell 連線檔或資料夾。";
+"Select an Xshell session file, folder, or backup." = "請選擇 Xshell 連線檔、資料夾或備份檔。";
 "Select none" = "全部不選";
 "Select output" = "選取輸出";
 "Select output of last command" = "選取上一個指令的輸出";
@@ -702,6 +707,7 @@
 "The SSH proxy settings could not be read." = "無法讀取 SSH 代理設定。";
 "The SSH server listens on its loopback interface. This Mac connects to the destination you enter." = "SSH 伺服器在自己的回送介面監聽，由這台 Mac 連到指定的目的地。";
 "The SSH/SFTP profile could not be read." = "讀不到這份 SSH/SFTP 設定。";
+"The Xshell backup could not be read." = "讀不到這個 Xshell 備份檔。";
 "Theme" = "主題";
 "There are no sessions to export." = "沒有可匯出的連線。";
 "This account's password is saved in the password vault." = "這個帳號的密碼已存入密碼庫。";
@@ -722,6 +728,8 @@
 "This session is tagged %@, and the command matches a pattern in Settings > Safety.\n\n%@" = "這個連線標為「%@」，而且指令符合「設定 > 安全」中的規則。\n\n%@";
 "This session used a key file on Windows. Choose the key in the session properties." = "這條連線原本使用 Windows 上的金鑰檔。請在「連線設定」重新選取金鑰。";
 "This session uses a proxy type Gloamux does not support." = "Gloamux 不支援這條連線使用的代理類型。";
+"This serial session used a Windows port. Check the device and line settings in the session properties." = "這條序列埠連線原本使用 Windows 的埠。請在連線屬性中確認裝置和傳輸設定。";
+"This serial session uses a speed Gloamux does not support." = "這條序列埠連線使用了 Gloamux 不支援的速率。";
 "This sessions file was written by a newer Gloamux." = "這個連線檔由較新版的 Gloamux 建立。";
 "Toolbar, flat tabs, and floating panes" = "工具列、扁平分頁與浮動窗格";
 "Touch ID and Secure Enclave are required to create this key." = "建立此金鑰需要 Touch ID 與 Secure Enclave。";
@@ -791,7 +799,6 @@
 "You can save up to 256 quick commands." = "最多可儲存 256 條指令。";
 "Your servers, organized." = "管理你的伺服器與連線";
 "zsh reports each prompt, command, exit status, and folder. Then ⌘↑ and ⌘↓ jump between prompts, the pane header shows the last result, and ⌘T opens in the same folder. Applies to new terminals." = "zsh 會回報每個提示字元、指令、結束代碼與所在資料夾。之後可用 ⌘↑、⌘↓ 在提示字元間跳轉，窗格標頭會顯示上一個結果，⌘T 也會在同一個資料夾開啟。新開的終端機才會套用。";
-"⌘+ and ⌘− change it from any terminal; ⌘0 goes back to 13 pt." = "在任何終端按 ⌘+、⌘− 都能調整，⌘0 回到 13 pt。";
 "Stop following the terminal folder" = "停止跟隨終端資料夾";
 "Show next tab" = "顯示下一個分頁";
 "Show previous tab" = "顯示上一個分頁";
@@ -960,6 +967,7 @@
 "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password." = "連到 Mac 的螢幕共享時，填 Mac 的帳號和密碼。只用 VNC 密碼就留空。";
 "Upload to %@" = "上傳到 %@";
 "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault." = "密碼會存進密碼庫。密碼庫鎖著的時候，Gloamux 會先記到關閉為止，等你解鎖後再存進去。";
+"This Mac's shell at 127.0.0.1" = "這台 Mac 的終端（127.0.0.1）";
 "Terminal and files on a server" = "伺服器的終端和檔案";
 "Windows desktop" = "Windows 桌面";
 "Mac or Linux desktop" = "Mac 或 Linux 桌面";
@@ -1028,7 +1036,6 @@
 "Import…" = "匯入";
 "Export" = "輸出";
 "All settings" = "全部設定";
-"Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, and settings in one file, with a .sha256 file next to it. No passwords are included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first." = "「輸出」會把連線（含帳號）、快速指令、觸發條件、操作手冊、主機金鑰、主題、版面配置與設定存成一個檔案，旁邊另附一個 .sha256 檔。不含任何密碼。「匯入」會取代以上全部內容並重新啟動 Gloamux，原本的內容會先保留在 Gloamux 資料夾的 Backups 資料夾。";
 "Export all settings" = "輸出全部設定";
 "Import all settings" = "匯入全部設定";
 "The settings could not be exported." = "無法輸出設定。";
@@ -1100,3 +1107,20 @@
 "Every SSH session open in this window, with its running forwards. Choose Manage to add, save, or start a session's forwarding rules." = "這個視窗中開啟的每個 SSH 連線，以及正在執行的轉發。選「管理」可新增、儲存或啟動該連線的轉發規則。";
 "No SSH sessions are open." = "沒有開啟的 SSH 連線。";
 "XQuartz is not installed. Get it from xquartz.org to show remote X11 programs on this Mac." = "尚未安裝 XQuartz。請從 xquartz.org 下載，才能在這台 Mac 上顯示遠端的 X11 程式。";
+"The password saved on this Mac for this account could not be read. Type it again to replace it." = "這個帳號存在本機的密碼無法讀取。請重新輸入密碼以取代它。";
+"Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings, and the password vault in one file, with a .sha256 file next to it. The vault stays sealed under its master password, which is not saved in the file. Passwords remembered on this Mac are not included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first." = "匯出會把連線與帳號、快速指令、觸發條件、操作手冊、主機金鑰、主題、版面配置、設定和密碼庫存成一個檔案，旁邊附一個 .sha256 檔。密碼庫仍以主密碼加密，主密碼本身不會存進檔案。本機記住的密碼不會匯出。匯入會取代以上全部並重新啟動 Gloamux，目前的內容會先保留在 Gloamux 資料夾的 Backups 資料夾。";
+"The password vault in the backup replaces the one on this Mac. Unlock it with the master password it was made with." = "備份中的密碼庫會取代這台 Mac 上的密碼庫。請用建立它時的主密碼解鎖。";
+"The password vault in this Gloamux backup is damaged." = "這個 Gloamux 備份中的密碼庫已損壞。";
+
+"Application" = "應用程式";
+"Application font size" = "應用程式字級";
+"Session font size" = "工作階段字級";
+"Bigger app text" = "放大 App 文字";
+"Smaller app text" = "縮小 App 文字";
+"App text actual size" = "App 文字實際大小";
+"Lists, forms, toolbars, and this window. ⌘+ and ⌘− change it outside a session, ⌥⌘+ and ⌥⌘− from anywhere; ⌥⌘0 goes back to 13 pt." = "清單、表單、工具列和這個視窗。不在工作階段時按 ⌘+、⌘− 調整，⌥⌘+、⌥⌘− 在任何地方都能調整；⌥⌘0 回到 13 pt。";
+"⌘+ and ⌘− change it in any session; ⌘0 goes back to 13 pt." = "在任何工作階段按 ⌘+、⌘− 調整，⌘0 回到 13 pt。";
+"Opening workspace" = "正在開啟工作區";
+"Workspace could not be opened" = "無法開啟工作區";
+"New tabs open a local terminal" = "新分頁直接開本機終端";
+"The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form." = "按「+」會直接開這台 Mac 的終端，不再先顯示新連線表單。要連線時，「新連線」（⇧⌘N）仍會開啟表單。";

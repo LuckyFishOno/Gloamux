@@ -109,6 +109,10 @@ import AppKit
         XCTAssertTrue(tab.renamed)
         let read = try await run(["tabs", "read", tab.id.uuidString], first, windows: [first, second]) as? [String: Any]
         XCTAssertTrue((read?["text"] as? String)?.contains("hello from the second window") == true)
+        // The empty rows below the cursor are not output: LINES counts back from the last printed line.
+        tab.feed("second line\r\n")
+        let tail = try await run(["tabs", "read", tab.id.uuidString, "1"], first, windows: [first, second]) as? [String: Any]
+        XCTAssertEqual(tail?["text"] as? String, "second line")
         do { try await run(["tabs", "send", tab.id.uuidString, "ls"], first, windows: [first, second]); XCTFail("Not ready") }
         catch WorkspaceError.invalid {}
         do { try await run(["tabs", "rename", UUID().uuidString, "x"], first, windows: [first, second]); XCTFail("Unknown tab") }

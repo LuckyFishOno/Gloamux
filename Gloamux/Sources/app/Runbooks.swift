@@ -243,7 +243,7 @@ struct RunbooksView: View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
-                    Text(T("Runbooks")).font(.headline)
+                    Text(T("Runbooks")).appFont(.headline)
                     InfoButton(T("Runbooks are Markdown files in the workspace's runbooks folder. Each sh, bash, zsh, or console block can run in a session you choose, after you confirm it. With shell integration, Gloamux records each block's exit status and output."))
                     Spacer()
                     Menu {
@@ -330,7 +330,7 @@ private struct RunbookDocumentView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Text(runbook.title).font(.title3.bold()).lineLimit(1)
+                Text(runbook.title).appFont(.title3.bold()).lineLimit(1)
                 Spacer()
                 Picker(T("Run in"), selection: Binding(get: { target?.id }, set: { destination = $0 })) {
                     if sessions.isEmpty { Text(T("No open terminal")).tag(UUID?.none) }
@@ -369,11 +369,11 @@ private struct RunbookDocumentView: View {
     @ViewBuilder private func blockView(_ block: Runbook.Block) -> some View {
         switch block {
         case .heading(let level, let text):
-            Text(inline(text)).font(level == 1 ? .title2.bold() : level == 2 ? .title3.bold() : .headline).padding(.top, level <= 2 ? 6 : 2)
+            Text(inline(text)).appFont(level == 1 ? .title2.bold() : level == 2 ? .title3.bold() : .headline).padding(.top, level <= 2 ? 6 : 2)
         case .text(let text):
             Text(inline(text)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
         case .listing(let text):
-            Text(text).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+            Text(text).appFont(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
         case .code(let index, _, let code):
@@ -389,7 +389,7 @@ private struct RunbookDocumentView: View {
         let result = library.results[url.lastPathComponent]?[index]
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                Text(code).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                Text(code).appFont(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button { confirming = [(index, code)] } label: { Label(T("Run"), systemImage: "play.fill") }
                     .controlSize(.small).disabled(target == nil || running)
@@ -408,7 +408,7 @@ private struct RunbookDocumentView: View {
         let risky = tab.environment.map { SessionEnvironment.confirming.contains($0) } == true
             && blocks.contains { block in block.code.split(separator: "\n").contains { RiskyCommands.match(String($0)) != nil } }
         return VStack(alignment: .leading, spacing: 14) {
-            Label(T(blocks.count == 1 ? "Run this block?" : "Run these blocks?"), systemImage: "play.rectangle").font(.title3.bold())
+            Label(T(blocks.count == 1 ? "Run this block?" : "Run these blocks?"), systemImage: "play.rectangle").appFont(.title3.bold())
             HStack(spacing: 6) {
                 Text(T("Destination:")).foregroundStyle(.secondary)
                 Text(UIStrings.text(tab.title, language: model.language) + (tab.host.isEmpty ? "" : " (\(tab.host))")).fontWeight(.medium)
@@ -419,14 +419,14 @@ private struct RunbookDocumentView: View {
                     .foregroundStyle(.red)
             }
             ScrollView {
-                Text(blocks.map(\.code).joined(separator: "\n\n")).font(.system(size: 12, design: .monospaced))
+                Text(blocks.map(\.code).joined(separator: "\n\n")).appFont(.system(size: 12, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
             }
             .frame(maxHeight: 260)
             .padding(8).background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
             if blocks.count > 1 && !model.hasShellIntegration(tab) {
                 Label(T("Without shell integration, Gloamux sends every block at once and cannot stop after a failure."), systemImage: "info.circle")
-                    .foregroundStyle(.secondary).font(.callout)
+                    .foregroundStyle(.secondary).appFont(.callout)
             }
             HStack {
                 Spacer()
@@ -477,13 +477,13 @@ private struct RunbookResultView: View {
                 Text("· ").foregroundStyle(.secondary) + Text(result.date, format: .dateTime.month().day().hour().minute()).foregroundStyle(.secondary)
                 Spacer()
                 if let output = result.output, !output.isEmpty {
-                    Button(T(expanded ? "Hide output" : "Show output")) { expanded.toggle() }.buttonStyle(.link).font(.caption)
+                    Button(T(expanded ? "Hide output" : "Show output")) { expanded.toggle() }.buttonStyle(.link).appFont(.caption)
                 }
             }
-            .font(.caption)
+            .appFont(.caption)
             if expanded, let output = result.output {
                 ScrollView {
-                    Text(output).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                    Text(output).appFont(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 220)
@@ -499,7 +499,7 @@ struct EnvironmentBadge: View {
     var compact = false
     var body: some View {
         Text(compact ? environment.shortTitle : T(environment.title))
-            .font(.system(size: compact ? 9 : 10, weight: .bold))
+            .appFont(.system(size: compact ? 9 : 10, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, compact ? 4 : 6).padding(.vertical, 1.5)
             .background(environment.color, in: Capsule())

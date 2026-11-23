@@ -134,8 +134,8 @@ struct WorkspaceLockCover: View {
             ZStack {
                 Rectangle().fill(.ultraThickMaterial).ignoresSafeArea()
                 VStack(spacing: 14) {
-                    Image(systemName: "lock.fill").font(.system(size: 34)).foregroundStyle(.secondary)
-                    Text(T("Gloamux is locked")).font(.title3.weight(.semibold))
+                    Image(systemName: "lock.fill").appFont(.system(size: 34)).foregroundStyle(.secondary)
+                    Text(T("Gloamux is locked")).appFont(.title3.weight(.semibold))
                     Button(T("Unlock")) { Task { await model.unlockWorkspace() } }
                         .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                 }

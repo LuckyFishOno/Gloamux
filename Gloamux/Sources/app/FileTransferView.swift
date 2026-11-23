@@ -33,7 +33,7 @@ struct WorkspaceModeSwitch: View {
         let selected = mode == value
         return Button { if !selected { choose(value) } } label: {
             Text(value.title)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .appFont(.system(size: 12, weight: selected ? .semibold : .regular))
                 .foregroundStyle(theme.foreground.color.opacity(selected ? 1 : 0.6))
                 .lineLimit(1)
                 .frame(minWidth: 32)
@@ -71,7 +71,7 @@ struct WorkspaceModeSwitch: View {
         window.minSize = NSSize(width: 820, height: 480)
         window.isReleasedWhenClosed = false
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: FileTransferWindowContent(model: model, local: local, target: target))
+        window.contentView = NSHostingView(rootView: FileTransferWindowContent(model: model, local: local, target: target).appTextSize())
         if !window.setFrameUsingName("GloamuxFileTransfer") { window.center() }
         window.setFrameAutosaveName("GloamuxFileTransfer")
     }
@@ -103,6 +103,8 @@ struct LocalItem: Identifiable, Hashable {
     let isDirectory: Bool
     let size: UInt64
     let modified: Date
+    /// An app or other package, read with the listing so drawing a row does not ask the disk again.
+    var isPackage = false
     var id: String { url.path }
     /// The `..` row at the top of a file list.
     var isParent: Bool { name == ".." }
@@ -228,7 +230,7 @@ struct FileTransferView: View {
     private var titleBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.arrow.right").foregroundStyle(model.theme.accent.color)
-            Text(T("File Transfer")).font(.system(size: 13, weight: .semibold))
+            Text(T("File Transfer")).appFont(.system(size: 13, weight: .semibold))
             Picker(T("Server"), selection: Binding(get: { target.tabID }, set: { target.tabID = $0 })) {
                 if currentTab == nil { Text(T("No connected server")).tag(UUID?.none) }
                 ForEach(model.remoteTabs, id: \.id) { tab in
@@ -352,7 +354,7 @@ private struct PaneTitle: View {
     let symbol: String
     let title: String
     var body: some View {
-        Label(title, systemImage: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+        Label(title, systemImage: symbol).appFont(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
     }
 }
 
@@ -387,7 +389,7 @@ private struct LocalFilePane: View {
                     .help(T("New folder…"))
             }
             .buttonStyle(.borderless)
-            if let error = local.error { Text(error).font(.caption).foregroundStyle(.red).lineLimit(2) }
+            if let error = local.error { Text(error).appFont(.caption).foregroundStyle(.red).lineLimit(2) }
             Table(of: LocalItem.self, selection: $selection, sortOrder: $sortOrder) {
                 TableColumn(T("Name"), value: \.name, comparator: .localizedStandard) { item in
                     Label { Text(item.name).lineLimit(1) } icon: {
@@ -445,7 +447,7 @@ private struct LocalFilePane: View {
         .onChange(of: local.folder) { _, folder in pathDraft = folder.path; selection = [] }
         .sheet(item: $naming) { request in
             VStack(alignment: .leading, spacing: 14) {
-                Text(request.rename == nil ? T("New folder") : T("Rename")).font(.headline)
+                Text(request.rename == nil ? T("New folder") : T("Rename")).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
@@ -517,7 +519,7 @@ private struct RemoteFilePane: View {
                     .help(T("New folder…")).disabled(remote.folder == nil)
             }
             .buttonStyle(.borderless)
-            if let error = remote.error { Text(T(error)).font(.caption).foregroundStyle(.red).lineLimit(2) }
+            if let error = remote.error { Text(T(error)).appFont(.caption).foregroundStyle(.red).lineLimit(2) }
             Table(of: RemoteItem.self, selection: $selection, sortOrder: $sortOrder) {
                 TableColumn(T("Name"), value: \.name, comparator: .localizedStandard) { item in
                     Label(item.name, systemImage: item.isDirectory || item.isParent ? "folder.fill" : "doc").lineLimit(1)
@@ -531,7 +533,7 @@ private struct RemoteFilePane: View {
                         .foregroundStyle(.secondary)
                 }.width(min: 100, ideal: 140)
                 TableColumn(T("Permissions")) { item in
-                    Text(item.permissions.map(Self.mode) ?? "").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(item.permissions.map(Self.mode) ?? "").appFont(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                 }.width(min: 80, ideal: 90)
             } rows: {
                 ForEach(sorted) { item in
@@ -603,7 +605,7 @@ private struct RemoteFilePane: View {
         }
         .sheet(item: $naming) { request in
             VStack(alignment: .leading, spacing: 14) {
-                Text(request.rename == nil ? T("New remote folder") : T("Rename remote item")).font(.headline)
+                Text(request.rename == nil ? T("New remote folder") : T("Rename remote item")).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
@@ -683,7 +685,7 @@ struct TransferQueueView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label(T("Transfers"), systemImage: "arrow.up.arrow.down").font(.system(size: 12, weight: .semibold))
+                Label(T("Transfers"), systemImage: "arrow.up.arrow.down").appFont(.system(size: 12, weight: .semibold))
                 Spacer()
                 Button(T("Cancel all")) { queue.cancelAll() }.disabled(!queue.isActive)
                 Button(T("Clear finished")) { queue.clearFinished() }.disabled(!queue.items.contains { $0.state.isFinished })
@@ -692,7 +694,7 @@ struct TransferQueueView: View {
             Divider()
             if queue.items.isEmpty {
                 Text(T("Drag files between the panes, or use the arrows, to transfer them."))
-                    .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .appFont(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(queue.items.reversed()) { item in TransferRow(item: item, cancel: { queue.cancel(item) }, retry: { queue.retry(item) }) }
                     .listStyle(.plain)
@@ -712,10 +714,10 @@ private struct TransferRow: View {
                 .foregroundStyle(item.direction == .upload ? Color.accentColor : Color.green)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Image(systemName: item.isFolder ? "folder" : "doc").foregroundStyle(.secondary).font(.caption)
+                    Image(systemName: item.isFolder ? "folder" : "doc").foregroundStyle(.secondary).appFont(.caption)
                     Text(item.name).lineLimit(1).truncationMode(.middle)
                     Text(item.direction == .upload ? "→ \(item.host):\(item.destinationFolder)" : "← \(item.host)")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        .appFont(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 if item.state == .running {
                     ProgressView(value: item.fraction ?? 0).controlSize(.small)
@@ -723,7 +725,7 @@ private struct TransferRow: View {
             }
             Spacer(minLength: 8)
             // A fixed column keeps the progress bar the same length while the byte counts change.
-            Text(detail).font(.caption.monospacedDigit()).foregroundStyle(stateColor).lineLimit(1).truncationMode(.middle)
+            Text(detail).appFont(.caption.monospacedDigit()).foregroundStyle(stateColor).lineLimit(1).truncationMode(.middle)
                 .frame(width: 190, alignment: .trailing)
                 .help(detail)
             if case .failed = item.state {

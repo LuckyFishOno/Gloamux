@@ -32,10 +32,10 @@ import GloamuxNetwork
         """
         let draft = try MobaXtermImport.parse(text, name: "MobaXterm", localUser: "me")
         let web = try entry(draft, "web")
-        XCTAssertEqual(web.connection.host, "web.example.com")
-        XCTAssertEqual(web.connection.port, 2222)
-        XCTAssertEqual(web.connection.username, "deploy")
-        XCTAssertNil(web.connection.identityPath, "A Windows key path is not usable on the Mac")
+        XCTAssertEqual(web.connection?.host, "web.example.com")
+        XCTAssertEqual(web.connection?.port, 2222)
+        XCTAssertEqual(web.connection?.username, "deploy")
+        XCTAssertNil(web.connection?.identityPath, "A Windows key path is not usable on the Mac")
         XCTAssertTrue(web.notes.contains { $0.contains("key file on Windows") })
 
         XCTAssertEqual(draft.folders.first, ["Prod"])
@@ -45,21 +45,58 @@ import GloamuxNetwork
                        "The last gateway reaches the session; a gateway without a user uses the session's")
         let inner = try entry(draft, "Jump hosts / postgres@inner.example.com:2200")
         XCTAssertEqual(inner.jump, ["Jump hosts", "jump@bastion.example.com"], "Gateways chain first to last")
-        XCTAssertEqual(try entry(draft, "Jump hosts / jump@bastion.example.com").connection.port, 22)
+        XCTAssertEqual(try entry(draft, "Jump hosts / jump@bastion.example.com").connection?.port, 22)
         XCTAssertEqual(draft.folders.last, ["Jump hosts"])
 
         let proxied = try entry(draft, "Prod / DB / proxied")
-        XCTAssertEqual(proxied.connection.username, "me", "<default> falls back to the Mac user")
-        XCTAssertEqual(proxied.connection.proxyHost, "proxy.example.com")
-        XCTAssertEqual(proxied.connection.proxyPort, 1080)
-        XCTAssertEqual(proxied.connection.proxy.kind, .socks5)
+        XCTAssertEqual(proxied.connection?.username, "me", "<default> falls back to the Mac user")
+        XCTAssertEqual(proxied.connection?.proxyHost, "proxy.example.com")
+        XCTAssertEqual(proxied.connection?.proxyPort, 1080)
+        XCTAssertEqual(proxied.connection?.proxy.kind, .socks5)
 
         let files = try entry(draft, "Prod / DB / files")
-        XCTAssertEqual(files.connection.opensFiles, true)
-        XCTAssertEqual(files.connection.username, "ftp")
+        XCTAssertEqual(files.connection?.opensFiles, true)
+        XCTAssertEqual(files.connection?.username, "ftp")
         XCTAssertEqual(draft.skipped.map(\.path), ["desktop"], "RDP is reported, not imported")
 
         XCTAssertThrowsError(try MobaXtermImport.parse("[Misc]\nShell=bash\n", name: "x"))
+    }
+
+    func testMobaXtermSerialSessionsKeepTheirSpeedAndLineSettingsOnAMacDevice() throws {
+        // The literal 100 before the speed is how MobaXterm writes it: 1009600 is 9600 bit/s.
+        let text = """
+        [Bookmarks]\r
+        SubRep=\r
+        ImgNum=42\r
+        COM3  (USB Serial Port (COM3))=#131#8%1%1009600%3%0%0%1%2%COM3  (USB Serial Port (COM3))#MobaFont%10%0%0%-1%15%236,236,236%30,30,30%180,180,192%0%-1%0%%xterm%-1%0%_Std_Colors_0_%80%24%0%0%-1%<none>%%0%0%-1#0# #-1\r
+        console=#131#8%-2%100115200%2%2%2%2%2%COM4#MobaFont%10#0# #-1\r
+        odd=#131#8%-2%100250000%3%0%0%0%2%COM5#MobaFont%10#0# #-1\r
+        web=#109#0%web.example.com%22%deploy%%-1%-1%%%%%0%0%0%%%-1%0%0%0%%1080%%0%0%1#MobaFont%10#0# #-1\r
+        """
+        let draft = try MobaXtermImport.parse(text, name: "MobaXterm", localUser: "me",
+                                              devices: ["/dev/cu.Bluetooth-Incoming-Port", "/dev/cu.usbserial-A10K3"])
+        let com3 = try entry(draft, "COM3  (USB Serial Port (COM3))")
+        let serial = try XCTUnwrap(com3.container)
+        XCTAssertNil(com3.connection)
+        XCTAssertEqual(serial.tool, .serial)
+        XCTAssertEqual(serial.target, "/dev/cu.usbserial-A10K3", "The Mac's only USB serial device stands in for COM3")
+        XCTAssertEqual(serial.serialSettings, SerialPort.Settings(baud: 9600, format: "8N1", flow: .software))
+        XCTAssertTrue(com3.notes.contains { $0.contains("Windows port") })
+
+        let console = try XCTUnwrap(entry(draft, "console").container)
+        XCTAssertEqual(console.serialSettings, SerialPort.Settings(baud: 115200, format: "7E2", flow: .hardware))
+        XCTAssertEqual(draft.skipped.map(\.path), ["odd"], "A speed the Mac's serial ports do not offer is reported")
+        XCTAssertEqual(try entry(draft, "web").connection?.host, "web.example.com")
+
+        // With no USB adapter, or several, the usual adapter name stands in until the device is chosen.
+        let none = try MobaXtermImport.parse(text, name: "MobaXterm", devices: [])
+        XCTAssertEqual(try entry(none, "console").container?.target, "/dev/cu.usbserial")
+
+        let tree = try store()
+        let root = try tree.importProfiles(draft, name: "MobaXterm", parent: nil)
+        let saved = try XCTUnwrap(tree.nodes.first { $0.parent == root && $0.name == "console" })
+        XCTAssertEqual(saved.container?.serialSettings.baud, 115200)
+        XCTAssertNil(saved.connection)
     }
 
     func testPuTTYRegistryExportsReadUTF16AndMapProxiesJumpsAndForwards() throws {
@@ -105,22 +142,22 @@ import GloamuxNetwork
         let draft = try PuTTYImport.parse(ImportText.decode(data), localUser: "me")
 
         let server = try entry(draft, "My Server")
-        XCTAssertEqual(server.connection.username, "admin")
-        XCTAssertEqual(server.connection.host, "my.example.com")
-        XCTAssertEqual(server.connection.port, 22)
-        XCTAssertEqual(server.connection.forwardingRules?.map(\.kind), [.local, .dynamic, .remote])
-        XCTAssertEqual(server.connection.forwardingRules?.first?.host, "db.internal")
-        XCTAssertEqual(server.connection.forwardingRules?.first?.port, 5432)
+        XCTAssertEqual(server.connection?.username, "admin")
+        XCTAssertEqual(server.connection?.host, "my.example.com")
+        XCTAssertEqual(server.connection?.port, 22)
+        XCTAssertEqual(server.connection?.forwardingRules?.map(\.kind), [.local, .dynamic, .remote])
+        XCTAssertEqual(server.connection?.forwardingRules?.first?.host, "db.internal")
+        XCTAssertEqual(server.connection?.forwardingRules?.first?.port, 5432)
         XCTAssertTrue(server.notes.contains { $0.contains("port forwards were not imported") })
         XCTAssertTrue(server.notes.contains { $0.contains("key file on Windows") })
 
         let socks = try entry(draft, "via socks")
-        XCTAssertEqual(socks.connection.proxy.kind, .socks4)
-        XCTAssertEqual(socks.connection.proxyPort, 1080)
+        XCTAssertEqual(socks.connection?.proxy.kind, .socks4)
+        XCTAssertEqual(socks.connection?.proxyPort, 1080)
 
         let jumped = try entry(draft, "via jump")
         XCTAssertEqual(jumped.jump, ["Jump hosts", "gatekeeper@gate.example.com"])
-        XCTAssertNil(jumped.connection.proxyHost)
+        XCTAssertNil(jumped.connection?.proxyHost)
 
         XCTAssertFalse(draft.entries.contains { $0.name == "Default Settings" })
         XCTAssertEqual(draft.skipped.map(\.path), ["router"])
@@ -138,13 +175,13 @@ import GloamuxNetwork
         let draft = try CSVSessionImport.parse(text, name: "servers", localUser: "me")
         XCTAssertEqual(draft.folders.prefix(2), [["Team"], ["Team", "Prod"]])
         let bastion = try entry(draft, "Team / Prod / bastion")
-        XCTAssertEqual(bastion.connection.identityPath, (("~/.ssh/id_ed25519") as NSString).expandingTildeInPath)
+        XCTAssertEqual(bastion.connection?.identityPath, (("~/.ssh/id_ed25519") as NSString).expandingTildeInPath)
         let db = try entry(draft, "Team / Prod / db; primary")
-        XCTAssertEqual(db.connection.port, 5432)
+        XCTAssertEqual(db.connection?.port, 5432)
         XCTAssertEqual(db.jump, ["Team", "Prod", "bastion"])
         let files = try entry(draft, "files")
-        XCTAssertEqual(files.connection.opensFiles, true)
-        XCTAssertEqual(files.connection.username, "me")
+        XCTAssertEqual(files.connection?.opensFiles, true)
+        XCTAssertEqual(files.connection?.username, "me")
         XCTAssertEqual(files.jump, ["Jump hosts", "deploy@edge.example.com:2222"])
         XCTAssertTrue(draft.skipped.contains { $0.path == "Password" }, "A password column is reported and ignored")
         XCTAssertEqual(draft.skipped.filter { $0.path != "Password" }.count, 2, "The bad port and the RDP row are reported")
@@ -171,11 +208,11 @@ import GloamuxNetwork
         let draft = try SessionsFile.read(data)
         XCTAssertEqual(draft.name, "Team")
         let gateEntry = try entry(draft, "Prod / gate")
-        XCTAssertEqual(gateEntry.connection.identityPath, home + "/.ssh/id_ed25519")
+        XCTAssertEqual(gateEntry.connection?.identityPath, home + "/.ssh/id_ed25519")
         let dbEntry = try entry(draft, "Prod / =db, primary")
         XCTAssertEqual(dbEntry.jump, ["Prod", "gate"])
-        XCTAssertEqual(dbEntry.connection.forwardingRules?.first?.listenPort, 5432)
-        XCTAssertNil(dbEntry.connection.jumpSessionID)
+        XCTAssertEqual(dbEntry.connection?.forwardingRules?.first?.listenPort, 5432)
+        XCTAssertNil(dbEntry.connection?.jumpSessionID)
         XCTAssertEqual(try entry(draft, "via outside").jump, ["Jump hosts", "x@out.example.com:2022"],
                        "A jump host outside the export becomes its own session")
 
@@ -204,7 +241,7 @@ import GloamuxNetwork
         XCTAssertTrue(text.contains("\"'=db, primary\""), "Formula-like names are guarded and quoted")
         let back = try CSVSessionImport.parse(text, name: "Team")
         XCTAssertEqual(try entry(back, "Prod / =db, primary").jump, ["Prod", "gate"])
-        XCTAssertEqual(try entry(back, "Prod / gate").connection.identityPath, home + "/.ssh/id_ed25519")
+        XCTAssertEqual(try entry(back, "Prod / gate").connection?.identityPath, home + "/.ssh/id_ed25519")
         XCTAssertThrowsError(try SessionsFile.read(Data("{\"format\":\"other\"}".utf8)))
     }
 

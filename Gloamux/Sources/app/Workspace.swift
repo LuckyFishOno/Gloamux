@@ -338,6 +338,8 @@ struct HostKeyChange: Identifiable {
     /// Terminal recordings in progress and saved.
     lazy var recordings = TerminalRecordings(folder: storage.appendingPathComponent("recordings", isDirectory: true))
     lazy var logs = TerminalLogs(folder: storage.appendingPathComponent("logs", isDirectory: true))
+    /// What the menu bar's workspace commands show, so the menus rebuild only when that changes.
+    lazy var commandState = WorkspaceCommandState(model: self)
 
     nonisolated public static var defaultStorage: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Gloamux", isDirectory: true)
@@ -526,6 +528,11 @@ struct HostKeyChange: Identifiable {
         selectTab(tab.id)
         return tab
     }
+    /// The + buttons: the New connection form, or a local terminal for those who set new tabs to open one.
+    /// New connection itself (⇧⌘N) always opens the form.
+    @discardableResult func newTab() -> SessionTab {
+        TerminalPreferences.newTabOpensLocal ? addLocalTab() : newConnectionTab()
+    }
     @discardableResult public func addLocalTab(select: Bool = true) -> SessionTab {
         addLocalTab(select: select, launch: nil)
     }
@@ -535,13 +542,32 @@ struct HostKeyChange: Identifiable {
     @discardableResult func addLocalTab(select: Bool = true, launch: LocalLaunch?, title: String = "Local terminal",
                                         container: ContainerSession? = nil) -> SessionTab {
         let folder = selected.flatMap { $0.isLocal && $0.localLaunch?.arguments.contains("-c") != true ? $0.screen.workingDirectory : nil }
-        let tab = addTab(select: select); tab.isLocal = true; tab.title = title
+        let tab = addTab(select: false)
+        startLocal(tab, launch: launch ?? .loginShell(directory: folder, integration: ShellIntegration.local), title: title, container: container)
+        if select { selectTab(tab.id) }
+        return tab
+    }
+
+    /// Turns a new-connection tab into a terminal on this Mac, in place, from the Local row at the top of the form.
+    func openLocalTerminal(in tab: SessionTab) {
+        guard !tab.isLocal, !tab.connected, !tab.busy, tab.desktop == nil, tab.savedSessionID == nil else { return }
+        tab.newConnectionType = nil
+        tab.error = nil
+        startLocal(tab, launch: .loginShell(directory: nil, integration: ShellIntegration.local), title: "Local terminal", container: nil)
+        if selection == tab.id {
+            // The file sidebar observes the workspace, so an in-place change of the selected tab's kind must redraw it.
+            objectWillChange.send()
+            tab.terminalFocusRequest += 1
+        }
+    }
+
+    private func startLocal(_ tab: SessionTab, launch: LocalLaunch, title: String, container: ContainerSession?) {
+        tab.isLocal = true; tab.title = title
         tab.host = container?.summary ?? "127.0.0.1"; tab.username = NSUserName(); tab.container = container
         tab.encoding = container?.encoding ?? .utf8
         tab.screen = TerminalPreferences.newScreen(); tab.screenRevision += 1
-        tab.localLaunch = launch ?? .loginShell(directory: folder, integration: ShellIntegration.local)
+        tab.localLaunch = launch
         startLocalTerminal(tab)
-        return tab
     }
     public func startLocalTerminal(_ tab: SessionTab) {
         guard tab.isLocal, tab.localShell == nil else { return }
@@ -687,7 +713,7 @@ struct HostKeyChange: Identifiable {
     }
 
     public func connect(_ tab: SessionTab) async {
-        guard tab.desktop == nil, tab.newConnectionType?.editorTool == nil else { return }
+        guard tab.desktop == nil, NewConnectionType.usesSSHForm(tab.newConnectionType) else { return }
         if tab.isLocal { startLocalTerminal(tab); return }
         guard !tab.busy, !tab.connected else { return }
         tab.error = nil

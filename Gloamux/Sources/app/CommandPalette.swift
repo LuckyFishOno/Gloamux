@@ -213,7 +213,7 @@ struct CommandPalette: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField(T("Search sessions and commands, or enter user@host"), text: $query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15))
+                    .appFont(.system(size: 15))
                     .focused($focused)
                     .onSubmit { run(items) }
                     .onKeyPress(.upArrow) { move(-1, count: items.count); return .handled }
@@ -256,14 +256,14 @@ struct CommandPalette: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).lineLimit(1)
                 if let detail = item.detail, !detail.isEmpty {
-                    Text(detail).font(.caption).lineLimit(1).foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                    Text(detail).appFont(.caption).lineLimit(1).foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
                 }
             }
             Spacer(minLength: 8)
             if let shortcut = item.shortcut {
-                Text(shortcut).font(.caption.monospaced()).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                Text(shortcut).appFont(.caption.monospaced()).foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
             }
-            Text(item.section).font(.caption).foregroundStyle(selected ? Color.white.opacity(0.75) : Color.secondary.opacity(0.8))
+            Text(item.section).appFont(.caption).foregroundStyle(selected ? Color.white.opacity(0.75) : Color.secondary.opacity(0.8))
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .foregroundStyle(selected ? Color.white : Color.primary)
@@ -320,7 +320,7 @@ public struct MenuBarPanel: View {
                     }
                     ForEach(matches.prefix(8)) { node in sessionRow(node) }
                     if matches.isEmpty && SavedConnection.quickTarget(query) == nil {
-                        Text(T("No matching sessions")).foregroundStyle(.secondary).font(.callout)
+                        Text(T("No matching sessions")).foregroundStyle(.secondary).appFont(.callout)
                     }
                 }
             } else {
@@ -351,7 +351,7 @@ public struct MenuBarPanel: View {
                     .help(T("Settings…"))
             }
             .buttonStyle(.borderless)
-            .font(.callout)
+            .appFont(.callout)
         }
         .padding(12)
         .frame(width: 340)
@@ -394,7 +394,7 @@ public struct MenuBarPanel: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 4)
+            Text(title).appFont(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 4)
             content()
         }
     }
@@ -407,7 +407,7 @@ public struct MenuBarPanel: View {
                 Text(title).lineLimit(1)
                 if let environment { EnvironmentBadge(environment: environment) }
                 Spacer(minLength: 6)
-                if let detail { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
+                if let detail { Text(detail).appFont(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
             }
             .padding(.horizontal, 4).padding(.vertical, 3)
             .contentShape(Rectangle())
@@ -437,15 +437,15 @@ private struct TunnelRow: View {
             Circle().fill(color(tab)).frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 1) {
                 Text(node.name).lineLimit(1)
-                Text(rules.map { $0.address() }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(rules.map { $0.address() }.joined(separator: ", ")).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if let tab, !tab.forwardingErrors.isEmpty {
-                    Text(tab.forwardingErrors.joined(separator: "; ")).font(.caption).foregroundStyle(.red).lineLimit(2)
+                    Text(tab.forwardingErrors.joined(separator: "; ")).appFont(.caption).foregroundStyle(.red).lineLimit(2)
                 }
             }
             Spacer(minLength: 6)
             if let tab {
                 if tab.busy { ProgressView().controlSize(.mini) }
-                Text("\(tab.forwards.count)/\(rules.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text("\(tab.forwards.count)/\(rules.count)").appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     .help(T("Forwards running"))
                 Button(T("Stop")) { Task { await model.disconnectAndClose(tab) } }.controlSize(.small)
             } else {

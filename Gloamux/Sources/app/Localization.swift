@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // Interface text follows the standard Apple layout: `Resources/<language>.lproj/Localizable.strings`, keyed by the
 // English source string, with English as the development language. The language choice is the app's own
@@ -7,17 +8,22 @@ import Foundation
 
 /// The languages Gloamux ships, plus following the Mac.
 public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
-    case system, english = "en", traditionalChinese = "zh-Hant"
+    case system, traditionalChinese = "zh-Hant", simplifiedChinese = "zh-Hans"
+    case english = "en", japanese = "ja", spanish = "es"
     public var id: String { rawValue }
 
     /// Localizations in `Resources`, in order of preference when nothing else matches.
-    static let supported = ["en", "zh-Hant"]
+    static let supported = allCases.filter { $0 != .system }.map(\.rawValue)
 
+    /// Each language is named in itself, so anyone can find their own.
     public var title: String {
         switch self {
         case .system: return T("System default")
         case .english: return "English"
         case .traditionalChinese: return "\u{7e41}\u{9ad4}\u{4e2d}\u{6587}"
+        case .simplifiedChinese: return "\u{7b80}\u{4f53}\u{4e2d}\u{6587}"
+        case .japanese: return "\u{65e5}\u{672c}\u{8a9e}"
+        case .spanish: return "Espa\u{f1}ol"
         }
     }
 
@@ -26,21 +32,34 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         (AppLanguage(rawValue: code) ?? .english).title
     }
 
-    /// The shipped localization to use. Following the Mac takes the first preferred language Gloamux has; any Chinese
-    /// variant uses Traditional Chinese, and anything else English.
+    /// The shipped language for a language tag such as `zh-TW`, `zh-Hans-CN`, `ja-JP`, or `es-419`, or nil when
+    /// Gloamux has none. Chinese written in Taiwan, Hong Kong, and Macau uses Traditional characters; other Chinese,
+    /// with no script or region, uses Simplified.
+    static func matching(_ tag: String) -> AppLanguage? {
+        let parts = tag.lowercased().replacingOccurrences(of: "_", with: "-").split(separator: "-").map(String.init)
+        switch parts.first {
+        case "en": return .english
+        case "ja": return .japanese
+        case "es": return .spanish
+        case "zh":
+            let rest = Set(parts.dropFirst())
+            if rest.contains("hant") { return .traditionalChinese }
+            if rest.contains("hans") { return .simplifiedChinese }
+            return rest.isDisjoint(with: ["tw", "hk", "mo"]) ? .simplifiedChinese : .traditionalChinese
+        default: return nil
+        }
+    }
+
+    /// The shipped localization to use. Following the Mac takes the first preferred language Gloamux has, and
+    /// anything else uses English.
     public func resolved(preferred: [String] = UIStrings.systemLanguages()) -> String {
         guard self == .system else { return rawValue }
-        for language in preferred.map({ $0.lowercased() }) {
-            if language.hasPrefix("zh") { return "zh-Hant" }
-            if language.hasPrefix("en") { return "en" }
-        }
-        return "en"
+        return preferred.lazy.compactMap(AppLanguage.matching).first?.rawValue ?? "en"
     }
 
     /// The language a stored `AppleLanguages` list asks for, or `.system` when it is absent.
     static func from(appleLanguages: [String]?) -> AppLanguage {
-        guard let first = appleLanguages?.first?.lowercased() else { return .system }
-        return first.hasPrefix("zh") ? .traditionalChinese : first.hasPrefix("en") ? .english : .system
+        appleLanguages?.first.flatMap(AppLanguage.matching) ?? .system
     }
 }
 
@@ -58,7 +77,7 @@ public enum UIStrings {
             return language
         }
         if let legacy = UserDefaults.standard.string(forKey: legacyKey) {
-            let language: AppLanguage = legacy.hasPrefix("zh") ? .traditionalChinese : AppLanguage(rawValue: legacy) ?? .system
+            let language = AppLanguage(rawValue: legacy) ?? AppLanguage.matching(legacy) ?? .system
             UserDefaults.standard.removeObject(forKey: legacyKey)
             store(language)
             return language
@@ -112,17 +131,43 @@ public enum UIStrings {
         return String(result)
     }
 
-    public static func text(_ key: String, language: AppLanguage) -> String {
-        withoutTrailingEllipsis(translated(key, language: language))
+    /// Translated text by language code and key. Views ask for the same strings on every redraw, and a bundle lookup
+    /// each time was a large share of the main thread's work while the window redrew.
+    private struct CacheKey: Hashable { let code: String; let key: String }
+    private static let cache = OSAllocatedUnfairLock(initialState: [CacheKey: String]())
+    /// Following the Mac reads its preferred languages; that is read again at most once a second, so a change in
+    /// System Settings still shows up at once.
+    private static let systemCode = OSAllocatedUnfairLock<(code: String, uptime: TimeInterval)?>(initialState: nil)
+
+    static func code(for language: AppLanguage) -> String {
+        guard language == .system else { return language.rawValue }
+        let now = ProcessInfo.processInfo.systemUptime
+        return systemCode.withLock { cached in
+            if let cached, now - cached.uptime < 1 { return cached.code }
+            let code = language.resolved()
+            cached = (code, now)
+            return code
+        }
     }
 
-    private static func translated(_ key: String, language: AppLanguage) -> String {
-        let code = language.resolved()
+    public static func text(_ key: String, language: AppLanguage) -> String {
+        let cacheKey = CacheKey(code: code(for: language), key: key)
+        if let text = cache.withLock({ $0[cacheKey] }) { return text }
+        let text = withoutTrailingEllipsis(translated(key, code: cacheKey.code))
+        cache.withLock { cache in
+            // Messages with details in them are keys too; start over rather than grow without end.
+            if cache.count > 5000 { cache.removeAll(keepingCapacity: true) }
+            cache[cacheKey] = text
+        }
+        return text
+    }
+
+    private static func translated(_ key: String, code: String) -> String {
         if let translated = lookup(key, in: code) { return translated }
         // Error messages are built from a translated lead-in and a translated detail.
         for prefix in ["Connection failed: ", "Command failed: ", "Invalid connection settings: ", "The HTTP proxy refused the connection: "] {
             if key.hasPrefix(prefix), let translated = lookup(prefix, in: code) {
-                return translated + Self.translated(String(key.dropFirst(prefix.count)), language: language)
+                return translated + Self.translated(String(key.dropFirst(prefix.count)), code: code)
             }
         }
         return key

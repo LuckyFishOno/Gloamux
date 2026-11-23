@@ -11,12 +11,10 @@ public struct DesktopView: View {
     @State var showingSignIns = false
     @AppStorage("showsConnectionTree") var showsTree = true
     @AppStorage("showsComposeBar") var showsCompose = true
+    @AppStorage(TerminalPreferences.newTabLocalKey) var newTabOpensLocal = false
     @AppStorage("sideRailPanel") var railPanel = SideRailPanel.sessions
     /// The Mac layout's remote file tree on the right, which follows the focused pane.
     @AppStorage("showsRemoteFilesSidebar") var showsFilesSidebar = true
-    /// Side panel widths, set by dragging their edges.
-    @AppStorage("leftSidebarWidth") var leftSidebarWidth = 254.0
-    @AppStorage("filesSidebarWidth") var rightSidebarWidth = 252.0
     @State var sidebar: WorkspaceSidebar?
     @State var importRequest: FolderImportRequest?
     @State var stripTargeted = false
@@ -34,7 +32,7 @@ public struct DesktopView: View {
             case .transfer: workbenchLayout
             }
         }
-        .toolbar { workspaceToolbar }
+        .background(WorkspaceToolbarHost(state: toolbarState) { workspaceToolbar }.equatable())
         // ThemeTitlebar paints the toolbar in the theme's header color without taking its clicks. A SwiftUI
         // toolbar background would cover the title bar and catch its double-clicks, so the window would no longer fill
         // the screen or zoom as System Settings says. The content background stops below the toolbar for the same reason.
@@ -79,18 +77,13 @@ public struct DesktopView: View {
     /// The Mac layout: connection tree, flat tabs over floating panes, and optional right-hand panels.
     private var nativeLayout: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                if showsTree {
-                    connectionSidebar
-                        .padding(13).frame(width: SidebarWidth.left.clamp(leftSidebarWidth)).background(model.theme.sidebar.color)
-                        .transition(.move(edge: .leading))
-                    resizeDivider($leftSidebarWidth, .left)
-                }
+            workspaceColumns {
+                connectionSidebar.padding(13)
+            } center: {
                 VStack(spacing: 0) {
                     tabStrip()
                     sessionArea
                 }
-                trailingSidebar
             }
             errorBanner
         }
@@ -101,8 +94,8 @@ public struct DesktopView: View {
         VStack(alignment: .leading, spacing: 13) {
             SessionTreeView(store: model.sessionTree, model: model, importFrom: chooseImport)
             Divider().opacity(0.5)
-            if model.savesWithoutUnlock { savedPasswordsSection }
             vaultSection
+            if model.savesWithoutUnlock { savedPasswordsSection }
         }
         .sheet(isPresented: $showingSignIns) { SavedSignInsView(model: model) }
     }
@@ -121,7 +114,7 @@ public struct DesktopView: View {
     private var savedPasswordsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                savedPasswordsButton.buttonStyle(.plain).font(.system(size: 12))
+                savedPasswordsButton.buttonStyle(.plain).appFont(.system(size: 12))
                 InfoButton(T("Passwords that sign in are remembered on this Mac and connect again without asking, also after a restart."))
             }
         }
@@ -160,14 +153,20 @@ public struct DesktopView: View {
             }.padding(.top, 8)
         } label: {
             HStack(spacing: 8) {
-                Label(T("Password vault"), systemImage: "lock.shield").lineLimit(1).truncationMode(.tail)
+                // The name keeps its width; a narrow sidebar shortens the state beside it instead.
+                Label(T("Password vault"), systemImage: "lock.shield").lineLimit(1).truncationMode(.tail).layoutPriority(1)
                 InfoButton(T(!model.savesWithoutUnlock
                              ? "Unlock once after opening Gloamux. Passwords that sign in are saved here, and every connection fills them in without asking again until you lock the vault or quit."
                              : model.vaultState == "Not configured"
                              ? "Create a vault to keep passwords under a master password. While it is unlocked, connections stop asking for Touch ID one by one."
                              : "Unlock once after opening Gloamux, and connections stop asking for Touch ID one by one. While it is locked, sessions set to ask on every connection ask; the others connect with the password remembered on this Mac."))
-                Spacer()
-                Text(T(model.vaultState)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                Spacer(minLength: 4)
+                ViewThatFits(in: .horizontal) {
+                    Text(T(model.vaultState)).lineLimit(1).fixedSize()
+                    Image(systemName: Self.vaultStateSymbol(model.vaultState))
+                        .help(T(model.vaultState)).accessibilityLabel(T(model.vaultState))
+                }
+                .foregroundStyle(.secondary)
                 // Collapsed and locked: unlock with Touch ID without opening the section.
                 if !vaultExpanded, model.vaultState == "Locked", model.vaultHasTouchID {
                     Button { Task { await model.unlockVaultWithTouchID() } } label: {
@@ -178,23 +177,28 @@ public struct DesktopView: View {
                     .help(T("Unlock with Touch ID"))
                     .accessibilityLabel(T("Unlock with Touch ID"))
                 }
-            }.font(.system(size: 12))
+            }.appFont(.system(size: 12))
         }
     }
 
-    /// In the Mac layout, all three panels share a width and a resize handle.
-    @ViewBuilder var trailingSidebar: some View {
-        if showsTrailingSidebar {
-            HStack(spacing: 0) {
-                if model.layout == .native {
-                    resizeDivider($rightSidebarWidth, .files)
-                } else {
-                    workspaceDivider
-                }
-                trailingSidebarContent.frame(width: trailingSidebarWidth)
-            }
-            .transition(.move(edge: .trailing).combined(with: .opacity))
+    /// The vault state as a symbol, for a sidebar too narrow to spell it out.
+    static func vaultStateSymbol(_ state: String) -> String {
+        switch state {
+        case "Unlocked": return "lock.open"
+        case "Locked": return "lock"
+        default: return "minus.circle"
         }
+    }
+
+    /// In the Mac layout, files, themes, and commands share the same trailing width and resize handle.
+    func workspaceColumns<Leading: View, Center: View>(@ViewBuilder leading: () -> Leading,
+                                                         @ViewBuilder center: () -> Center) -> some View {
+        let trailing = model.layout == .native ? TrailingSidebarSizing.resizable :
+            .fixed(sidebar == .themes ? 236 : 260)
+        return WorkspaceSidebarLayout(showsLeading: showsTree, trailing: showsTrailingSidebar ? trailing : nil,
+                                      sidebarColor: model.theme.sidebar.color,
+                                      dividerColor: model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16),
+                                      leadingContent: leading(), centerContent: center(), trailingContent: trailingSidebarContent)
     }
 
     private var showsTrailingSidebar: Bool {
@@ -213,11 +217,6 @@ public struct DesktopView: View {
 
     private var filesSidebarOpen: Bool {
         canShowFilesSidebar && sidebar == nil && showsFilesSidebar
-    }
-
-    private var trailingSidebarWidth: CGFloat {
-        if model.layout == .native { return SidebarWidth.files.clamp(rightSidebarWidth) }
-        return sidebar == .themes ? 236 : 260
     }
 
     @ViewBuilder private var trailingSidebarContent: some View {
@@ -268,7 +267,7 @@ public struct DesktopView: View {
                 Button(T("Show")) { model.recordingSaved = nil; model.showRecordings() }
                 Button { model.recordingSaved = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
             }
-            .font(.callout)
+            .appFont(.callout)
             .padding(.horizontal, 14).padding(.vertical, 9)
             .background(.regularMaterial, in: Capsule())
             .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
@@ -325,16 +324,15 @@ public struct DesktopView: View {
                             .transition(.asymmetric(insertion: .scale(scale: 0.6, anchor: .leading).combined(with: .opacity),
                                                     removal: .opacity))
                     }
-                    Button { model.newConnectionTab() } label: {
-                        Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 28, height: min(28, chrome.height)).contentShape(Rectangle())
+                    Button { model.newTab() } label: {
+                        Image(systemName: "plus").appFont(.system(size: 12, weight: .medium)).frame(width: 28, height: min(28, chrome.height)).contentShape(Rectangle())
                     }
                     .buttonStyle(StripPlusStyle())
-                    .help(T("New connection"))
+                    .help(T(newTabOpensLocal ? "New local terminal" : "New connection"))
                     .frame(width: addWidth)
                     Spacer(minLength: 0)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.86), value: items.map(\.id))
-                .animation(.spring(response: 0.3, dampingFraction: 0.86), value: width)
             }
             .frame(height: chrome.height)
             .padding(.top, chrome == .flat ? 0 : 4)
@@ -402,6 +400,13 @@ public struct DesktopView: View {
                      select: { if !layout.contains(model.selection), let first = layout.tabIDs.first { model.selectTab(first) } },
                      close: { Task { for tab in members { await model.closeTab(tab) } } })
         }
+    }
+
+    /// Everything `workspaceToolbar` reads, so it is rebuilt only when one of these changes.
+    private var toolbarState: WorkspaceToolbarState {
+        WorkspaceToolbarState(showsTree: showsTree, selection: model.selected?.id, layout: model.layout, mode: model.workspaceMode,
+                              themeID: model.displayedThemeID, language: model.language, filesSidebarOpen: filesSidebarOpen,
+                              canShowFilesSidebar: canShowFilesSidebar, sidebar: sidebar)
     }
 
     /// Native window toolbar. The Default layout keeps its actions here; the Classic and Workbench layouts
@@ -477,7 +482,7 @@ public struct DesktopView: View {
             newConnectionItems
         } label: {
             Label(T("New connection"), systemImage: "plus")
-        } primaryAction: { model.newConnectionTab() }
+        } primaryAction: { model.newTab() }
         .help(T("New connection"))
         .accessibilityIdentifier("newConnectionMenu")
     }
@@ -593,18 +598,13 @@ public struct DesktopView: View {
         Rectangle().fill(model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16)).frame(width: 1)
     }
 
-    /// A divider that resizes the panel beside it when dragged.
-    func resizeDivider(_ width: Binding<Double>, _ kind: SidebarWidth) -> some View {
-        SidebarResizeHandle(width: width, kind: kind, color: model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16))
-    }
-
     var themeSidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label(T("Color theme"), systemImage: "paintpalette").font(.headline)
+                Label(T("Color theme"), systemImage: "paintpalette").appFont(.headline)
                 Spacer()
                 Button { setSidebar(.collapsed) } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.semibold))
+                    Image(systemName: "xmark").appFont(.caption.weight(.semibold))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(T("Close theme panel"))
@@ -622,7 +622,8 @@ public struct DesktopView: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.allowedContentTypes = ["xsh", "xfp"].compactMap { UTType(filenameExtension: $0) }
+        // Session files, a folder of them, or an Xshell backup (.xts) from File > Export.
+        panel.allowedContentTypes = ["xsh", "xfp", "xts"].compactMap { UTType(filenameExtension: $0) }
         panel.canCreateDirectories = false
         panel.prompt = T("Review profiles")
         if panel.runModal() == .OK, let url = panel.url {
@@ -900,16 +901,16 @@ struct StripTab: View {
             }
             .frame(width: 16, height: 16)
             if showsTitle {
-                Text(title).font(.system(size: chrome == .flat ? 12 : 11.5, weight: selected ? .medium : .regular))
+                Text(title).appFont(.system(size: chrome == .flat ? 12 : 11.5, weight: selected ? .medium : .regular))
                     .foregroundStyle(selected ? .primary : .secondary)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
                 if let environment, width >= 130 { EnvironmentBadge(environment: environment, compact: true) }
                 if lost {
-                    Image(systemName: "bolt.horizontal.circle.fill").font(.system(size: 10)).foregroundStyle(.red)
+                    Image(systemName: "bolt.horizontal.circle.fill").appFont(.system(size: 10)).foregroundStyle(.red)
                         .help(T("Connection lost"))
                 } else if bell && !attention {
-                    Image(systemName: "bell.fill").font(.system(size: 9)).foregroundStyle(theme.accent.color).help(T("The bell rang"))
+                    Image(systemName: "bell.fill").appFont(.system(size: 9)).foregroundStyle(theme.accent.color).help(T("The bell rang"))
                 } else if attention {
                     Circle().fill(theme.accent.color).frame(width: 7, height: 7).help(T("A command finished"))
                 } else if activity {
@@ -970,12 +971,12 @@ struct StripTab: View {
                 Image(systemName: symbol).foregroundStyle(connected ? Color.green : Color.secondary)
             }
         }
-        .font(.system(size: 11))
+        .appFont(.system(size: 11))
     }
 
     private var closeButton: some View {
         Button(action: close) {
-            Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+            Image(systemName: "xmark").appFont(.system(size: 8, weight: .bold))
                 .foregroundStyle(hoveringClose ? Color.primary : Color.secondary)
                 .frame(width: 16, height: 16)
                 .background(Color.primary.opacity(hoveringClose ? 0.14 : 0), in: RoundedRectangle(cornerRadius: 4))
@@ -984,52 +985,6 @@ struct StripTab: View {
         .buttonStyle(.plain)
         .onHover { hoveringClose = $0 }
         .help(T("Close connection"))
-    }
-}
-
-/// A small borderless icon button that lights up only while the pointer is over it.
-/// The limits of each resizable side panel, and which way dragging widens it.
-enum SidebarWidth {
-    case left, files
-
-    var range: ClosedRange<Double> {
-        switch self {
-        case .left: return 200...520
-        case .files: return 220...560
-        }
-    }
-    /// A left panel widens when its right edge moves right; a right panel when its left edge moves left.
-    var direction: Double { self == .left ? 1 : -1 }
-
-    func clamp(_ width: Double) -> Double { min(max(width, range.lowerBound), range.upperBound) }
-}
-
-/// A one-point line with a wider grab area: dragging it resizes the panel beside it within its limits.
-struct SidebarResizeHandle: View {
-    @Binding var width: Double
-    let kind: SidebarWidth
-    let color: Color
-    @State private var startWidth: Double?
-    @State private var hovering = false
-
-    var body: some View {
-        Rectangle().fill(hovering || startWidth != nil ? Color.accentColor.opacity(0.6) : color).frame(width: 1)
-            .overlay {
-                Color.clear.frame(width: 9).contentShape(Rectangle())
-                    .onHover { inside in
-                        hovering = inside
-                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-                    }
-                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                        .onChanged { drag in
-                            let start = startWidth ?? kind.clamp(width)
-                            if startWidth == nil { startWidth = start }
-                            width = kind.clamp(start + drag.translation.width * kind.direction)
-                        }
-                        .onEnded { _ in startWidth = nil })
-            }
-            .zIndex(1)
-            .help(T("Drag to resize"))
     }
 }
 
@@ -1043,7 +998,7 @@ struct PaneIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .medium))
+            Image(systemName: symbol).appFont(.system(size: 11, weight: .medium))
                 .foregroundStyle(active ? activeColor : hovering ? Color.primary : Color.secondary)
                 .frame(width: 22, height: 22)
                 .background(Color.primary.opacity(hovering ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 5))
@@ -1098,8 +1053,15 @@ struct SessionPane: View {
     @AppStorage(TerminalPreferences.opacityKey) private var terminalOpacity = 1.0
     @State private var reviewedHostKey: HostKeyChange?
     @State private var confirmingVaultRemoval = false
+    @State private var namingConnection = false
+    @State private var connectionName = ""
     @State private var keyNeedsPassphrase = true
     @State private var jumpKeyNeedsPassphrase = true
+    /// The Local row was clicked: it shows so at once, and the terminal replaces the form on the next frame.
+    @State private var openingLocal = false
+    /// The SSH form's width, which decides how its option rows wrap.
+    @State private var sshFormWidth: CGFloat = 1000
+    @Environment(\.appTextScale) private var textScale
     init(model: WorkspaceModel, tab: SessionTab, compact: Bool = false, dockedFiles: Bool = false, flat: Bool = false, showsHeader: Bool = true,
          transferButton: Bool = false) {
         self.model = model; self.tab = tab; self.compact = compact
@@ -1164,17 +1126,17 @@ struct SessionPane: View {
         .loginChallengeSheet(model: model, tab: tab, visible: model.split?.contains(tab.id) != true || model.selection == tab.id)
         .sheet(item: visibleHostKey, onDismiss: { model.answerHostKey(tab, approve: false) }) { prompt in
             VStack(alignment: .leading, spacing: 18) {
-                Label(T("Verify this server"), systemImage: "key.horizontal").font(.title2.bold())
-                Text(prompt.endpoint).font(.headline)
+                Label(T("Verify this server"), systemImage: "key.horizontal").appFont(.title2.bold())
+                Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
-                Text(prompt.fingerprint).font(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier("hostFingerprint")
+                Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier("hostFingerprint")
                 HStack { Button(T("Cancel")) { model.answerHostKey(tab, approve: false) }; Spacer(); Button(T("Trust and connect")) { model.answerHostKey(tab, approve: true) }.buttonStyle(.borderedProminent).accessibilityIdentifier("trustHostButton") }
             }.padding(24).frame(width: 530)
         }
         .sheet(item: $reviewedHostKey) { change in
             VStack(alignment: .leading, spacing: 14) {
-                Label(T("Host key changed"), systemImage: "exclamationmark.shield").font(.title2.bold())
-                Text(change.endpoint).font(.headline).textSelection(.enabled)
+                Label(T("Host key changed"), systemImage: "exclamationmark.shield").appFont(.title2.bold())
+                Text(change.endpoint).appFont(.headline).textSelection(.enabled)
                 Text(T("Confirm the new fingerprint from the server console or with your administrator before updating the saved key."))
                     .fixedSize(horizontal: false, vertical: true)
                 fingerprint(T("Saved fingerprint"), value: change.savedFingerprint)
@@ -1192,6 +1154,18 @@ struct SessionPane: View {
             .padding(24).frame(width: 555)
         }
         .sheet(isPresented: $forwarding) { PortForwardingView(model: model, tab: tab) }
+        .sheet(isPresented: $namingConnection) {
+            SessionNameSheet(title: T("Save connection"), name: $connectionName, showsConnectionInfo: true) {
+                namingConnection = false
+            } onSave: {
+                do {
+                    try model.saveConnection(tab, name: connectionName, parent: model.sessionTree.destination)
+                } catch {
+                    tab.error = error.localizedDescription
+                }
+                namingConnection = false
+            }
+        }
         .task { if CommandLine.arguments.contains("--capture-files") { tab.showsFiles = true } }
         .task(id: tab.connected) { if tab.connected { await showSelectedPanel() } }
         .onChange(of: tab.identityPath) { _, _ in tab.password = ""; tab.keyPassphrase = ""; tab.error = nil }
@@ -1220,7 +1194,7 @@ struct SessionPane: View {
                         .accessibilityIdentifier("reviewHostKeyButton")
                 }
                 Button { tab.error = nil; tab.hostKeyChange = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-            }.font(.callout).foregroundStyle(.red).padding(8).background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+            }.appFont(.callout).foregroundStyle(.red).padding(8).background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
         }
     }
 
@@ -1245,12 +1219,12 @@ struct SessionPane: View {
         HStack(spacing: 4) {
             HStack(spacing: 7) {
                 Circle().fill(tab.connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
-                Image(systemName: tab.container?.tool.symbol ?? (tab.isLocal ? "apple.logo" : "network")).font(.system(size: 11)).foregroundStyle(.secondary)
+                Image(systemName: tab.container?.tool.symbol ?? (tab.isLocal ? "apple.logo" : "network")).appFont(.system(size: 11)).foregroundStyle(.secondary)
                 Text(tab.container != nil ? tab.host : tab.isLocal ? "127.0.0.1" : tab.host.isEmpty ? T("New connection") : tab.host)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced)).lineLimit(1)
-                Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                    .appFont(.system(size: 12, weight: .semibold, design: .monospaced)).lineLimit(1)
+                Text(subtitle).appFont(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
                 if let title = tab.programTitle {
-                    Text(title).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(title).appFont(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         .help(title)
                 }
                 if tab.busy || tab.terminalStarting { ProgressView().controlSize(.mini) }
@@ -1318,70 +1292,127 @@ struct SessionPane: View {
         if isNewConnection { newConnectionSections } else { sshForm.padding(14).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10)) }
     }
 
-    /// A new connection lists SSH, RDP, VNC, and other connections from top to bottom; the chosen one is open for filling in.
+    /// A new connection lists Local, SSH, RDP, VNC, and other connections from top to bottom; the chosen one is open
+    /// for filling in. Local has nothing to fill in: one click opens this Mac's shell in the tab.
     private var newConnectionSections: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(NewConnectionType.allCases, id: \.self) { type in
+        VStack(alignment: .leading, spacing: 10) {
+            localConnectionRow
+            ForEach(NewConnectionType.allCases.filter { $0 != .local }, id: \.self) { type in
                 let open = (tab.newConnectionType ?? .ssh) == type
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
                     Button {
                         NewConnectionType.last = type   // The next new connection opens here.
                         withAnimation(.easeOut(duration: 0.15)) { tab.newConnectionType = type }
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 12)
-                            Image(systemName: type.editorTool?.symbol ?? "terminal").frame(width: 18)
-                                .foregroundStyle(open ? Color.accentColor : .secondary)
-                            Text(T(type.shortTitle)).font(.system(size: 13, weight: .semibold))
-                            Text(T(type.subtitle)).font(.system(size: 12)).foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
+                        connectionRowLabel(type, open: open)
                     }
                     .buttonStyle(.plain)
                     .disabled(tab.busy)
                     .accessibilityIdentifier("newConnection-" + type.rawValue)
-                    if open {
-                        if let tool = type.editorTool {
-                            ContainerSessionEditor(model: model, editing: nil, tool: tool.opensDesktop ? tool : NewConnectionType.lastOtherTool,
-                                                   draftTab: tab).id(tool)
-                        } else {
-                            sshForm
-                        }
-                    }
+                    .accessibilityLabel(T(type.shortTitle))
+                    .accessibilityHint(T(type.subtitle))
+                    if open { sectionForm(type) }
                 }
-                .padding(.horizontal, 14).padding(.vertical, open ? 14 : 10)
                 .background(.quaternary.opacity(open ? 0.4 : 0.2), in: RoundedRectangle(cornerRadius: 10))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sectionForm(_ type: NewConnectionType) -> some View {
+        Group {
+            if let tool = type.editorTool {
+                ContainerSessionEditor(model: model, editing: nil, tool: tool.opensDesktop ? tool : NewConnectionType.lastOtherTool,
+                                       draftTab: tab).id(tool)
+            } else {
+                sshForm
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 16)
+    }
+
+    /// Green, unlike the other four, with no chevron since it has nothing to expand: it reads as a button, not a form.
+    private var localConnectionRow: some View {
+        let type = NewConnectionType.local
+        return Button {
+            guard !openingLocal else { return }
+            NewConnectionType.last = type   // The next new connection leaves every section closed.
+            // Show the click first; building the terminal takes a moment, which held the click up with no sign of it.
+            openingLocal = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(30))
+                model.openLocalTerminal(in: tab)
+                openingLocal = false
+            }
+        } label: {
+            connectionRowLabel(type, open: false, working: openingLocal)
+            .background(Color.green.opacity(openingLocal ? 0.22 : 0.12), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.green.opacity(0.4), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .disabled(tab.busy)
+        .accessibilityIdentifier("newConnection-" + type.rawValue)
+        .accessibilityLabel(T(type.title))
+        .accessibilityHint(T(type.subtitle))
+    }
+
+    private func connectionRowLabel(_ type: NewConnectionType, open: Bool, working: Bool = false) -> some View {
+        let local = type == .local
+        return HStack(spacing: 12) {
+            Image(systemName: local ? "laptopcomputer" : type.editorTool?.symbol ?? "terminal")
+                .appFont(.system(size: 16))
+                .foregroundStyle(local ? Color.green : open ? .accentColor : .secondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(T(type.shortTitle)).appFont(.body.weight(.semibold))
+                Text(T(type.subtitle)).appFont(.callout).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if working {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: local ? "arrow.right" : "chevron.right")
+                    .appFont(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(local ? Color.green : .secondary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var sshForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            let credentialLayout = compact ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) :
+        VStack(alignment: .leading, spacing: 14) {
+            let credentialLayout = compact ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) :
                 AnyLayout(HStackLayout(alignment: .top, spacing: 12))
             credentialLayout {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                HStack(alignment: .top, spacing: 10) {
                     field("Host") { TextField("server.example.com", text: $tab.host).accessibilityIdentifier("hostField") }
-                    field("Port") { TextField("22", text: $tab.port).accessibilityIdentifier("portField") }.frame(width: 55)
+                        .frame(maxWidth: 340)
+                    field("Port") { TextField("22", text: $tab.port).accessibilityIdentifier("portField") }.frame(width: 76)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                HStack(alignment: .top, spacing: 10) {
                     field("Username") { TextField(T("Username"), text: $tab.username).accessibilityIdentifier("usernameField") }
+                        .frame(maxWidth: 184)
                     if tab.identityPath == nil && tab.useAgent {
                         field("Authentication") {
                             Label(T("Keys from the SSH agent"), systemImage: "key.horizontal").foregroundStyle(.secondary)
                         }
                     } else if tab.identityPath == nil {
                         field("Password or vault entry") { SecureField(T("Password or vault entry"), text: $tab.password).accessibilityIdentifier("passwordField") }
+                            .frame(maxWidth: 230)
                     } else if keyNeedsPassphrase {
                         // Only an encrypted key file has a passphrase; the Gloamux key and unencrypted keys do not.
                         field("Key passphrase") { SecureField(T("Key passphrase"), text: $tab.keyPassphrase) }
+                            .frame(maxWidth: 230)
                     }
                 }
             }.onSubmit { Task { await model.connect(tab) } }
             // One row when the pane is wide enough; in a narrow split pane, the proxy settings move to a second row.
-            ViewThatFits(in: .horizontal) {
+            // Chosen from the measured width: ViewThatFits built every arrangement to try it, which slowed opening.
+            let oneRow = (tab.useProxy && tab.jumpSessionID == nil ? 940 : 660) * textScale
+            if sshFormWidth >= oneRow {
                 HStack {
                     keyOptions
                     if tab.jumpSessionID == nil {
@@ -1391,9 +1422,11 @@ struct SessionPane: View {
                     Spacer(minLength: 8)
                     savePasswordButton
                 }
+            } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    ViewThatFits(in: .horizontal) {
+                    if sshFormWidth >= 480 * textScale {
                         HStack { keyOptions; Spacer(minLength: 8); savePasswordButton }
+                    } else {
                         VStack(alignment: .leading, spacing: 8) { keyOptions; savePasswordButton }
                     }
                     if tab.jumpSessionID == nil {
@@ -1412,6 +1445,15 @@ struct SessionPane: View {
                 // The main button sits where filling in ends, as in a macOS dialog; Return does the same.
                 Spacer(minLength: 8)
                 if !tab.busy {
+                    if isNewConnection {
+                        Button(T("Save")) {
+                            connectionName = tab.host.trimmingCharacters(in: .whitespacesAndNewlines)
+                            namingConnection = true
+                        }
+                        .disabled(tab.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                  tab.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("saveConnectionButton")
+                    }
                     Button(T(tab.transportLost ? "Reconnect" : "Connect")) { Task { await model.connect(tab) } }
                         .buttonStyle(.borderedProminent).tint(model.theme.accent.color)
                         .keyboardShortcut(.defaultAction)
@@ -1419,6 +1461,9 @@ struct SessionPane: View {
                 }
             }
         }
+        .controlSize(.large)
+        .frame(maxWidth: isNewConnection ? .infinity : 870, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sshFormWidth = $0 }
         .disabled(tab.busy)
     }
 
@@ -1487,12 +1532,15 @@ struct SessionPane: View {
     }
 
     private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) { Text(T(title)).font(.caption).foregroundStyle(.secondary); content() }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(T(title)).appFont(.callout.weight(.medium)).foregroundStyle(.secondary)
+            content()
+        }
     }
     private func fingerprint(_ label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.body.monospaced()).textSelection(.enabled)
+            Text(label).appFont(.caption).foregroundStyle(.secondary)
+            Text(value).appFont(.body.monospaced()).textSelection(.enabled)
         }
     }
     private func showSelectedPanel() async {
@@ -1502,6 +1550,35 @@ struct SessionPane: View {
     }
 }
 
+
+/// What the window toolbar shows. The toolbar is rebuilt only when one of these changes.
+struct WorkspaceToolbarState: Equatable {
+    var showsTree: Bool
+    var selection: UUID?
+    var layout: WorkspaceLayout
+    var mode: WorkspaceMode
+    var themeID: String
+    var language: AppLanguage
+    var filesSidebarOpen: Bool
+    var canShowFilesSidebar: Bool
+    var sidebar: WorkspaceSidebar?
+}
+
+/// Holds the window toolbar apart from the rest of the window. The window redraws on every workspace change; if the
+/// toolbar were rebuilt with it, AppKit would also rebuild each item's overflow menu and its symbol images, a frame or
+/// two of main-thread work each time that makes animations elsewhere, such as an explanation popover, stutter.
+/// Compared by `state` alone: the content's actions reach the workspace and the window's settings through references
+/// that stay the same.
+struct WorkspaceToolbarHost<Content: ToolbarContent>: View, Equatable {
+    let state: WorkspaceToolbarState
+    @ToolbarContentBuilder let content: () -> Content
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0).toolbar(content: content)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.state == rhs.state }
+}
 
 /// Redraws its content when the tab changes, for views drawn by a parent that observes only the workspace.
 struct TabObserver<Content: View>: View {

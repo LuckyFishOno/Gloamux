@@ -54,21 +54,21 @@ struct TerminalFindBar: View {
     var body: some View {
         if let search = tab.search {
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 11))
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).appFont(.system(size: 11))
                 TextField(T("Find"), text: Binding(get: { search.query }, set: { value in
                     guard var current = tab.search else { return }
                     current.query = value
                     tab.search = current
                 }))
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: search.regex ? .monospaced : .default))
+                    .appFont(.system(size: 12, design: search.regex ? .monospaced : .default))
                     .frame(minWidth: 120, idealWidth: 180, maxWidth: 220)
                     .focused($focused)
                     .onSubmit { model.findAgain(backwards: !NSEvent.modifierFlags.contains(.shift), in: tab) }
                     .onKeyPress(.escape) { model.closeFind(tab); return .handled }
                     .accessibilityIdentifier("terminalFindField")
                 Text(statusText)
-                    .font(.system(size: 11).monospacedDigit())
+                    .appFont(.system(size: 11).monospacedDigit())
                     .foregroundStyle(tab.searchStatus.invalid || (tab.searchStatus.total == 0 && !search.query.isEmpty) ? Color.red : .secondary)
                     .lineLimit(1)
                     .fixedSize()
@@ -103,7 +103,7 @@ struct TerminalFindBar: View {
             change(&search)
             tab.search = search
         } label: {
-            Text(label).font(.system(size: 11, weight: .semibold, design: .monospaced))
+            Text(label).appFont(.system(size: 11, weight: .semibold, design: .monospaced))
                 .frame(width: 22, height: 18)
                 .background(on ? Color.accentColor.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 4))
         }
@@ -115,7 +115,7 @@ struct TerminalFindBar: View {
 
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).frame(width: 18, height: 18).contentShape(Rectangle())
+            Image(systemName: symbol).appFont(.system(size: 10, weight: .semibold)).frame(width: 18, height: 18).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)

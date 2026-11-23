@@ -20,6 +20,11 @@ extension WorkspaceTheme {
     }
 
     static let presets: [WorkspaceTheme] = [
+        // Gloamux's own theme, taken from the app icon: deep indigo chrome with the icon's violet as the accent.
+        preset("gloam", "Gloam", appearance: "dark", chrome: ["1A1838", "201E42", "25224B", "1D1B3D", "A48CFF", "4A3F8A"],
+               background: "15132E", foreground: "E6E1FF", cursor: "B9A6FF", selection: "463A86",
+              ansi: ["25223F", "FF7E9D", "8EE0B5", "F7CB86", "8FA8FF", "C8A0FF", "7FD6E6", "C4C0E0",
+                     "8A84B8", "FF9DB4", "A9F0C8", "FFDCA6", "ADC0FF", "DEC2FF", "A2E6F0", "F6F4FF"]),
         preset("midnight", "Midnight", appearance: "dark", chrome: ["191B2C", "222337", "27283E", "1F2136", "AFA1ED", "534B76"],
                background: "141722", foreground: "E1E7FA", cursor: "C3B4FF", selection: "484268",
               ansi: ["24283A", "FF8796", "95DDB8", "F4C486", "92ADF8", "C9A2F0", "80D1DB", "BBC5E0",
@@ -111,9 +116,9 @@ struct ThemeGallery: View {
         let matching = ThemeSearch.filter(themes, matching: query)
         VStack(spacing: 6) {
             HStack(spacing: 5) {
-                Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").appFont(.caption).foregroundStyle(.secondary)
                 TextField(T("Search themes"), text: $query)
-                    .textFieldStyle(.plain).font(.system(size: 12))
+                    .textFieldStyle(.plain).appFont(.system(size: 12))
                     .accessibilityIdentifier("themeSearch")
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
@@ -130,7 +135,7 @@ struct ThemeGallery: View {
                             row(theme).id(theme.id)
                         }
                         if matching.isEmpty {
-                            Text(T("No matching themes")).font(.caption).foregroundStyle(.secondary)
+                            Text(T("No matching themes")).appFont(.caption).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                         }
                     }
@@ -153,15 +158,15 @@ struct ThemeGallery: View {
                 WorkspaceThumbnail(theme: theme)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(T(theme.title)).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                    Text(T(theme.title)).appFont(.system(size: 12, weight: selected ? .semibold : .regular))
                         .lineLimit(1)
                     Text(T(theme.isDark ? "Dark theme" : "Light theme"))
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .appFont(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 3)
                 if selected {
                     Image(systemName: "checkmark")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.tint)
+                        .appFont(.caption.weight(.semibold)).foregroundStyle(.tint)
                         .accessibilityHidden(true)
                 }
             }
@@ -224,10 +229,17 @@ private struct WorkspaceThumbnail: View {
 struct ThemeTitlebar: NSViewRepresentable {
     let theme: WorkspaceTheme
     func makeNSView(context: Context) -> TitlebarView { TitlebarView() }
-    func updateNSView(_ view: TitlebarView, context: Context) { view.color = theme.header.nsColor }
+    func updateNSView(_ view: TitlebarView, context: Context) {
+        view.color = theme.header.nsColor
+        view.menuStyle = MenuTint.Style(color: theme.menu.nsColor, dark: theme.isDark)
+    }
 
     final class TitlebarView: NSView {
-        var color: NSColor? { didSet { apply() } }
+        /// SwiftUI sets this on every update of the view around it. Setting a window's background color redraws the whole
+        /// window, so it is applied only when the color changes; a popover opening over a form would otherwise stutter.
+        var color: NSColor? { didSet { if color != oldValue { apply() } } }
+        /// The window's menus take the theme's menu color and light or dark look.
+        var menuStyle: MenuTint.Style? { didSet { if menuStyle != oldValue { registerMenus() } } }
         private let fill = Fill()
         private var observers: [NSObjectProtocol] = []
 
@@ -244,6 +256,11 @@ struct ThemeTitlebar: NSViewRepresentable {
                 }
             }
             apply()
+            registerMenus()
+        }
+
+        private func registerMenus() {
+            if let window, let menuStyle { MenuTint.use(menuStyle, for: window) }
         }
 
         deinit { observers.forEach(NotificationCenter.default.removeObserver) }

@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 import Foundation
 import MasterPassword
 @testable import App
@@ -32,7 +33,39 @@ import MasterPassword
         object["entries"] = entries
         try JSONSerialization.data(withJSONObject: object).write(to: url)
         var swapped = try DeviceSecrets(url: url)
-        XCTAssertThrowsError(try swapped.secret(id: "bob@[server]:22"))
+        XCTAssertThrowsError(try swapped.secret(id: "bob@[server]:22")) {
+            XCTAssertEqual($0.localizedDescription, DeviceSecrets.unreadable, "A readable message, not a CryptoKit error code.")
+        }
+    }
+
+    /// Passwords saved while the app had an earlier name were sealed with that name in the key. They still open, and
+    /// are sealed again under the current name.
+    func testSignInsSavedUnderAnEarlierNameStillOpenAndAreResealed() throws {
+        let url = try directory().appendingPathComponent("saved-sign-ins.json")
+        var secrets = try DeviceSecrets(url: url)
+        try secrets.store(id: "alice@[server]:22", secret: "current")
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let enclaveKey = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(object["enclaveKey"] as? String)))
+        let peerKey = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(object["peerKey"] as? String)))
+        let shared = try SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: enclaveKey)
+            .sharedSecretFromKeyAgreement(with: P256.KeyAgreement.PublicKey(x963Representation: peerKey))
+        let legacyKey = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(), sharedInfo: Data("MShell saved sign-ins v1".utf8),
+                                                       outputByteCount: 32)
+        let id = "bob@[server]:22"
+        let legacySealed = try XCTUnwrap(try AES.GCM.seal(Data("from-mshell".utf8), using: legacyKey, authenticating: Data(id.utf8)).combined)
+        var entries = try XCTUnwrap(object["entries"] as? [String: Any])
+        entries[id] = legacySealed.base64EncodedString()
+        object["entries"] = entries
+        try JSONSerialization.data(withJSONObject: object).write(to: url)
+
+        var reopened = try DeviceSecrets(url: url)
+        XCTAssertEqual(try reopened.secret(id: id), "from-mshell")
+        XCTAssertEqual(try reopened.secret(id: "alice@[server]:22"), "current")
+        let rewritten = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let stored = try XCTUnwrap((rewritten["entries"] as? [String: Any])?[id] as? String)
+        XCTAssertNotEqual(stored, legacySealed.base64EncodedString(), "Read once, the entry is sealed under the current name.")
+        var again = try DeviceSecrets(url: url)
+        XCTAssertEqual(try again.secret(id: id), "from-mshell")
     }
 
     func testAPasswordThatSignedInConnectsAgainAfterARestartWithoutUnlocking() async throws {

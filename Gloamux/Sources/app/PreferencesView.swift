@@ -40,6 +40,7 @@ public struct PreferencesMenuLink: View {
 public struct PreferencesView: View {
     enum Pane: String, Hashable { case general, terminal, text, triggers, safety, agents, appearance }
     @ObservedObject private var model: WorkspaceModel
+    @Environment(\.appTextScale) private var textScale
     /// `--preferences-pane terminal` opens on another pane, for screenshots.
     @State private var pane: Pane = {
         let arguments = CommandLine.arguments
@@ -85,7 +86,8 @@ public struct PreferencesView: View {
             }
             .padding(20)
         }
-        .frame(width: 540)
+        // Wider with larger app text, so the pane buttons and labels keep their room.
+        .frame(width: (540 * max(1, textScale)).rounded())
         .fixedSize(horizontal: false, vertical: true)
         .navigationTitle(T("Settings"))
         .onAppear(perform: takeRequestedPane)
@@ -103,8 +105,8 @@ public struct PreferencesView: View {
         return Button { pane = value } label: {
             VStack(spacing: 3) {
                 // Some symbols, such as textformat, change with the Mac's language (格式 in Chinese); keep the Latin "Aa".
-                Image(systemName: symbol).font(.system(size: 18)).environment(\.locale, Locale(identifier: "en"))
-                Text(title).font(.system(size: 11))
+                Image(systemName: symbol).appFont(.system(size: 18)).environment(\.locale, Locale(identifier: "en"))
+                Text(title).appFont(.system(size: 11))
             }
             .foregroundStyle(selected ? model.theme.accent.color : model.theme.foreground.color.opacity(0.7))
             .frame(minWidth: 60).padding(.vertical, 5).padding(.horizontal, 5)
@@ -138,12 +140,11 @@ private struct GeneralSettings: View {
     @AppStorage(WorkspaceModel.restoreTabsKey) private var reopenTabs = false
     @AppStorage(WorkspaceModel.lockIdleKey) private var lockAfter = 0
 
-    private let languages: [AppLanguage] = [.system, .traditionalChinese, .english]
 
     var body: some View {
         Form {
             Picker(selection: $model.language) {
-                ForEach(languages) { language in
+                ForEach(AppLanguage.allCases) { language in
                     Text(language == .system ? String(format: T("System default (%@)"), AppLanguage.title(for: language.resolved())) : language.title)
                         .tag(language)
                 }
@@ -181,7 +182,7 @@ private struct GeneralSettings: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(T("All settings"))
-                    InfoButton(T("Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, and settings in one file, with a .sha256 file next to it. No passwords are included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first."))
+                    InfoButton(T("Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings, and the password vault in one file, with a .sha256 file next to it. The vault stays sealed under its master password, which is not saved in the file. Passwords remembered on this Mac are not included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first."))
                 }
             }
         }
@@ -213,10 +214,14 @@ private struct TerminalSettings: View {
     @AppStorage(TerminalPreferences.keepAliveKey) private var keepAlive = 30
     @AppStorage(TerminalPreferences.terminalTypeKey) private var terminalType = "xterm-256color"
     @AppStorage(TerminalPreferences.reconnectKey) private var reconnect = true
+    @AppStorage(TerminalPreferences.newTabLocalKey) private var newTabLocal = false
 
     var body: some View {
         Form {
             Section {
+                Toggle(isOn: $newTabLocal) {
+                    label(T("New tabs open a local terminal"), T("The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form."))
+                }
                 Toggle(isOn: $local) {
                     label(T("Local shell integration"), T("zsh reports each prompt, command, exit status, and folder. Then ⌘↑ and ⌘↓ jump between prompts, the pane header shows the last result, and ⌘T opens in the same folder. Applies to new terminals."))
                 }
@@ -326,11 +331,24 @@ private struct TextSettings: View {
     @AppStorage(TerminalPreferences.cursorKey) private var cursor = CursorShape.block.rawValue
     @AppStorage(TerminalPreferences.blinkKey) private var blinks = false
     @AppStorage(TerminalPreferences.opacityKey) private var opacity = 1.0
+    @AppStorage(AppTextSize.key) private var appSize = AppTextSize.defaultSize
     @State private var families: [String] = []
 
     var body: some View {
         Form {
-            Section {
+            Section(T("Application")) {
+                LabeledContent {
+                    Stepper(value: $appSize, in: AppTextSize.sizes, step: 1) {
+                        Text("\(Int(AppTextSize.clamped(appSize))) pt").monospacedDigit()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Application font size")).fixedSize(horizontal: false, vertical: true)
+                        InfoButton(T("Lists, forms, toolbars, and this window. ⌘+ and ⌘− change it outside a session, ⌥⌘+ and ⌥⌘− from anywhere; ⌥⌘0 goes back to 13 pt."))
+                    }
+                }
+            }
+            Section(T("Session")) {
                 Picker(T("Font"), selection: $font) {
                     Text(T("System monospaced")).tag("")
                     if !families.isEmpty { Divider() }
@@ -342,8 +360,8 @@ private struct TextSettings: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(T("Size")).fixedSize(horizontal: false, vertical: true)
-                        InfoButton(T("⌘+ and ⌘− change it from any terminal; ⌘0 goes back to 13 pt."))
+                        Text(T("Session font size")).fixedSize(horizontal: false, vertical: true)
+                        InfoButton(T("⌘+ and ⌘− change it in any session; ⌘0 goes back to 13 pt."))
                     }
                 }
                 Text(T("The quick brown fox · 終端機 · 0O1lI"))
@@ -422,7 +440,7 @@ private struct SafetySettings: View {
                             .controlSize(.small)
                     }
                     TextEditor(text: $patterns)
-                        .font(.system(size: 11, design: .monospaced))
+                        .appFont(.system(size: 11, design: .monospaced))
                         .frame(height: 120)
                         .scrollContentBackground(.hidden)
                         .padding(4)
@@ -461,13 +479,13 @@ private struct AppearanceSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(T("Color theme")).font(.headline)
+            Text(T("Color theme")).appFont(.headline)
             // A click applies the theme, like every other choice in Settings.
             ThemeGallery(themes: model.themes, selectedID: model.themeID) { id in
                 do { try model.selectTheme(id); model.error = nil }
                 catch { model.error = error.localizedDescription }
             }.frame(height: 312)
-            if let error = model.error { Text(T(error)).foregroundStyle(.red).font(.caption) }
+            if let error = model.error { Text(T(error)).foregroundStyle(.red).appFont(.caption) }
         }
         .padding(.horizontal, 4)
     }

@@ -33,9 +33,14 @@ struct SessionTreeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                // One line, cut short when the sidebar is narrow, rather than wrapping.
-                Label(T("Session Manager"), systemImage: "folder").font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1).truncationMode(.tail)
+                // One line: the full title, a shorter one, or only the icon when the sidebar is narrow, never a cut word.
+                ViewThatFits(in: .horizontal) {
+                    Label(T("Session Manager"), systemImage: "folder").fixedSize()
+                    Label(T("Sessions"), systemImage: "folder").fixedSize()
+                    Label(T("Session Manager"), systemImage: "folder").labelStyle(.iconOnly)
+                }
+                .appFont(.system(size: 13, weight: .semibold))
+                .accessibilityElement(children: .ignore).accessibilityLabel(T("Session Manager")).accessibilityAddTraits(.isHeader)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .contextMenu { rootMenu }
@@ -45,7 +50,7 @@ struct SessionTreeView: View {
                         Text(T("Name (ascending)")).tag(SessionTreeSorting.nameAscending)
                         Text(T("Name (descending)")).tag(SessionTreeSorting.nameDescending)
                     }.pickerStyle(.inline)
-                } label: { Image(systemName: "arrow.up.arrow.down") }
+                } label: { Image(systemName: "arrow.up.arrow.down").iconHitArea() }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     .help(T("Sort")).accessibilityLabel(T("Sort"))
                 Menu {
@@ -64,7 +69,8 @@ struct SessionTreeView: View {
                     Button(T("Expand all")) { perform { try store.expandAll(true) } }
                     Button(T("Collapse all")) { perform { try store.expandAll(false) } }
                     Button(T("Paste at root")) { perform { try store.paste(into: nil) } }.disabled(store.clipboard == nil)
-                } label: { Image(systemName: "plus.circle") }.menuStyle(.borderlessButton).fixedSize()
+                } label: { Image(systemName: "plus.circle").iconHitArea() }.menuStyle(.borderlessButton).fixedSize()
+                    .help(T("Add")).accessibilityLabel(T("Add"))
             }
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -81,9 +87,9 @@ struct SessionTreeView: View {
                         LazyVStack(alignment: .leading, spacing: 3) {
                             ForEach(store.children(of: nil).filter { store.matches($0.id) }) { item in row(item) }
                             if store.nodes.isEmpty {
-                                Text(T("Save a connection or create a folder using +.")).font(.caption).foregroundStyle(.secondary).padding(.vertical, 10)
+                                Text(T("Save a connection or create a folder using +.")).appFont(.caption).foregroundStyle(.secondary).padding(.vertical, 10)
                             } else if !store.children(of: nil).contains(where: { store.matches($0.id) }) {
-                                Text(T("No matching sessions")).font(.caption).foregroundStyle(.secondary)
+                                Text(T("No matching sessions")).appFont(.caption).foregroundStyle(.secondary)
                             }
                         }
                         Spacer(minLength: 18)
@@ -124,14 +130,11 @@ struct SessionTreeView: View {
             ConnectionEditor(store: store, item: request.item, parent: request.parent, model: model)
         }
         .sheet(item: $editor) { current in
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 6) {
-                    Text(current.title).font(.headline)
-                    if current.kind == .save { InfoButton(T("Host, account and proxy settings only. Passwords are excluded.")) }
-                }
-                TextField(T("Name"), text: $name).textFieldStyle(.roundedBorder).onSubmit { submit(current) }
-                HStack { Button(T("Cancel")) { editor = nil }; Spacer(); Button(T("Save")) { submit(current) }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-            }.padding(24).frame(width: 380)
+            SessionNameSheet(title: current.title, name: $name, showsConnectionInfo: current.kind == .save) {
+                editor = nil
+            } onSave: {
+                submit(current)
+            }
         }
         .alert(T("Delete saved item?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button(T("Cancel"), role: .cancel) { deleting = nil }
@@ -141,7 +144,7 @@ struct SessionTreeView: View {
 
     private var canSaveCurrent: Bool {
         guard let tab = model.selected else { return false }
-        return !tab.isLocal && tab.newConnectionType?.editorTool == nil
+        return !tab.isLocal && NewConnectionType.usesSSHForm(tab.newConnectionType)
     }
 
     @ViewBuilder private func newItems(parent: UUID?) -> some View {
@@ -164,7 +167,7 @@ struct SessionTreeView: View {
         AnyView(VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 if item.isFolder {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").appFont(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                         .rotationEffect(.degrees(item.expanded || !store.query.isEmpty ? 90 : 0))
                         .frame(width: 14, height: 14)
                 } else { Color.clear.frame(width: 14, height: 14) }
@@ -174,7 +177,7 @@ struct SessionTreeView: View {
                 if let environment = item.environment { EnvironmentBadge(environment: environment, compact: true) }
                 if reachabilityEnabled && !item.isFolder { ReachabilityDot(monitor: model.reachability, id: item.id) }
                 Spacer(minLength: 0)
-                if store.clipboard == item.id { Image(systemName: store.cutting ? "scissors" : "doc.on.doc").font(.caption) }
+                if store.clipboard == item.id { Image(systemName: store.cutting ? "scissors" : "doc.on.doc").appFont(.caption) }
             }
             .padding(.vertical, 6).padding(.horizontal, 4).contentShape(Rectangle())
             .background(store.selection == item.id ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
@@ -385,6 +388,33 @@ private struct TreeEditor: Identifiable {
     var title: String { switch kind { case .folder: return T("New folder"); case .rename: return T("Rename saved item"); case .save: return T("Save connection") } }
 }
 
+struct SessionNameSheet: View {
+    let title: String
+    @Binding var name: String
+    let showsConnectionInfo: Bool
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 6) {
+                Text(title).appFont(.headline)
+                if showsConnectionInfo { InfoButton(T("Host, account and proxy settings only. Passwords are excluded.")) }
+            }
+            TextField(T("Name"), text: $name).textFieldStyle(.roundedBorder)
+                .onSubmit { if canSave { onSave() } }
+            HStack {
+                Button(T("Cancel"), action: onCancel).keyboardShortcut(.cancelAction)
+                Spacer()
+                Button(T("Save"), action: onSave).disabled(!canSave)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+    }
+
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+}
 
 private struct ConnectionEditRequest: Identifiable {
     let id = UUID()

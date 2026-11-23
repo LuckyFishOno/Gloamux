@@ -19,18 +19,13 @@ extension DesktopView {
                 .padding(.horizontal, 8).padding(.vertical, 5)
                 .background(model.theme.header.color)
             classicRule
-            HStack(spacing: 0) {
-                if showsTree {
-                    connectionSidebar
-                        .padding(10).frame(width: SidebarWidth.left.clamp(leftSidebarWidth)).background(model.theme.sidebar.color)
-                        .transition(.move(edge: .leading))
-                    resizeDivider($leftSidebarWidth, .left)
-                }
+            workspaceColumns {
+                connectionSidebar.padding(10)
+            } center: {
                 VStack(spacing: 0) {
                     tabStrip(.boxed)
                     sessionArea
                 }
-                trailingSidebar
             }
             if showsCompose {
                 classicRule
@@ -57,19 +52,16 @@ extension DesktopView {
                     }
                 }
                 workspaceDivider
-                if showsTree {
+                workspaceColumns {
                     railContent
-                        .frame(width: SidebarWidth.left.clamp(leftSidebarWidth)).background(model.theme.sidebar.color)
-                        .transition(.move(edge: .leading))
-                    resizeDivider($leftSidebarWidth, .left)
+                } center: {
+                    VStack(spacing: 0) {
+                        tabStrip(.rounded)
+                        sessionArea
+                        classicRule
+                        MonitorBar(model: model)
+                    }
                 }
-                VStack(spacing: 0) {
-                    tabStrip(.rounded)
-                    sessionArea
-                    classicRule
-                    MonitorBar(model: model)
-                }
-                trailingSidebar
             }
             errorBanner
         }
@@ -122,7 +114,7 @@ private struct ToolIcon: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .symbolRenderingMode(.hierarchical)
-                .font(.system(size: 14))
+                .appFont(.system(size: 14))
                 .foregroundStyle(enabled ? color : Color.secondary.opacity(0.5))
                 .frame(width: 28, height: 26)
                 .background(Color.primary.opacity(active ? 0.14 : hovering && enabled ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 5))
@@ -132,8 +124,7 @@ private struct ToolIcon: View {
         .disabled(!enabled)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
-        .help(T(help))
-        .accessibilityLabel(T(help))
+        .helpTag(T(help))
     }
 }
 
@@ -147,8 +138,8 @@ private struct ToolMenu<Items: View>: View {
     var body: some View {
         Menu(content: items) {
             HStack(spacing: 2) {
-                Image(systemName: symbol).symbolRenderingMode(.hierarchical).font(.system(size: 14)).foregroundStyle(color)
-                Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold)).foregroundStyle(.secondary)
+                Image(systemName: symbol).symbolRenderingMode(.hierarchical).appFont(.system(size: 14)).foregroundStyle(color)
+                Image(systemName: "chevron.down").appFont(.system(size: 7, weight: .bold)).foregroundStyle(.secondary)
             }
         }
         // The button menu style with a plain button keeps a custom label intact; the borderless style flattens it.
@@ -158,8 +149,7 @@ private struct ToolMenu<Items: View>: View {
         .fixedSize()
         .frame(height: 26)
         .padding(.horizontal, 4)
-        .help(T(help))
-        .accessibilityLabel(T(help))
+        .helpTag(T(help))
     }
 }
 
@@ -178,10 +168,10 @@ struct AddressField: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: prominent ? "link" : "bolt.horizontal.fill")
-                .font(.system(size: 11)).foregroundStyle(prominent ? Color.secondary : Color.yellow)
+                .appFont(.system(size: 11)).foregroundStyle(prominent ? Color.secondary : Color.yellow)
             TextField(T(prominent ? "Host, IP address, or ssh://user@host:port" : "Quick connect…"), text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .appFont(.system(size: 12))
                 .focused($focused)
                 .onSubmit(open)
                 .accessibilityIdentifier(prominent ? "addressBar" : "quickConnectField")
@@ -318,14 +308,14 @@ private struct ComposeBar: View {
                 .pickerStyle(.inline)
             } label: {
                 Label(T(toAll ? "All sessions" : "Current session"), systemImage: toAll ? "rectangle.stack" : "rectangle")
-                    .font(.system(size: 11))
+                    .appFont(.system(size: 11))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help(T("Send to"))
             TextField(T("Type text to send, then press Return"), text: $draft)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, design: .monospaced))
+                .appFont(.system(size: 12, design: .monospaced))
                 .focused($focused)
                 .onSubmit(send)
                 .accessibilityIdentifier("composeBar")
@@ -334,7 +324,7 @@ private struct ComposeBar: View {
                 .foregroundStyle(draft.isEmpty ? Color.secondary : model.theme.accent.color)
                 .disabled(draft.isEmpty)
                 .help(T("Send"))
-            Button(action: close) { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+            Button(action: close) { Image(systemName: "xmark").appFont(.system(size: 9, weight: .bold)) }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .help(T("Hide compose bar"))
         }
@@ -368,7 +358,7 @@ private struct ClassicStatusBar: View {
             StatusCell(text: String(format: T("%d sessions"), model.tabs.count))
             StatusCell(text: "CAP", dim: !keys.capsLock)
         }
-        .font(.system(size: 11).monospacedDigit())
+        .appFont(.system(size: 11).monospacedDigit())
         .foregroundStyle(.secondary)
         .padding(.horizontal, 8)
         .frame(height: 22)
@@ -380,7 +370,7 @@ private struct ClassicStatusBar: View {
         var body: some View {
             HStack(spacing: 6) {
                 Image(systemName: tab.isLocal ? "terminal" : tab.connected ? "lock.fill" : "lock.open")
-                    .font(.system(size: 9)).foregroundStyle(tab.connected || tab.isLocal ? Color.green : Color.secondary)
+                    .appFont(.system(size: 9)).foregroundStyle(tab.connected || tab.isLocal ? Color.green : Color.secondary)
                 Text(address).lineLimit(1).truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -451,9 +441,9 @@ private struct RibbonLabel: View {
     var hovering = false
     var body: some View {
         VStack(spacing: 3) {
-            Image(systemName: symbol).symbolRenderingMode(.hierarchical).font(.system(size: 19)).foregroundStyle(color)
+            Image(systemName: symbol).symbolRenderingMode(.hierarchical).appFont(.system(size: 19)).foregroundStyle(color)
                 .frame(height: 22)
-            Text(T(title)).font(.system(size: 10.5)).lineLimit(1).fixedSize()
+            Text(T(title)).appFont(.system(size: 10.5)).lineLimit(1).fixedSize()
         }
         .padding(.horizontal, 7)
         .frame(minWidth: 52, minHeight: 50)
@@ -589,8 +579,8 @@ private struct SideRail: View {
         let selected = selection == panel
         return Button { select(panel) } label: {
             VStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(color)
-                Text(label).font(.system(size: 11, weight: selected ? .semibold : .regular)).fixedSize()
+                Image(systemName: symbol).appFont(.system(size: 11)).foregroundStyle(color)
+                Text(label).appFont(.system(size: 11, weight: selected ? .semibold : .regular)).fixedSize()
                     .rotationEffect(.degrees(-90))
                     .frame(width: 16, height: length)
             }
@@ -619,7 +609,7 @@ private struct SideRailFiles: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "folder.fill").foregroundStyle(.orange)
-                Text(tab.isLocal || tab.host.isEmpty ? "SFTP" : "SFTP · \(tab.host)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Text(tab.isLocal || tab.host.isEmpty ? "SFTP" : "SFTP · \(tab.host)").appFont(.system(size: 12, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 0)
                 if !tab.isLocal && tab.connected {
                     Button { tab.followsFolder.toggle() } label: {
@@ -631,7 +621,7 @@ private struct SideRailFiles: View {
                     .accessibilityLabel(T("Follow terminal folder"))
                     .accessibilityAddTraits(tab.followsFolder ? .isSelected : [])
                     Button { model.openFileTransfer(for: tab) } label: {
-                        Label(T("Two-pane"), systemImage: "arrow.left.arrow.right").labelStyle(.titleAndIcon).font(.system(size: 11))
+                        Label(T("Two-pane"), systemImage: "arrow.left.arrow.right").labelStyle(.titleAndIcon).appFont(.system(size: 11))
                     }
                     .buttonStyle(.bordered).controlSize(.small)
                     .help(T("Open these files in the two-pane File Transfer view"))
@@ -642,8 +632,8 @@ private struct SideRailFiles: View {
                 RemoteFilesPane(model: model, tab: tab, compact: true).id(tab.id)
             } else {
                 VStack(spacing: 8) {
-                    Image(systemName: "externaldrive.badge.wifi").font(.system(size: 26)).foregroundStyle(.secondary)
-                    Text(T("Open an SSH tab to browse remote files.")).font(.callout).foregroundStyle(.secondary)
+                    Image(systemName: "externaldrive.badge.wifi").appFont(.system(size: 26)).foregroundStyle(.secondary)
+                    Text(T("Open an SSH tab to browse remote files.")).appFont(.callout).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -719,7 +709,7 @@ private struct MonitorBar: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 11).monospacedDigit())
+            .appFont(.system(size: 11).monospacedDigit())
             .padding(.horizontal, 10)
             .task(id: "\(tab.id)-\(tab.connected)") { monitor.watch(tab) }
         }
@@ -727,7 +717,7 @@ private struct MonitorBar: View {
         @ViewBuilder private func metric(_ symbol: String, _ color: Color, _ value: String?) -> some View {
             if let value {
                 HStack(spacing: 4) {
-                    Image(systemName: symbol).font(.system(size: 10)).foregroundStyle(color)
+                    Image(systemName: symbol).appFont(.system(size: 10)).foregroundStyle(color)
                     Text(value)
                 }
             }

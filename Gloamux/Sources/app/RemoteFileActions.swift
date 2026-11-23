@@ -93,13 +93,13 @@ struct PermissionsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(T("Permissions")).font(.headline)
+            Text(T("Permissions")).appFont(.headline)
             Text(request.paths.count == 1 ? request.paths[0] : String(format: T("%d items"), request.paths.count))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                .appFont(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 GridRow {
                     Text("")
-                    ForEach(Self.rights, id: \.0) { right in Text(T(right.0)).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(Self.rights, id: \.0) { right in Text(T(right.0)).appFont(.caption).foregroundStyle(.secondary) }
                 }
                 ForEach(Self.classes, id: \.0) { owner in
                     GridRow {
@@ -112,9 +112,9 @@ struct PermissionsSheet: View {
             }
             HStack(spacing: 6) {
                 Text(T("Octal"))
-                TextField("", text: $octal).font(.system(.body, design: .monospaced)).frame(width: 60)
+                TextField("", text: $octal).appFont(.system(.body, design: .monospaced)).frame(width: 60)
                     .onChange(of: octal) { _, text in if let value = UInt32(text, radix: 8), value <= 0o777, text.count == 3 { bits = value } }
-                Text(PermissionsSheet.symbolic(bits)).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
+                Text(PermissionsSheet.symbolic(bits)).appFont(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
             }
             HStack {
                 Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
@@ -331,9 +331,9 @@ private struct RemoteEditRow: View {
                 Button { if edit.changed { discarding = true } else { RemoteEditor.shared.close(edit) } } label: { Image(systemName: "xmark.circle") }
                     .buttonStyle(.borderless).help(T("Stop editing"))
             }
-            .font(.system(size: 11))
+            .appFont(.system(size: 11))
             Text(edit.error.map { T($0) } ?? T(edit.changed ? "Saved on this Mac, not uploaded" : "Same as on the server"))
-                .font(.system(size: 10)).foregroundStyle(edit.error == nil ? Color.secondary : .red).lineLimit(2)
+                .appFont(.system(size: 10)).foregroundStyle(edit.error == nil ? Color.secondary : .red).lineLimit(2)
         }
         .padding(8).frame(maxWidth: .infinity, alignment: .leading)
         .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))

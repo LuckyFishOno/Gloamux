@@ -26,7 +26,7 @@ struct SavedSignInsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label(T("Saved passwords"), systemImage: "key.viewfinder").font(.title2.weight(.semibold))
+                Label(T("Saved passwords"), systemImage: "key.viewfinder").appFont(.title2.weight(.semibold))
                 InfoButton(T(model.savesWithoutUnlock
                              ? "Passwords that signed in are remembered on this Mac. Vault entries are copies you put in the password vault; they need the vault unlocked."
                              : "Passwords in the password vault. Unlock the vault to show or delete them.")
@@ -44,7 +44,7 @@ struct SavedSignInsView: View {
                     .accessibilityIdentifier("savedSignInsList")
             }
             if let error {
-                Label(T(error), systemImage: "exclamationmark.circle").foregroundStyle(.red).font(.callout)
+                Label(T(error), systemImage: "exclamationmark.circle").foregroundStyle(.red).appFont(.callout)
             }
             HStack {
                 Spacer()
@@ -70,20 +70,20 @@ struct SavedSignInsView: View {
             Image(systemName: item.isPassphrase ? "key.horizontal" : "person.badge.key")
                 .foregroundStyle(.secondary).frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: item.account).font(.body.monospaced()).lineLimit(1).truncationMode(.middle)
+                Text(verbatim: item.account).appFont(.body.monospaced()).lineLimit(1).truncationMode(.middle)
                 let subtitle = item.sessions.isEmpty ? (item.isPassphrase ? T("Key passphrase") : T("Password"))
                     : item.sessions.joined(separator: ", ")
                 HStack(spacing: 6) {
                     Label(T(item.place == .vault ? "Password vault" : "This Mac"),
                           systemImage: item.place == .vault ? "lock.shield" : "laptopcomputer")
-                        .font(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
+                        .appFont(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
                         .background(.quaternary, in: Capsule())
-                    Text(verbatim: subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(verbatim: subtitle).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
                         .help(item.detail ?? subtitle)
                 }
             }
             Spacer(minLength: 8)
-            Text(verbatim: revealed[item.id] ?? "••••••••").font(.callout.monospaced()).textSelection(.enabled)
+            Text(verbatim: revealed[item.id] ?? "••••••••").appFont(.callout.monospaced()).textSelection(.enabled)
                 .lineLimit(1).frame(maxWidth: 170, alignment: .trailing)
             Button { Task { await toggleReveal(item) } } label: {
                 Image(systemName: revealed[item.id] == nil ? "eye" : "eye.slash")

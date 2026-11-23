@@ -33,6 +33,7 @@ extension WorkspaceModel {
         let alert = NSAlert()
         alert.messageText = T("Replace all Gloamux settings with this backup?")
         var detail = T("Sessions, quick commands, triggers, runbooks, host keys, and settings are replaced. Saved passwords stay on this Mac. Open tabs close and Gloamux restarts.")
+        if backup.vault != nil { detail += "\n\n" + T("The password vault in the backup replaces the one on this Mac. Unlock it with the master password it was made with.") }
         if !backup.verified { detail += "\n\n" + T("No .sha256 file was found next to the backup, so it could not be checked.") }
         alert.informativeText = detail
         alert.alertStyle = .warning

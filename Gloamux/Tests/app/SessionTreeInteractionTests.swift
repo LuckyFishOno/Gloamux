@@ -4,7 +4,13 @@ import AppKit
 @testable import App
 
 @MainActor final class SessionTreeInteractionTests: XCTestCase {
-    func testSingleClickSelectsBeforeDoubleClickDeadlineAndDoubleClickStillActivates() {
+    /// The row gestures need a key window, so the test process must become the active app. macOS can refuse that
+    /// while the user works in another app; the tests then wait up to this many 50 ms tries and skip instead of failing.
+    private static let activationTries = 200
+    private static let activationRefused = "macOS kept another app active, so the test window could not become key."
+
+    func testSingleClickSelectsBeforeDoubleClickDeadlineAndDoubleClickStillActivates() throws {
+        var refused = false
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
@@ -25,7 +31,7 @@ import AppKit
         func startWhenReady(_ remaining: Int) {
             guard NSApp.isActive, window.isKeyWindow else {
                 guard remaining > 0 else {
-                    XCTFail("The owned test window did not become active.")
+                    refused = true
                     NSApp.stop(nil)
                     NSApp.postEvent(NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0)!, atStart: true)
                     return
@@ -48,11 +54,13 @@ import AppKit
                 }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { startWhenReady(40) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { startWhenReady(Self.activationTries) }
         NSApp.run()
+        if refused { throw XCTSkip(Self.activationRefused) }
     }
 
-    func testDraggingAFolderRowMovesItWithoutTogglingIt() {
+    func testDraggingAFolderRowMovesItWithoutTogglingIt() throws {
+        var refused = false
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
@@ -78,7 +86,7 @@ import AppKit
         NSApp.finishLaunching()
         func startWhenReady(_ remaining: Int) {
             guard NSApp.isActive, window.isKeyWindow else {
-                guard remaining > 0 else { XCTFail("The owned test window did not become active."); stop(); return }
+                guard remaining > 0 else { refused = true; stop(); return }
                 NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { startWhenReady(remaining - 1) }
                 return
@@ -101,7 +109,8 @@ import AppKit
                 }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { startWhenReady(40) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { startWhenReady(Self.activationTries) }
         NSApp.run()
+        if refused { throw XCTSkip(Self.activationRefused) }
     }
 }

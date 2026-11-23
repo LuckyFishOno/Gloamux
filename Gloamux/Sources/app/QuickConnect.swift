@@ -76,7 +76,7 @@ struct QuickConnect: View {
     var body: some View {
         let matches = filtered
         VStack(alignment: .leading, spacing: 14) {
-            Label(T("Quick connect"), systemImage: "bolt.horizontal.circle").font(.title2.weight(.semibold))
+            Label(T("Quick connect"), systemImage: "bolt.horizontal.circle").appFont(.title2.weight(.semibold))
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField(T("Find a session or enter user@host"), text: $search)
@@ -108,11 +108,11 @@ struct QuickConnect: View {
                                     Text(row.item.name).fontWeight(.medium)
                                     if let connection = row.item.connection {
                                         Text(verbatim: "\(connection.username)@\(connection.host):\(connection.port)")
-                                            .font(.caption.monospaced()).foregroundStyle(.secondary)
+                                            .appFont(.caption.monospaced()).foregroundStyle(.secondary)
                                     }
                                 }
                                 Spacer()
-                                Text(row.folder).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(row.folder).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .padding(.vertical, 4)
                             .contentShape(Rectangle())

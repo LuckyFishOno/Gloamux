@@ -41,7 +41,7 @@ enum ToolWindowKind: String, CaseIterable {
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: ToolWindowContent(model: model, content: content))
+        window.contentView = NSHostingView(rootView: ToolWindowContent(model: model, content: content).appTextSize())
         let name = "GloamuxTool-" + kind.rawValue
         if !window.setFrameUsingName(name) { window.center() }
         if [.rdp, .vnc, .desktopEditor].contains(kind) { window.setContentSize(kind.size) }

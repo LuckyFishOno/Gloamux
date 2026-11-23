@@ -319,6 +319,7 @@
 "Match blocks are not imported. Review those hosts in Gloamux." = "Match blocks are not imported. Review those hosts in Gloamux.";
 "Match case" = "Match case";
 "Maximize pane" = "Maximize pane";
+"Gloam" = "Gloam";
 "Midnight" = "Midnight";
 "MobaXterm config…" = "MobaXterm config";
 "MobaXterm used the Windows sign-in name for this session. Check the user name." = "MobaXterm used the Windows sign-in name for this session. Check the user name.";
@@ -343,6 +344,7 @@
 "Native SSH workspace" = "Native SSH workspace";
 "Needs Touch ID" = "Needs Touch ID";
 "New connection" = "New connection";
+"New local terminal" = "New local terminal";
 "New container session…" = "New container session";
 "New fingerprint" = "New fingerprint";
 "New folder" = "New folder";
@@ -367,6 +369,7 @@
 "No matching sessions" = "No matching sessions";
 "No matching themes" = "No matching themes";
 "No MobaXterm sessions were found in this file." = "No MobaXterm sessions were found in this file.";
+"No Xshell sessions were found in this backup." = "No Xshell sessions were found in this backup.";
 "No open terminal" = "No open terminal";
 "No password is saved for this account. Enter a connection password." = "No password is saved for this account. Enter a connection password.";
 "No PuTTY sessions were found in this file." = "No PuTTY sessions were found in this file.";
@@ -391,6 +394,7 @@
 "Only for tabs you are not looking at. Needs shell integration." = "Only for tabs you are not looking at. Needs shell integration.";
 "Only SSH and SFTP profiles can be imported." = "Only SSH and SFTP profiles can be imported.";
 "Only SSH and SFTP sessions can be imported." = "Only SSH and SFTP sessions can be imported.";
+"Only SSH, SFTP, and serial sessions can be imported." = "Only SSH, SFTP, and serial sessions can be imported.";
 "Only SSH sessions can be imported." = "Only SSH sessions can be imported.";
 "Only the copy in the password vault is deleted." = "Only the copy in the password vault is deleted.";
 "Open" = "Open";
@@ -450,6 +454,7 @@
 "Proxy type" = "Proxy type";
 "ProxyCommand is not supported. Set a jump host or proxy in Gloamux." = "ProxyCommand is not supported. Set a jump host or proxy in Gloamux.";
 "PuTTY asks for the user name when this session connects. Check the user name." = "PuTTY asks for the user name when this session connects. Check the user name.";
+"Xshell asks for the user name when this session connects. Check the user name." = "Xshell asks for the user name when this session connects. Check the user name.";
 "PuTTY config…" = "PuTTY config";
 "Quick commands" = "Quick commands";
 "Quick connect" = "Quick connect";
@@ -547,7 +552,7 @@
 "Select a tab connected over SSH to show its server here." = "Select a tab connected over SSH to show its server here.";
 "Select all" = "Select all";
 "Select an open terminal to use a command." = "Select an open terminal to use a command.";
-"Select an Xshell session file or folder." = "Select an Xshell session file or folder.";
+"Select an Xshell session file, folder, or backup." = "Select an Xshell session file, folder, or backup.";
 "Select none" = "Select none";
 "Select output" = "Select output";
 "Select output of last command" = "Select output of last command";
@@ -702,6 +707,7 @@
 "The SSH proxy settings could not be read." = "The SSH proxy settings could not be read.";
 "The SSH server listens on its loopback interface. This Mac connects to the destination you enter." = "The SSH server listens on its loopback interface. This Mac connects to the destination you enter.";
 "The SSH/SFTP profile could not be read." = "The SSH/SFTP profile could not be read.";
+"The Xshell backup could not be read." = "The Xshell backup could not be read.";
 "Theme" = "Theme";
 "There are no sessions to export." = "There are no sessions to export.";
 "This account's password is saved in the password vault." = "This account's password is saved in the password vault.";
@@ -722,6 +728,8 @@
 "This session is tagged %@, and the command matches a pattern in Settings > Safety.\n\n%@" = "This session is tagged %@, and the command matches a pattern in Settings > Safety.\n\n%@";
 "This session used a key file on Windows. Choose the key in the session properties." = "This session used a key file on Windows. Choose the key in the session properties.";
 "This session uses a proxy type Gloamux does not support." = "This session uses a proxy type Gloamux does not support.";
+"This serial session used a Windows port. Check the device and line settings in the session properties." = "This serial session used a Windows port. Check the device and line settings in the session properties.";
+"This serial session uses a speed Gloamux does not support." = "This serial session uses a speed Gloamux does not support.";
 "This sessions file was written by a newer Gloamux." = "This sessions file was written by a newer Gloamux.";
 "Toolbar, flat tabs, and floating panes" = "Toolbar, flat tabs, and floating panes";
 "Touch ID and Secure Enclave are required to create this key." = "Touch ID and Secure Enclave are required to create this key.";
@@ -791,7 +799,6 @@
 "You can save up to 256 quick commands." = "You can save up to 256 quick commands.";
 "Your servers, organized." = "Your servers, organized.";
 "zsh reports each prompt, command, exit status, and folder. Then ⌘↑ and ⌘↓ jump between prompts, the pane header shows the last result, and ⌘T opens in the same folder. Applies to new terminals." = "zsh reports each prompt, command, exit status, and folder. Then ⌘↑ and ⌘↓ jump between prompts, the pane header shows the last result, and ⌘T opens in the same folder. Applies to new terminals.";
-"⌘+ and ⌘− change it from any terminal; ⌘0 goes back to 13 pt." = "⌘+ and ⌘− change it from any terminal; ⌘0 goes back to 13 pt.";
 "Stop following the terminal folder" = "Stop following the terminal folder";
 "Show next tab" = "Show next tab";
 "Show previous tab" = "Show previous tab";
@@ -960,6 +967,7 @@
 "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password." = "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password.";
 "Upload to %@" = "Upload to %@";
 "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault." = "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault.";
+"This Mac's shell at 127.0.0.1" = "This Mac's shell at 127.0.0.1";
 "Terminal and files on a server" = "Terminal and files on a server";
 "Windows desktop" = "Windows desktop";
 "Mac or Linux desktop" = "Mac or Linux desktop";
@@ -1028,7 +1036,6 @@
 "Import…" = "Import";
 "Export" = "Export";
 "All settings" = "All settings";
-"Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, and settings in one file, with a .sha256 file next to it. No passwords are included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first." = "Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, and settings in one file, with a .sha256 file next to it. No passwords are included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first.";
 "Export all settings" = "Export all settings";
 "Import all settings" = "Import all settings";
 "The settings could not be exported." = "The settings could not be exported.";
@@ -1100,3 +1107,20 @@
 "Every SSH session open in this window, with its running forwards. Choose Manage to add, save, or start a session's forwarding rules." = "Every SSH session open in this window, with its running forwards. Choose Manage to add, save, or start a session's forwarding rules.";
 "No SSH sessions are open." = "No SSH sessions are open.";
 "XQuartz is not installed. Get it from xquartz.org to show remote X11 programs on this Mac." = "XQuartz is not installed. Get it from xquartz.org to show remote X11 programs on this Mac.";
+"The password saved on this Mac for this account could not be read. Type it again to replace it." = "The password saved on this Mac for this account could not be read. Type it again to replace it.";
+"Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings, and the password vault in one file, with a .sha256 file next to it. The vault stays sealed under its master password, which is not saved in the file. Passwords remembered on this Mac are not included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first." = "Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings, and the password vault in one file, with a .sha256 file next to it. The vault stays sealed under its master password, which is not saved in the file. Passwords remembered on this Mac are not included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first.";
+"The password vault in the backup replaces the one on this Mac. Unlock it with the master password it was made with." = "The password vault in the backup replaces the one on this Mac. Unlock it with the master password it was made with.";
+"The password vault in this Gloamux backup is damaged." = "The password vault in this Gloamux backup is damaged.";
+
+"Application" = "Application";
+"Application font size" = "Application font size";
+"Session font size" = "Session font size";
+"Bigger app text" = "Bigger app text";
+"Smaller app text" = "Smaller app text";
+"App text actual size" = "App text actual size";
+"Lists, forms, toolbars, and this window. ⌘+ and ⌘− change it outside a session, ⌥⌘+ and ⌥⌘− from anywhere; ⌥⌘0 goes back to 13 pt." = "Lists, forms, toolbars, and this window. ⌘+ and ⌘− change it outside a session, ⌥⌘+ and ⌥⌘− from anywhere; ⌥⌘0 goes back to 13 pt.";
+"⌘+ and ⌘− change it in any session; ⌘0 goes back to 13 pt." = "⌘+ and ⌘− change it in any session; ⌘0 goes back to 13 pt.";
+"Opening workspace" = "Opening workspace";
+"Workspace could not be opened" = "Workspace could not be opened";
+"New tabs open a local terminal" = "New tabs open a local terminal";
+"The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form." = "The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form.";

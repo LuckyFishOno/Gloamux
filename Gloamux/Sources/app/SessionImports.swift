@@ -65,14 +65,14 @@ struct ImportCollector {
 
     /// Adds a session under `folder`, renaming it when the folder already has one by that name. Returns its path.
     @discardableResult
-    mutating func add(_ name: String, in folder: [String], connection: SavedConnection, notes: [String] = [],
-                      jump: [String]? = nil) -> [String] {
+    mutating func add(_ name: String, in folder: [String], connection: SavedConnection? = nil, container: ContainerSession? = nil,
+                      notes: [String] = [], jump: [String]? = nil) -> [String] {
         if !folder.isEmpty { addFolder(folder) }
         var candidate = name, index = 2
         while taken.contains(folder + [candidate]) { candidate = "\(name) (\(index))"; index += 1 }
         let components = folder + [candidate]
         taken.insert(components)
-        entries.append(.init(components: components, name: candidate, connection: connection, notes: notes, jump: jump))
+        entries.append(.init(components: components, name: candidate, connection: connection, container: container, notes: notes, jump: jump))
         return components
     }
 
@@ -89,8 +89,7 @@ struct ImportCollector {
 
     mutating func link(_ components: [String], to jump: [String]) {
         guard let index = entries.firstIndex(where: { $0.components == components }) else { return }
-        let entry = entries[index]
-        entries[index] = .init(components: entry.components, name: entry.name, connection: entry.connection, notes: entry.notes, jump: jump)
+        entries[index].jump = jump
     }
 
     func result(name: String) -> ProfileImport {
@@ -109,14 +108,17 @@ private extension String {
 /// Reads a MobaXterm session export (`.mxtsessions`) or the `[Bookmarks]` sections of `MobaXterm.ini`.
 ///
 /// Each session is one `Name=#icon#fields%…#…` line; fields are `%`-separated. SSH sessions (type 0) and SFTP
-/// sessions (type 7) are imported with their folder, user, port, SSH gateways, and SOCKS or HTTP proxy. Field
+/// sessions (type 7) are imported with their folder, user, port, SSH gateways, and SOCKS or HTTP proxy; serial sessions
+/// (type 8) with their speed and line settings, on a serial device of this Mac. Field
 /// positions follow MobaXterm's own export, which is not publicly documented, so short lines are accepted.
 enum MobaXtermImport {
     static func scan(_ url: URL, localUser: String = NSUserName()) throws -> ProfileImport {
         try parse(ImportText.read(url), name: url.deletingPathExtension().lastPathComponent, localUser: localUser)
     }
 
-    static func parse(_ text: String, name: String, localUser: String = NSUserName()) throws -> ProfileImport {
+    /// `devices` are this Mac's serial devices, for the port of a serial session.
+    static func parse(_ text: String, name: String, localUser: String = NSUserName(),
+                      devices: [String] = SerialPort.devices()) throws -> ProfileImport {
         var collector = ImportCollector()
         var inBookmarks = false
         var folder: [String] = []
@@ -140,22 +142,24 @@ enum MobaXtermImport {
             default:
                 guard value.contains("#") else { continue }
                 found = true
-                session(key, value: value, folder: folder, localUser: localUser, into: &collector)
+                session(key, value: value, folder: folder, localUser: localUser, devices: devices, into: &collector)
             }
         }
         guard found else { throw WorkspaceError.invalid("No MobaXterm sessions were found in this file.") }
         return collector.result(name: name)
     }
 
-    private static func session(_ name: String, value: String, folder: [String], localUser: String, into collector: inout ImportCollector) {
+    private static func session(_ name: String, value: String, folder: [String], localUser: String, devices: [String],
+                                into collector: inout ImportCollector) {
         let path = (folder + [name]).joined(separator: " / ")
         let groups = value.components(separatedBy: "#")
         guard groups.count >= 3 else { return collector.skipped.append(.init(path: path, reason: "The session could not be read.")) }
         let fields = groups[2].components(separatedBy: "%")
         func field(_ index: Int) -> String { index < fields.count ? fields[index].trimmed : "" }
         let type = field(0)
+        if type == "8" { return serial(name, path: path, folder: folder, field: field, devices: devices, into: &collector) }
         guard type == "0" || type == "7" else {
-            return collector.skipped.append(.init(path: path, reason: "Only SSH and SFTP sessions can be imported."))
+            return collector.skipped.append(.init(path: path, reason: "Only SSH, SFTP, and serial sessions can be imported."))
         }
         let isSFTP = type == "7"
         let host = field(1)
@@ -224,14 +228,42 @@ enum MobaXtermImport {
     }
 }
 
+extension MobaXtermImport {
+    /// A serial session: `8%?%100<speed>%<data bits>%<parity>%<stop bits>%<flow>%<engine>%<port>`. Only the speed's
+    /// layout is known for certain, the literal `100` before it; the line settings after it are read in the order of
+    /// PuTTY's, which MobaXterm's serial sessions are built on, and the import asks to check them.
+    fileprivate static func serial(_ name: String, path: String, folder: [String], field: (Int) -> String, devices: [String],
+                                   into collector: inout ImportCollector) {
+        let speed = field(2)
+        let baud = speed.hasPrefix("100") ? Int(speed.dropFirst(3)) : nil
+        guard let baud = baud ?? Int(speed), SerialPort.Settings.speeds.contains(baud) else {
+            return collector.skipped.append(.init(path: path, reason: "This serial session uses a speed Gloamux does not support."))
+        }
+        let bits = Int(field(3)).flatMap { (0...3).contains($0) ? 5 + $0 : nil } ?? 8
+        let parity = Int(field(4)).flatMap { [0: "N", 1: "O", 2: "E"][$0] } ?? "N"
+        let stopBits = field(5) == "2" ? 2 : 1
+        let flow: [Int: SerialPort.Settings.Flow] = [1: .software, 2: .hardware, 3: .dtrDsr]
+        // Windows names ports COM1, COM2, and so on. A Mac with one USB serial adapter gets that one; otherwise the usual
+        // name of a USB adapter stands in until the device is chosen.
+        let usb = devices.filter { device in ["usbserial", "usbmodem", "SLAB", "UART"].contains { device.contains($0) } }
+        let device = usb.count == 1 ? usb[0] : "/dev/cu.usbserial"
+        let session = ContainerSession(tool: .serial, target: device, baud: baud, format: "\(bits)\(parity)\(stopBits)",
+                                       flow: Int(field(6)).flatMap { flow[$0] }?.rawValue)
+        guard (try? session.validate()) != nil else {
+            return collector.skipped.append(.init(path: path, reason: "The session could not be read."))
+        }
+        collector.add(name, in: folder, container: session,
+                      notes: ["This serial session used a Windows port. Check the device and line settings in the session properties."])
+    }
+}
+
 extension ImportCollector {
     mutating func setProxy(_ components: [String], _ proxy: (kind: ProxyKind, host: String, port: Int)) {
-        guard let index = entries.firstIndex(where: { $0.components == components }), entries[index].jump == nil else { return }
-        let entry = entries[index]
-        var connection = entry.connection
+        guard let index = entries.firstIndex(where: { $0.components == components }), entries[index].jump == nil,
+              var connection = entries[index].connection else { return }
         connection.proxyHost = proxy.host; connection.proxyPort = proxy.port
         connection.proxyKind = proxy.kind == .socks5 ? nil : proxy.kind
-        entries[index] = .init(components: entry.components, name: entry.name, connection: connection, notes: entry.notes, jump: entry.jump)
+        entries[index].connection = connection
     }
 }
 
@@ -539,9 +571,7 @@ enum CSVSessionImport {
 extension ImportCollector {
     mutating func addNote(_ components: [String], _ note: String) {
         guard let index = entries.firstIndex(where: { $0.components == components }) else { return }
-        let entry = entries[index]
-        entries[index] = .init(components: entry.components, name: entry.name, connection: entry.connection,
-                               notes: entry.notes + [note], jump: entry.jump)
+        entries[index].notes.append(note)
     }
 }
 

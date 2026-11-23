@@ -484,9 +484,20 @@ public actor SSHSession {
         return try await promise.futureResult.get()
     }
 
+    /// Says goodbye to the server before closing, so it ends the login session at once; a server that does not take the
+    /// message within two seconds is disconnected anyway. Then closes the jump host the same way.
     public func close() async throws {
         guard !closed else { return }
         closed = true
+        if let handler = try? await channel.pipeline.handler(type: NIOSSHHandler.self).get() {
+            let parent = channel
+            let timeout = channel.eventLoop.scheduleTask(in: .seconds(2)) { parent.close(promise: nil) }
+            let loop = channel.eventLoop
+            _ = try? await loop.flatSubmit {
+                do { return try handler.sendDisconnect(description: "Closed by Gloamux") } catch { return loop.makeFailedFuture(error) }
+            }.get()
+            timeout.cancel()
+        }
         try? await channel.close().get()
         try? await jump?.close()
     }

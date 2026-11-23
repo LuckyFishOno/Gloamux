@@ -163,7 +163,7 @@ struct OutputTriggerSettings: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(trigger.name.isEmpty ? trigger.pattern : trigger.name)
                             Text((trigger.regex ? "/\(trigger.pattern)/" : "“\(trigger.pattern)”") + " · " + T(trigger.action.title))
-                                .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                .appFont(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         }
                         Spacer()
                         Button(T("Edit")) { draft = trigger; editing = true }.buttonStyle(.borderless)
@@ -187,17 +187,17 @@ struct OutputTriggerSettings: View {
 
     private var editor: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(T(store.triggers.contains { $0.id == draft.id } ? "Edit trigger" : "Add trigger")).font(.headline)
+            Text(T(store.triggers.contains { $0.id == draft.id } ? "Edit trigger" : "Add trigger")).appFont(.headline)
             Form {
                 TextField(T("Name"), text: $draft.name, prompt: Text(T("Optional")))
-                TextField(T("Pattern"), text: $draft.pattern).font(.body.monospaced())
+                TextField(T("Pattern"), text: $draft.pattern).appFont(.body.monospaced())
                 Toggle(T("Regular expression"), isOn: $draft.regex)
                 Toggle(T("Match case"), isOn: $draft.caseSensitive)
                 Picker(T("Action"), selection: $draft.action) {
                     ForEach(OutputTrigger.Action.allCases, id: \.self) { Text(T($0.title)).tag($0) }
                 }
             }
-            if let error { Text(T(error)).foregroundStyle(.red).font(.callout) }
+            if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
             HStack {
                 Button(T("Cancel")) { editing = false; error = nil }.keyboardShortcut(.cancelAction)
                 Spacer()

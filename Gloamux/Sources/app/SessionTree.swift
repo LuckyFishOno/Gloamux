@@ -351,7 +351,8 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
         var folders: [[String]: UUID] = [:]
         var names: [UUID: Set<String>] = [:]
         var imported: [[String]: UUID] = [:]
-        @discardableResult func append(_ name: String, to parent: UUID, connection: SavedConnection? = nil) -> UUID {
+        @discardableResult func append(_ name: String, to parent: UUID, connection: SavedConnection? = nil,
+                                       container: ContainerSession? = nil) -> UUID {
             let safeName = Self.importName(name)
             var candidate = safeName
             var index = 2
@@ -360,7 +361,7 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
                 candidate = String(safeName.prefix(160 - suffix.count)) + suffix
                 index += 1
             }
-            let item = SessionTreeNode(parent: parent, name: candidate, connection: connection)
+            let item = SessionTreeNode(parent: parent, name: candidate, connection: connection, container: container)
             updated.append(item)
             return item.id
         }
@@ -371,7 +372,7 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
         }
         for entry in draft.entries {
             let folder = folders[Array(entry.components.dropLast())] ?? root.id
-            imported[entry.components] = append(entry.name, to: folder, connection: entry.connection)
+            imported[entry.components] = append(entry.name, to: folder, connection: entry.connection, container: entry.container)
         }
         for entry in draft.entries {
             guard let jump = entry.jump, let target = imported[jump], let id = imported[entry.components],

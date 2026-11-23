@@ -31,7 +31,7 @@ struct AgentReview: ViewModifier {
         content.sheet(item: Binding(get: { visible ? agents.waiting(in: tab.id) : nil }, set: { _ in })) { proposal in
             let stale = proposal.terminalID != tab.terminalID || !tab.connected
             VStack(alignment: .leading, spacing: 14) {
-                Label(T("Run this command from an AI agent?"), systemImage: "sparkles").font(.title2.bold())
+                Label(T("Run this command from an AI agent?"), systemImage: "sparkles").appFont(.title2.bold())
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                     GridRow { Text(T("Agent")).foregroundStyle(.secondary); Text(proposal.client) }
                     GridRow { Text(T("Session")).foregroundStyle(.secondary); Text(proposal.session) }
@@ -42,7 +42,7 @@ struct AgentReview: ViewModifier {
                 }
                 ScrollView {
                     Text(proposal.command)
-                        .font(.system(.body, design: .monospaced))
+                        .appFont(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
@@ -104,7 +104,7 @@ struct AgentSettings: View {
                 .accessibilityIdentifier("agentsEnabled")
                 LabeledContent(T("MCP command")) {
                     HStack(spacing: 6) {
-                        Text(Self.command).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                        Text(Self.command).appFont(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.head)
                             .textSelection(.enabled)
                         Button {
                             NSPasteboard.general.clearContents()
@@ -136,7 +136,7 @@ struct AgentSettings: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(node.name)
-                                Text(WorkspaceCommand.destination(node)).font(.system(size: 11)).foregroundStyle(.secondary)
+                                Text(WorkspaceCommand.destination(node)).appFont(.system(size: 11)).foregroundStyle(.secondary)
                             }
                             Spacer()
                             Button(T("Remove")) { agents.revoke(id, name: node.name) }.controlSize(.small)
@@ -163,11 +163,11 @@ struct AgentSettings: View {
                                     if let session = event.session { Text("· " + session).foregroundStyle(.secondary) }
                                 }
                                 if let detail = event.detail {
-                                    Text(detail).font(.system(size: 11, design: .monospaced)).lineLimit(2).textSelection(.enabled)
+                                    Text(detail).appFont(.system(size: 11, design: .monospaced)).lineLimit(2).textSelection(.enabled)
                                 }
-                                Text(T(event.outcome)).font(.system(size: 11)).foregroundStyle(.secondary)
+                                Text(T(event.outcome)).appFont(.system(size: 11)).foregroundStyle(.secondary)
                             }
-                            .font(.system(size: 12))
+                            .appFont(.system(size: 12))
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }

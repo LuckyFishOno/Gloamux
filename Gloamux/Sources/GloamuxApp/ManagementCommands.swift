@@ -43,7 +43,8 @@ enum ManagementCommands {
 
             Use an item UUID or its unique name. Use - for the top level or an empty username.
             Protocols: ssh, sftp, scp, ftp, ftps, ftps-implicit, rdp, vnc.
-            Formats: openssh, xshell, mobaxterm, putty, csv, gloamux. Omit IMPORT_NAME for a preview.
+            Import formats: openssh, xshell, mobaxterm, putty, csv, gloamux. Omit IMPORT_NAME for a preview.
+            Export formats: openssh, csv, gloamux.
 
             Other connections, with TARGET and their settings (folder=FOLDER works for all; - resets a setting):
               serial  DEVICE    baud=9600 data-bits=8|7|6|5 parity=none|odd|even stop-bits=1|2
@@ -126,8 +127,10 @@ enum ManagementCommands {
             export PATH | import PATH
 
             export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout,
-            and settings in one file, and writes PATH.sha256 next to it. No passwords are included.
-            import replaces all of these. Quit Gloamux first. The current ones are kept in the Backups folder of the workspace.
+            settings, and the password vault in one file, and writes PATH.sha256 next to it. The vault stays sealed under
+            its master password, which is not in the file. Passwords remembered on this Mac are not included.
+            import replaces all of these; the vault only when the backup has one. Quit Gloamux first. The current ones are
+            kept in the Backups folder of the workspace.
             When PATH.sha256 is there, the backup must match it.
             """,
         "vault": "status | lock\nUnlock the vault in Gloamux, or pass --vault-password-stdin to gloamux files or gloamux ssh.",
@@ -185,7 +188,8 @@ enum ManagementCommands {
 
     /// XQuartz belongs to this Mac, not to a workspace, so this runs here without the app.
     private static func xserver(_ arguments: [String]) async throws {
-        let args = try CLIArguments(arguments)
+        // XQuartz is per Mac, not per workspace; the shared options are accepted like every other group's.
+        let args = try CLIArguments(arguments, values: ["--workspace"], switches: ["--json"])
         guard args.operands.count == 1, let action = args.operands.first, ["status", "start"].contains(action) else {
             throw CLIUsageError("Usage: gloamux xserver status|start")
         }

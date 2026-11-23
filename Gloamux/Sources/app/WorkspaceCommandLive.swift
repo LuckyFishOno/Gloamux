@@ -185,14 +185,15 @@ extension WorkspaceCommand {
             try count(args, 1...2)
             let tab = try tab(args[0], windows).tab
             guard tab.desktop == nil else { throw Usage("Remote desktop tabs have no terminal text.") }
-            var lines: [String]
+            var wanted: Int?
             if let raw = args.dropFirst().first {
-                guard let wanted = Int(raw), (1...100_000).contains(wanted) else { throw Usage("Enter a line count from 1 to 100000.") }
-                lines = Array(tab.lines.suffix(wanted))
-            } else {
-                lines = tab.screen.lines
+                guard let count = Int(raw), (1...100_000).contains(count) else { throw Usage("Enter a line count from 1 to 100000.") }
+                wanted = count
             }
+            var lines = wanted == nil ? tab.screen.lines : tab.lines
+            // Drop the empty rows below the cursor first, so LINES counts the last lines of output.
             while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
+            if let wanted { lines = Array(lines.suffix(wanted)) }
             return ["id": tab.id.uuidString, "text": lines.map { String($0.reversed().drop(while: { $0 == " " }).reversed()) }.joined(separator: "\n")]
         case "send", "run":
             try count(args, 2...2)

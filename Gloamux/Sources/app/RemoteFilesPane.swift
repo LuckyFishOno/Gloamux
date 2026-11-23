@@ -87,10 +87,10 @@ struct RemoteFilesPane: View {
         .controlSize(compact ? .small : .regular)
         .sheet(isPresented: $renameVisible) {
             VStack(alignment: .leading, spacing: 16) {
-                Text(T("Rename remote file")).font(.headline)
+                Text(T("Rename remote file")).appFont(.headline)
                 TextField(T("New name"), text: $renameTo)
                 if let selectedFile, let warning = FileNameCheck.warning(original: selectedFile, chosen: renameTo) {
-                    Label(warning, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    Label(warning, systemImage: "exclamationmark.triangle.fill").appFont(.caption).foregroundStyle(.orange)
                 }
                 HStack { Button(T("Cancel")) { renameVisible = false }; Spacer(); Button(T("Rename")) {
                     if let old = selectedFile, let new = FileNameCheck.confirm(original: old, chosen: renameTo) {
@@ -118,7 +118,7 @@ struct RemoteFilesPane: View {
     }
 
     private var entryCount: some View {
-        Text(String(format: T("%d entries"), tab.entries.count)).font(.caption).foregroundStyle(.secondary)
+        Text(String(format: T("%d entries"), tab.entries.count)).appFont(.caption).foregroundStyle(.secondary)
     }
     private func isFile(_ name: String) -> Bool {
         tab.entries.first(where: { $0.name == name }).map { !$0.isDirectory } ?? false

@@ -14,7 +14,7 @@ struct RecordingsView: View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text(T("Recordings")).font(.headline)
+                    Text(T("Recordings")).appFont(.headline)
                     InfoButton(T("Start recording from the Terminal menu or the command palette. Only what the terminal shows is recorded, never your keystrokes, and access tokens, private keys, and password values are replaced with [REDACTED]. Files use the asciinema format."))
                     Spacer()
                     Button { NSWorkspace.shared.activateFileViewerSelecting([store.folder]) } label: { Image(systemName: "folder") }
@@ -34,7 +34,7 @@ struct RecordingsView: View {
                                 Text(formatDuration(recording.duration))
                                 Text(ByteCountFormatter.string(fromByteCount: Int64(recording.size), countStyle: .file))
                             }
-                            .font(.caption).foregroundStyle(.secondary)
+                            .appFont(.caption).foregroundStyle(.secondary)
                         }
                         .tag(recording.url)
                         .contextMenu {
@@ -172,9 +172,9 @@ private struct RecordingPlayerView: View {
                     Button { player.toggle() } label: { Image(systemName: player.playing ? "pause.fill" : "play.fill").frame(width: 18) }
                         .buttonStyle(.borderless).keyboardShortcut(.space, modifiers: [])
                         .help(T(player.playing ? "Pause" : "Play"))
-                    Text(formatClock(player.position)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(formatClock(player.position)).appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     Slider(value: Binding(get: { player.position }, set: { player.seek($0) }), in: 0...max(player.duration, 0.01))
-                    Text(formatClock(player.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(formatClock(player.duration)).appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     Picker(T("Speed"), selection: $player.speed) {
                         ForEach([0.5, 1, 2, 4], id: \.self) { Text("\($0.formatted())×").tag($0) }
                     }

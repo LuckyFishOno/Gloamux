@@ -236,7 +236,9 @@ extension WorkspaceModel {
 
 /// The Tab menu items: selecting by number, moving through tabs, renaming, and moving a tab.
 struct TabCommands: View {
-    @ObservedObject var model: WorkspaceModel
+    let model: WorkspaceModel
+    /// What the items show, worked out by the Terminal commands that hold this menu.
+    let menu: WorkspaceCommandState.Snapshot
 
     var body: some View {
         Button(T("Show next tab")) { model.selectAdjacentTab(1) }
@@ -246,13 +248,13 @@ struct TabCommands: View {
         Button(T("Move tab left")) { model.moveTab(by: -1) }
         Button(T("Move tab right")) { model.moveTab(by: 1) }
         Button(T("Rename tab…")) { model.renameTab() }
-            .disabled(model.selected == nil)
+            .disabled(!menu.hasSelection)
         Button(T("Duplicate tab")) { model.duplicateTab() }
-            .disabled(model.selected.map(model.canDuplicate) != true)
+            .disabled(!menu.canDuplicate)
         Button(T("Move tab to new window")) { model.moveTabToWindow() }
-            .disabled(model.selected == nil)
+            .disabled(!menu.hasSelection)
         Button(T("Move window to tab bar")) { if let tab = model.keySessionWindowTab { model.moveWindowToTabs(tab) } }
-            .disabled(model.keySessionWindowTab == nil)
+            .disabled(!menu.hasKeySessionWindow)
         Divider()
         ForEach(1...9, id: \.self) { number in
             Button(number == 9 ? T("Last tab") : String(format: T("Tab %d"), number)) { model.selectTab(number: number) }

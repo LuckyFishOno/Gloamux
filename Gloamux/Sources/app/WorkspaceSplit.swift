@@ -109,27 +109,30 @@ struct WorkspaceSplit: Equatable {
 
 
 public struct WorkspaceSplitCommands: Commands {
-    @ObservedObject private var model: WorkspaceModel
-    public init(model: WorkspaceModel) { self.model = model }
+    private let model: WorkspaceModel
+    /// Observed in place of the whole workspace, so these items rebuild only when what they show changes.
+    @ObservedObject private var state: WorkspaceCommandState
+    public init(model: WorkspaceModel) { self.model = model; state = model.commandState }
 
     public var body: some Commands {
+        let menu = state.snapshot
         CommandGroup(after: .toolbar) {
             Button(T("Split side by side")) { model.splitWorkspace(.sideBySide) }
                 .keyboardShortcut("d", modifiers: .command)
-                .disabled(!model.canSplit(model.selection))
+                .disabled(!menu.canSplit)
             Button(T("Split top and bottom")) { model.splitWorkspace(.stacked) }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
-                .disabled(!model.canSplit(model.selection))
-            Button(T(model.maximizedPane == nil ? "Maximize pane" : "Restore pane")) {
+                .disabled(!menu.canSplit)
+            Button(T(menu.maximized ? "Restore pane" : "Maximize pane")) {
                 if let id = model.maximizedPane ?? model.selection { model.toggleMaximizedPane(id) }
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
-            .disabled(model.split == nil)
-            Button(T(model.broadcastInput ? "Stop typing into all panes" : "Type into all panes")) { model.toggleBroadcastInput() }
+            .disabled(!menu.hasSplit)
+            Button(T(menu.broadcastInput ? "Stop typing into all panes" : "Type into all panes")) { model.toggleBroadcastInput() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
-                .disabled(model.split == nil)
+                .disabled(!menu.hasSplit)
             Button(T("Close split view")) { model.closeSplit() }
-                .disabled(model.split == nil)
+                .disabled(!menu.hasSplit)
         }
     }
 }

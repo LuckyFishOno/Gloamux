@@ -168,7 +168,7 @@ struct PortForwardingView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 Label(T("Port forwarding"), systemImage: "arrow.left.arrow.right")
-                    .font(.title2.weight(.semibold))
+                    .appFont(.title2.weight(.semibold))
                 InfoButton(T(kind.help) + (tab.savedSessionID == nil ? "\n\n" + T("Save this connection to keep its forwarding rules.") : ""))
             }
             Form {
@@ -182,7 +182,7 @@ struct PortForwardingView: View {
                     TextField(T("Destination port"), text: $port)
                 }
             }
-            if let error { Text(T(error)).foregroundStyle(.red).font(.callout).textSelection(.enabled) }
+            if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout).textSelection(.enabled) }
             List {
                 Section(T("Active forwards")) {
                     if tab.forwards.isEmpty { Text(T("No active forwards")).foregroundStyle(.secondary) }
@@ -191,7 +191,7 @@ struct PortForwardingView: View {
                             ruleLabel(forward.rule, boundPort: forward.handle.port)
                             Spacer()
                             Text(String(format: T("%d connections"), connections[forward.id] ?? 0))
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                             Button(T("Stop")) { Task { await model.stopForward(tab, forward) } }.buttonStyle(.borderless)
                         }
                     }
@@ -240,8 +240,8 @@ struct PortForwardingView: View {
 
     private func ruleLabel(_ rule: ForwardingRule, boundPort: Int? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(T(rule.kind.title)).font(.caption).foregroundStyle(.secondary)
-            Text(rule.address(boundPort: boundPort)).font(.callout.monospaced())
+            Text(T(rule.kind.title)).appFont(.caption).foregroundStyle(.secondary)
+            Text(rule.address(boundPort: boundPort)).appFont(.callout.monospaced())
         }.padding(.vertical, 3)
     }
 
@@ -286,7 +286,7 @@ struct TunnelManagerView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 Label(T("Tunnels"), systemImage: "point.3.connected.trianglepath.dotted")
-                    .font(.title2.weight(.semibold))
+                    .appFont(.title2.weight(.semibold))
                 InfoButton(T("Every SSH session open in this window, with its running forwards. Choose Manage to add, save, or start a session's forwarding rules."))
             }
             List {
@@ -330,12 +330,12 @@ private struct TunnelSessionSection: View {
             ForEach(tab.forwards) { forward in
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(T(forward.rule.kind.title)).font(.caption).foregroundStyle(.secondary)
-                        Text(forward.rule.address(boundPort: forward.handle.port)).font(.callout.monospaced())
+                        Text(T(forward.rule.kind.title)).appFont(.caption).foregroundStyle(.secondary)
+                        Text(forward.rule.address(boundPort: forward.handle.port)).appFont(.callout.monospaced())
                     }.padding(.vertical, 3)
                     Spacer()
                     Text(String(format: T("%d connections"), connections[forward.id] ?? 0))
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     Button(T("Stop")) { Task { await model.stopForward(tab, forward) } }.buttonStyle(.borderless)
                 }
             }

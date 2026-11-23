@@ -95,6 +95,15 @@ final class RemoteKindsTests: XCTestCase {
         XCTAssertEqual(try SessionTreeStore(url: catalog).node(id)?.container?.gatewaySessionID, gatewayID)
     }
 
+    func testASavedDesktopPasswordShowsAsDotsUntilTheFieldIsEdited() {
+        let mask = RemoteDesktopPane.savedMask
+        XCTAssertEqual(mask.count, 8)
+        XCTAssertEqual(RemoteDesktopPane.withoutSavedMask(mask), mask, "Untouched, the dots stand for the saved password")
+        XCTAssertEqual(RemoteDesktopPane.withoutSavedMask(String(mask.dropLast())), "", "Deleting a dot clears the saved password")
+        XCTAssertEqual(RemoteDesktopPane.withoutSavedMask(mask + "n3w"), "n3w", "Typing replaces it")
+        XCTAssertEqual(RemoteDesktopPane.withoutSavedMask("typed"), "typed")
+    }
+
     func testDesktopSizeAndClipboardLimits() {
         XCTAssertTrue(RemoteDesktopSession.pixels(.zero) == (0, 0))
         XCTAssertTrue(RemoteDesktopSession.pixels(CGSize(width: 1280.7, height: 800.2)) == (1280, 800))

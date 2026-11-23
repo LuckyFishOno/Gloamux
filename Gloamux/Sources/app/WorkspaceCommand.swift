@@ -237,7 +237,13 @@ public enum WorkspaceCommand {
                 let parent = try args.dropFirst(3).first.flatMap(folder)
                 result["id"] = try tree.importProfiles(draft, name: args[2], parent: parent).uuidString
             } else {
-                result["preview"] = draft.entries.map { ["name": $0.name, "path": $0.path, "host": $0.connection.host] }
+                result["preview"] = draft.entries.map { entry -> [String: Any] in
+                    var item: [String: Any] = ["name": entry.name, "path": entry.path,
+                                               "host": entry.connection?.host ?? entry.container?.target ?? ""]
+                    if let container = entry.container { item["kind"] = container.tool.rawValue }
+                    if !entry.notes.isEmpty { item["notes"] = entry.notes }
+                    return item
+                }
             }
             return result
         case "export":

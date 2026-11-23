@@ -24,7 +24,7 @@ struct RemoteDesktopPane: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(T(connection.profile.tool.title)).font(.title2.weight(.semibold))
+                    Text(T(connection.profile.tool.title)).appFont(.title2.weight(.semibold))
                     if connection.profile.tool == .rdp {
                         TextField(T("Username"), text: $username).frame(width: 280)
                     } else {
@@ -34,8 +34,10 @@ struct RemoteDesktopPane: View {
                         }
                     }
                     HStack(spacing: 6) {
-                        SecureField(T(hasSavedPassword && password.isEmpty ? "Saved password" : "Password"), text: $password)
+                        SecureField(T("Password"), text: $password)
                             .onSubmit(connect).frame(width: 280)
+                            .onChange(of: password) { _, value in password = Self.withoutSavedMask(value) }
+                            .accessibilityValue(password == Self.savedMask ? T("Saved password") : "")
                         if connection.profile.tool == .vnc, connection.profile.gatewaySessionID == nil {
                             InfoButton(T("This VNC connection does not encrypt traffic."))
                         }
@@ -51,11 +53,11 @@ struct RemoteDesktopPane: View {
                         }
                     }
                     if let error = trustError ?? connection.error {
-                        Text(T(error)).font(.callout).foregroundStyle(.red).textSelection(.enabled)
+                        Text(T(error)).appFont(.callout).foregroundStyle(.red).textSelection(.enabled)
                     }
                     if let fingerprint = connection.pendingFingerprint {
                         Text(T("Verify the RDP server certificate fingerprint before trusting it."))
-                        Text(fingerprint).font(.caption.monospaced()).textSelection(.enabled)
+                        Text(fingerprint).appFont(.caption.monospaced()).textSelection(.enabled)
                         HStack {
                             Button(T("Cancel")) { connection.dismissFingerprint() }
                             Button(T("Trust this certificate")) { trustCertificate() }
@@ -84,6 +86,7 @@ struct RemoteDesktopPane: View {
         .onAppear {
             if username.isEmpty { username = connection.profile.user ?? "" }
         }
+        // A saved password shows as dots in the field and is used when Connect is pressed; the desktop waits for Connect.
         .task(id: credentialID) { await checkSaved() }
         // A publisher rather than onChange: it also reports the current phase when this view is rebuilt mid sign-in.
         .onReceive(connection.$phase) { phase in
@@ -116,6 +119,18 @@ struct RemoteDesktopPane: View {
     private func checkSaved() async {
         hasSavedPassword = await model.vault.hasRemembered(id: credentialID)
         remember = remember || hasSavedPassword
+        if hasSavedPassword, password.isEmpty { password = Self.savedMask }
+        if !hasSavedPassword, password == Self.savedMask { password = "" }
+    }
+
+    /// Stands in for a saved password in the field, so it shows as dots without reading the password, which could
+    /// ask for Touch ID before the user means to connect. Characters from Unicode's private use area, which no
+    /// keyboard types.
+    static let savedMask = String(repeating: "\u{F8FF}", count: 8)
+
+    /// Editing the dots clears them: a deleted dot clears the whole saved password, and typing replaces it.
+    static func withoutSavedMask(_ value: String) -> String {
+        value == savedMask ? value : value.replacingOccurrences(of: "\u{F8FF}", with: "")
     }
 
     private func connect() {
@@ -126,8 +141,8 @@ struct RemoteDesktopPane: View {
         let typed = password, id = credentialID
         Task {
             var secret = typed
-            // An empty field with a saved password signs in with the saved one.
-            if secret.isEmpty, hasSavedPassword {
+            // The saved password's dots, or an empty field, sign in with the saved one.
+            if secret.isEmpty || secret == Self.savedMask, hasSavedPassword {
                 do { secret = try await model.vault.password(id: id) }
                 catch { trustError = message(for: error); return }
             }
@@ -176,10 +191,10 @@ private struct GatewayHostKey: View {
         Color.clear.loginChallengeSheet(model: model, tab: gateway).sheet(item: Binding(get: { gateway.hostKeyPrompt }, set: { _ in }),
                           onDismiss: { model.answerHostKey(gateway, approve: false) }) { prompt in
             VStack(alignment: .leading, spacing: 18) {
-                Label(T("Verify this server"), systemImage: "key.horizontal").font(.title2.bold())
-                Text(prompt.endpoint).font(.headline)
+                Label(T("Verify this server"), systemImage: "key.horizontal").appFont(.title2.bold())
+                Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
-                Text(prompt.fingerprint).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled)
                 HStack {
                     Button(T("Cancel")) { model.answerHostKey(gateway, approve: false) }
                     Spacer()

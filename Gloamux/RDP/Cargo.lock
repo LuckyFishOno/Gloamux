@@ -915,6 +915,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "gloamux-rdp"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "des 0.8.1",
+ "flate2",
+ "getrandom 0.3.4",
+ "ironrdp-blocking",
+ "ironrdp-cliprdr",
+ "ironrdp-connector",
+ "ironrdp-core",
+ "ironrdp-displaycontrol",
+ "ironrdp-dvc",
+ "ironrdp-graphics",
+ "ironrdp-input",
+ "ironrdp-pdu",
+ "ironrdp-session",
+ "ironrdp-tls",
+ "md-5 0.10.6",
+ "num-bigint",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "x509-cert",
+]
+
+[[package]]
 name = "group"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1504,35 +1533,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "gloamux-rdp"
-version = "0.1.0"
-dependencies = [
- "aes",
- "anyhow",
- "des 0.8.1",
- "flate2",
- "getrandom 0.3.4",
- "ironrdp-blocking",
- "ironrdp-cliprdr",
- "ironrdp-connector",
- "ironrdp-core",
- "ironrdp-displaycontrol",
- "ironrdp-dvc",
- "ironrdp-graphics",
- "ironrdp-input",
- "ironrdp-pdu",
- "ironrdp-session",
- "ironrdp-tls",
- "md-5 0.10.6",
- "num-bigint",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "x509-cert",
 ]
 
 [[package]]

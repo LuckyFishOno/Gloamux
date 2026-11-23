@@ -13,7 +13,7 @@ struct ProfileImportView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 6) {
-                Label(T(kind.title), systemImage: kind.symbol).font(.title2.weight(.semibold))
+                Label(T(kind.title), systemImage: kind.symbol).appFont(.title2.weight(.semibold))
                 InfoButton(T("Review the sessions below. Passwords are not imported: Gloamux asks for them, and for host trust, on the first connection."))
             }
             Text(kind == .xshellFolder ? source.lastPathComponent : source.path).foregroundStyle(.secondary)
@@ -25,14 +25,20 @@ struct ProfileImportView: View {
                         ForEach(draft.entries, id: \.components) { entry in
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(entry.path)
-                                Text(verbatim: "\(entry.connection.username)@\(entry.connection.host):\(entry.connection.port)"
-                                     + (entry.jump.map { " ⟵ " + $0.joined(separator: " / ") } ?? ""))
-                                    .font(.caption.monospaced()).foregroundStyle(.secondary)
-                                if let key = entry.connection.identityPath {
-                                    Text(verbatim: key).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                                if let connection = entry.connection {
+                                    Text(verbatim: "\(connection.username)@\(connection.host):\(connection.port)"
+                                         + (entry.jump.map { " ⟵ " + $0.joined(separator: " / ") } ?? ""))
+                                        .appFont(.caption.monospaced()).foregroundStyle(.secondary)
+                                } else if let container = entry.container {
+                                    let settings = container.serialSettings
+                                    Text(verbatim: "\(container.target) · \(settings.baud) \(settings.format)")
+                                        .appFont(.caption.monospaced()).foregroundStyle(.secondary)
+                                }
+                                if let key = entry.connection?.identityPath {
+                                    Text(verbatim: key).appFont(.caption2.monospaced()).foregroundStyle(.tertiary)
                                         .lineLimit(1).truncationMode(.middle)
                                 }
-                                ForEach(entry.notes, id: \.self) { Text(T($0)).font(.caption).foregroundStyle(.orange) }
+                                ForEach(entry.notes, id: \.self) { Text(T($0)).appFont(.caption).foregroundStyle(.orange) }
                             }.padding(.vertical, 3)
                         }
                     }
@@ -41,7 +47,7 @@ struct ProfileImportView: View {
                             ForEach(draft.skipped, id: \.path) { item in
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.path)
-                                    Text(T(item.reason)).font(.caption).foregroundStyle(.secondary)
+                                    Text(T(item.reason)).appFont(.caption).foregroundStyle(.secondary)
                                 }.padding(.vertical, 3)
                             }
                         }

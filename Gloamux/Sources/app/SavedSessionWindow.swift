@@ -13,7 +13,7 @@ import SwiftUI
         window.title = (tab.environment.map { "[\($0.shortTitle)] " } ?? "") + tab.title
         window.minSize = NSSize(width: 880, height: 580)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: SavedSessionContent(model: model, tab: tab))
+        window.contentView = NSHostingView(rootView: SavedSessionContent(model: model, tab: tab).appTextSize())
         super.init(window: window)
         window.delegate = self
         let accessory = NSTitlebarAccessoryViewController()

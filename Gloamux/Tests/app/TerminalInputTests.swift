@@ -97,24 +97,36 @@ import Terminal
     }
     func testLocalizationsAreCompleteAndTheSystemLanguageResolves() throws {
         XCTAssertEqual(AppLanguage.system.resolved(preferred: ["zh-TW"]), "zh-Hant")
-        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["zh-Hans-CN"]), "zh-Hant", "Every Chinese variant uses the Chinese Gloamux has")
-        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["ja-JP", "zh-Hant-TW", "en"]), "zh-Hant", "The first shipped language wins")
+        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["zh-HK"]), "zh-Hant")
+        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["zh-Hans-CN"]), "zh-Hans")
+        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["zh-CN"]), "zh-Hans")
+        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["ja-JP", "zh-Hant-TW", "en"]), "ja", "The first shipped language wins")
+        XCTAssertEqual(AppLanguage.system.resolved(preferred: ["fr-FR", "es-MX", "en"]), "es")
         XCTAssertEqual(AppLanguage.system.resolved(preferred: ["en-US"]), "en")
         XCTAssertEqual(AppLanguage.system.resolved(preferred: ["fr-FR"]), "en")
         XCTAssertEqual(AppLanguage.from(appleLanguages: ["zh-Hant-TW"]), .traditionalChinese)
+        XCTAssertEqual(AppLanguage.from(appleLanguages: ["zh-Hans", "en"]), .simplifiedChinese)
+        XCTAssertEqual(AppLanguage.from(appleLanguages: ["ja_JP"]), .japanese)
+        XCTAssertEqual(AppLanguage.from(appleLanguages: ["es-419"]), .spanish)
         XCTAssertEqual(AppLanguage.from(appleLanguages: nil), .system)
 
-        // Both catalogs carry the same keys, and every translation is filled in.
+        // All shipped catalogs carry the same keys, and every translation is filled in.
         func catalog(_ code: String) throws -> [String: String] {
             let bundle = try XCTUnwrap(UIStrings.bundles[code])
             let url = try XCTUnwrap(bundle.url(forResource: "Localizable", withExtension: "strings"), code)
             return try XCTUnwrap(NSDictionary(contentsOf: url) as? [String: String], code)
         }
-        let english = try catalog("en"), chinese = try catalog("zh-Hant")
+        let english = try catalog("en")
         XCTAssertGreaterThan(english.count, 100)
-        XCTAssertEqual(Set(english.keys), Set(chinese.keys))
-        for (key, value) in chinese { XCTAssertFalse(value.isEmpty, key) }
-        XCTAssertNotEqual(UIStrings.text("Connect", language: .traditionalChinese), "Connect")
+        for code in AppLanguage.supported where code != "en" {
+            let localized = try catalog(code)
+            XCTAssertEqual(Set(english.keys), Set(localized.keys), code)
+            for (key, value) in localized { XCTAssertFalse(value.isEmpty, "\(code): \(key)") }
+        }
+        XCTAssertEqual(UIStrings.text("Connect", language: .traditionalChinese), "連線")
+        XCTAssertEqual(UIStrings.text("Connect", language: .simplifiedChinese), "连接")
+        XCTAssertEqual(UIStrings.text("Connect", language: .japanese), "接続")
+        XCTAssertEqual(UIStrings.text("Connect", language: .spanish), "Conectar")
         XCTAssertEqual(UIStrings.text("Connect", language: .english), "Connect")
         XCTAssertEqual(UIStrings.text("Not a key", language: .traditionalChinese), "Not a key")
     }

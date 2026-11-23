@@ -64,12 +64,12 @@ import GloamuxNetwork
         XCTAssertEqual(byName["web"]?.notes, [])
 
         let db = try XCTUnwrap(byName["db"])
-        XCTAssertEqual(db.connection.port, 2201, "the first Port obtained wins")
+        XCTAssertEqual(db.connection?.port, 2201, "the first Port obtained wins")
         XCTAssertEqual(db.jump, ["bastion"])
 
         let bastion = try XCTUnwrap(byName["bastion"])
-        XCTAssertEqual(bastion.connection.host, "bastion.example.com")
-        XCTAssertEqual(bastion.connection.identityPath, home.appendingPathComponent("id_missing").path)
+        XCTAssertEqual(bastion.connection?.host, "bastion.example.com")
+        XCTAssertEqual(bastion.connection?.identityPath, home.appendingPathComponent("id_missing").path)
         XCTAssertEqual(bastion.notes, ["The identity file was not found."])
 
         let edge = try XCTUnwrap(byName["edge"])
@@ -146,7 +146,7 @@ import GloamuxNetwork
         """.write(to: ssh.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         let withAgent = try OpenSSHConfigImport.scan(ssh.appendingPathComponent("config"),
                                                      options: .init(home: home, localUser: "me", agentAvailable: true))
-        let byName = Dictionary(uniqueKeysWithValues: withAgent.entries.map { ($0.name, $0.connection) })
+        let byName = Dictionary(uniqueKeysWithValues: withAgent.entries.compactMap { entry in entry.connection.map { (entry.name, $0) } })
         XCTAssertEqual(byName["plain"]?.usesAgent, true)
         XCTAssertNil(byName["plain"]?.identityPath)
         XCTAssertNil(byName["pinned"]?.usesAgent)
@@ -156,7 +156,7 @@ import GloamuxNetwork
 
         let withoutAgent = try OpenSSHConfigImport.scan(ssh.appendingPathComponent("config"),
                                                         options: .init(home: home, localUser: "me", agentAvailable: false))
-        XCTAssertEqual(withoutAgent.entries.first { $0.name == "plain" }?.connection.identityPath,
+        XCTAssertEqual(withoutAgent.entries.first { $0.name == "plain" }?.connection?.identityPath,
                        ssh.appendingPathComponent("id_rsa").path, "falls back to a default key file")
     }
 
@@ -175,7 +175,7 @@ import GloamuxNetwork
         try "Host corp\n  HostName corp.test\n  ProxyCommand nc -X connect -x proxy.test:8080 %h %p\n"
             .write(to: config, atomically: true, encoding: .utf8)
         let entry = try XCTUnwrap(OpenSSHConfigImport.scan(config, options: .init(home: home, localUser: "me", agentAvailable: false)).entries.first)
-        XCTAssertEqual(entry.connection.proxy, ProxyConfiguration(kind: .http, host: "proxy.test", port: 8080))
+        XCTAssertEqual(entry.connection?.proxy, ProxyConfiguration(kind: .http, host: "proxy.test", port: 8080))
         XCTAssertEqual(entry.notes, [])
     }
 

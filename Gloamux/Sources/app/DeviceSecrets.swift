@@ -11,6 +11,10 @@ import Security
 struct DeviceSecrets {
     static var isAvailable: Bool { SecureEnclave.isAvailable }
     private static let contextInfo = Data("Gloamux saved sign-ins v1".utf8)
+    /// Entries saved under an earlier name were sealed with that name in the key derivation. They still open, and are
+    /// sealed again under the current name the first time they are read.
+    static let legacyContextInfo = LegacyName.installs.map { Data("\($0.folder) saved sign-ins v1".utf8) }
+    static let unreadable = "The password saved on this Mac for this account could not be read. Type it again to replace it."
 
     private struct File: Codable {
         var version = 1
@@ -22,6 +26,7 @@ struct DeviceSecrets {
     private let url: URL
     private var file: File?
     private var key: SymmetricKey?
+    private var shared: SharedSecret?
 
     init(url: URL) throws {
         self.url = url
@@ -37,8 +42,18 @@ struct DeviceSecrets {
 
     mutating func secret(id: String) throws -> String? {
         guard let sealed = file?.entries[id] else { return nil }
-        let box = try AES.GCM.SealedBox(combined: sealed)
-        return String(decoding: try AES.GCM.open(box, using: try symmetricKey(), authenticating: Data(id.utf8)), as: UTF8.self)
+        guard let box = try? AES.GCM.SealedBox(combined: sealed) else { throw WorkspaceError.invalid(Self.unreadable) }
+        let tag = Data(id.utf8)
+        if let opened = try? AES.GCM.open(box, using: try symmetricKey(), authenticating: tag) {
+            return String(decoding: opened, as: UTF8.self)
+        }
+        for info in Self.legacyContextInfo {
+            guard let opened = try? AES.GCM.open(box, using: try symmetricKey(info: info), authenticating: tag) else { continue }
+            let secret = String(decoding: opened, as: UTF8.self)
+            try? store(id: id, secret: secret)
+            return secret
+        }
+        throw WorkspaceError.invalid(Self.unreadable)
     }
 
     mutating func store(id: String, secret: String) throws {
@@ -64,13 +79,19 @@ struct DeviceSecrets {
 
     private mutating func symmetricKey() throws -> SymmetricKey {
         if let key { return key }
-        guard let file else { throw VaultError.notFound("saved sign-ins") }
-        let enclave = try SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: file.enclaveKey)
-        let peer = try P256.KeyAgreement.PublicKey(x963Representation: file.peerKey)
-        let shared = try enclave.sharedSecretFromKeyAgreement(with: peer)
-        let derived = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(), sharedInfo: Self.contextInfo, outputByteCount: 32)
+        let derived = try symmetricKey(info: Self.contextInfo)
         key = derived
         return derived
+    }
+
+    private mutating func symmetricKey(info: Data) throws -> SymmetricKey {
+        if shared == nil {
+            guard let file else { throw VaultError.notFound("saved sign-ins") }
+            let enclave = try SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: file.enclaveKey)
+            let peer = try P256.KeyAgreement.PublicKey(x963Representation: file.peerKey)
+            shared = try enclave.sharedSecretFromKeyAgreement(with: peer)
+        }
+        return shared!.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(), sharedInfo: info, outputByteCount: 32)
     }
 
     private static func newFile() throws -> File {

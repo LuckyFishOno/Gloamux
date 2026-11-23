@@ -75,7 +75,7 @@ struct ConnectionEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Label(T(item == nil ? "New saved session" : "Session properties"), systemImage: "server.rack")
-                .font(.title2.weight(.semibold))
+                .appFont(.title2.weight(.semibold))
             Form {
                 TextField(T("Name"), text: $name)
                 HStack(spacing: 6) {
@@ -97,7 +97,7 @@ struct ConnectionEditor: View {
                     if ftpSecurity != FTPSecurity.none {
                         HStack(spacing: 6) {
                             TextField(T("Trusted certificate"), text: $ftpFingerprint, prompt: Text(T("SHA-256 fingerprint")))
-                                .font(.system(size: 11, design: .monospaced))
+                                .appFont(.system(size: 11, design: .monospaced))
                             InfoButton(T("Leave this empty for servers with a certificate this Mac trusts. For a self-signed certificate, connect once: the error shows the server's fingerprint. Check it with the server's administrator, then paste it here."))
                         }
                     }
@@ -116,7 +116,7 @@ struct ConnectionEditor: View {
             }
             if let error {
                 Label(T(error), systemImage: "exclamationmark.circle").foregroundStyle(.red)
-                    .font(.callout).textSelection(.enabled)
+                    .appFont(.callout).textSelection(.enabled)
             }
             HStack {
                 Spacer()
@@ -158,7 +158,7 @@ struct ConnectionEditor: View {
                 }
                 if usesAgent, let socket = item?.connection?.agentSocket {
                     LabeledContent(T("Agent socket")) {
-                        Text(verbatim: socket).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle).help(socket)
+                        Text(verbatim: socket).appFont(.caption.monospaced()).lineLimit(1).truncationMode(.middle).help(socket)
                     }
                 }
                 JumpHostPicker(store: store, excluding: item?.id, selection: $jumpSessionID)
@@ -172,7 +172,7 @@ struct ConnectionEditor: View {
                 }
                 LabeledContent {
                     TextEditor(text: $startupCommands)
-                        .font(.system(size: 11, design: .monospaced))
+                        .appFont(.system(size: 11, design: .monospaced))
                         .frame(height: 54)
                         .scrollContentBackground(.hidden)
                         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 5))
@@ -195,12 +195,12 @@ struct ConnectionEditor: View {
 
     private var masterPasswordSheet: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(T("Enter the master password"), systemImage: "lock.shield").font(.title3.weight(.semibold))
+            Label(T("Enter the master password"), systemImage: "lock.shield").appFont(.title3.weight(.semibold))
             Text(T("Changing whether this session asks on every connection needs the password vault's master password."))
                 .fixedSize(horizontal: false, vertical: true)
             SecureField(T("Master password"), text: $masterPassword).onSubmit(checkMasterPassword)
             if let masterPasswordError {
-                Label(T(masterPasswordError), systemImage: "exclamationmark.circle").foregroundStyle(.red).font(.callout)
+                Label(T(masterPasswordError), systemImage: "exclamationmark.circle").foregroundStyle(.red).appFont(.callout)
             }
             HStack {
                 Spacer()
@@ -420,10 +420,10 @@ struct IdentityFilePicker: View {
     private var publicKeySheet: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
-                Label(T("Gloamux public key"), systemImage: "key.horizontal").font(.headline)
+                Label(T("Gloamux public key"), systemImage: "key.horizontal").appFont(.headline)
                 InfoButton(T("Add this line to ~/.ssh/authorized_keys on the server. The private key stays in this Mac's Secure Enclave."))
             }
-            Text(verbatim: shownPublicKey ?? "").font(.callout.monospaced()).textSelection(.enabled)
+            Text(verbatim: shownPublicKey ?? "").appFont(.callout.monospaced()).textSelection(.enabled)
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
             HStack {
@@ -548,11 +548,11 @@ struct KeyGeneratorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
-                Label(T("Generate key file"), systemImage: "key.horizontal").font(.headline)
+                Label(T("Generate key file"), systemImage: "key.horizontal").appFont(.headline)
                 InfoButton(T("Creates an Ed25519 key in ~/.ssh, the same file ssh-keygen makes, so ssh and other apps can use it too. Add the public key to ~/.ssh/authorized_keys on the server."))
             }
             if let publicKey {
-                Text(verbatim: publicKey).font(.callout.monospaced()).textSelection(.enabled)
+                Text(verbatim: publicKey).appFont(.callout.monospaced()).textSelection(.enabled)
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                 HStack {
@@ -566,15 +566,15 @@ struct KeyGeneratorSheet: View {
                 Form {
                     LabeledContent(T("File")) {
                         HStack(spacing: 2) {
-                            Text("~/.ssh/").foregroundStyle(.secondary).font(.body.monospaced())
-                            TextField("", text: $name).font(.body.monospaced()).labelsHidden()
+                            Text("~/.ssh/").foregroundStyle(.secondary).appFont(.body.monospaced())
+                            TextField("", text: $name).appFont(.body.monospaced()).labelsHidden()
                         }
                     }
                     TextField(T("Comment"), text: $comment)
                     SecureField(T("Passphrase (optional)"), text: $passphrase)
                     SecureField(T("Confirm passphrase"), text: $confirmation).disabled(passphrase.isEmpty)
                 }
-                if let error { Text(T(error)).foregroundStyle(.red).font(.callout) }
+                if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
                 HStack {
                     Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                     Spacer()

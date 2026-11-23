@@ -115,13 +115,13 @@ struct RemoteFileSidebar: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 // One line, cut short when the panel is narrow, rather than wrapping.
-                Label(T(focusedTab?.isLocal == true ? "Local files" : "Remote files"), systemImage: "folder").font(.headline)
+                Label(T(focusedTab?.isLocal == true ? "Local files" : "Remote files"), systemImage: "folder").appFont(.headline)
                     .lineLimit(1).truncationMode(.tail)
                 Spacer()
                 if let tab = focusedTab, !tab.isLocal {
                     SidebarUploadButton(tab: tab, tree: tab.remoteTree) { uploadRequest += 1 }
                 }
-                Button(action: close) { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
+                Button(action: close) { Image(systemName: "xmark").appFont(.caption.weight(.semibold)).iconHitArea() }
                     .buttonStyle(.plain).help(T("Hide files")).accessibilityLabel(T("Hide files"))
             }
             if let tab = focusedTab {
@@ -198,7 +198,7 @@ private struct SidebarUploadButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(T("Upload"), systemImage: "arrow.up.doc").labelStyle(.titleAndIcon).font(.system(size: 11)).lineLimit(1)
+            Label(T("Upload"), systemImage: "arrow.up.doc").labelStyle(.titleAndIcon).appFont(.system(size: 11)).lineLimit(1)
         }
         .buttonStyle(.bordered).controlSize(.small)
         .disabled(!tab.connected || tree.root == nil)
@@ -226,7 +226,14 @@ private struct RemoteTreePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !tab.connected {
-                ContentUnavailableView(T("Connect to browse files"), systemImage: "network").frame(maxHeight: .infinity)
+                if tab.busy {
+                    SidebarLoading(title: T("Connecting…"))
+                } else {
+                    ContentUnavailableView(T("Connect to browse files"), systemImage: "network").frame(maxHeight: .infinity)
+                }
+            } else if tree.root == nil, tree.error == nil {
+                // The first listing: centered rather than an empty list, which read as a blank panel.
+                SidebarLoading(title: T("Loading…"))
             } else {
                 header
                 treeList
@@ -235,7 +242,7 @@ private struct RemoteTreePanel: View {
             }
         }
         .task(id: tab.connected) {
-            if tab.connected, tree.root == nil { await tree.open(nil, model: model, tab: tab) }
+            if tab.connected, !tab.isLocal, tree.root == nil { await tree.open(nil, model: model, tab: tab) }
         }
         .onChange(of: tree.root) { _, root in pathDraft = root ?? "" }
         .onAppear { pathDraft = tree.root ?? "" }
@@ -266,7 +273,7 @@ private struct RemoteTreePanel: View {
         }
         .sheet(item: $naming) { request in
             VStack(alignment: .leading, spacing: 14) {
-                Text(request.title).font(.headline)
+                Text(request.title).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
@@ -280,20 +287,20 @@ private struct RemoteTreePanel: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(tab.username)@\(tab.host)").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+            Text("\(tab.username)@\(tab.host)").appFont(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 4) {
-                Button { openParent() } label: { Image(systemName: "arrow.up") }
+                Button { openParent() } label: { Image(systemName: "arrow.up").iconHitArea() }
                     .help(T("Parent folder")).disabled(tree.root == nil || tree.root == "/")
-                Button { open(nil) } label: { Image(systemName: "house") }.help(T("Home folder"))
-                TextField(T("Remote directory"), text: $pathDraft).textFieldStyle(.roundedBorder).font(.system(size: 11))
+                Button { open(nil) } label: { Image(systemName: "house").iconHitArea() }.help(T("Home folder"))
+                TextField(T("Remote directory"), text: $pathDraft).textFieldStyle(.roundedBorder).appFont(.system(size: 11))
                     .onSubmit { open(pathDraft) }
-                Button { Task { await tree.refresh(model: model, tab: tab) } } label: { Image(systemName: "arrow.clockwise") }
+                Button { Task { await tree.refresh(model: model, tab: tab) } } label: { Image(systemName: "arrow.clockwise").iconHitArea() }
                     .help(T("Refresh"))
                 FollowFolderButton(model: model, tab: tab)
             }
             .buttonStyle(.borderless).controlSize(.small)
             if let error = tree.error {
-                Label(T(error), systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.red).lineLimit(3)
+                Label(T(error), systemImage: "exclamationmark.triangle.fill").appFont(.caption).foregroundStyle(.red).lineLimit(3)
             }
         }
     }
@@ -308,10 +315,8 @@ private struct RemoteTreePanel: View {
                         if root != "/" { TreeParentRow { openParent() } }
                         ForEach(visibleRows) { row in rowView(row) }
                         if tree.children[root]?.isEmpty == true {
-                            Text(T("This folder is empty")).font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                            Text(T("This folder is empty")).appFont(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
                         }
-                    } else if tree.loading.isEmpty == false {
-                        ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.top, 20)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -328,7 +333,8 @@ private struct RemoteTreePanel: View {
             perform(action)
             return .handled
         }
-        .background(dropTarget == tree.root ? Color.accentColor.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        // Only while files are dragged over the list; with no folder open yet both are nil, which tinted it all.
+        .background(dropTarget != nil && dropTarget == tree.root ? Color.accentColor.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
         // Files dropped from Finder on empty space go to the top folder.
         .dropDestination(for: URL.self) { urls, _ in
             guard let root = tree.root else { return false }
@@ -352,14 +358,14 @@ private struct RemoteTreePanel: View {
                 tree.selection = row.path; tree.picked = [row.path]; listFocused = true
                 Task { await tree.toggle(row.path, model: model, tab: tab) }
             }
-            Image(systemName: row.entry.isDirectory ? "folder.fill" : "doc").font(.system(size: 11))
+            Image(systemName: row.entry.isDirectory ? "folder.fill" : "doc").appFont(.system(size: 11))
                 .foregroundStyle(row.entry.isDirectory ? Color.accentColor : .secondary)
-            Text(row.entry.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+            Text(row.entry.name).appFont(.system(size: 12)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 4)
             if tree.loading.contains(row.path) { ProgressView().controlSize(.mini) }
             else if !row.entry.isDirectory, let size = row.entry.size {
                 Text(ByteCountFormatter.string(fromByteCount: Int64(clamping: size), countStyle: .file))
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .appFont(.system(size: 10)).foregroundStyle(.secondary)
             }
         }
         .padding(.leading, CGFloat(row.depth) * 12 + 2).padding(.vertical, 3).padding(.trailing, 4)
@@ -619,13 +625,13 @@ private struct TransferRow: View {
                     Image(systemName: symbol).foregroundStyle(tint)
                     Text(item.name).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 0)
-                }.font(.system(size: 11))
+                }.appFont(.system(size: 11))
                 // Only a running transfer has a bar, so a finished one never looks stuck near the end.
                 if item.state == .running {
                     let total = item.size ?? 0
                     ProgressView(value: total > 0 ? min(1, Double(item.bytes) / Double(total)) : 0).controlSize(.small)
                 }
-                Text(detail).font(.system(size: 10).monospacedDigit()).foregroundStyle(.secondary).lineLimit(2)
+                Text(detail).appFont(.system(size: 10).monospacedDigit()).foregroundStyle(.secondary).lineLimit(2)
             }
             .padding(8).frame(maxWidth: .infinity, alignment: .leading)
             .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
@@ -735,7 +741,8 @@ enum TransferFigures {
                     isFolder = target.isDirectory == true && target.isPackage != true
                 }
                 return LocalItem(url: url, name: url.lastPathComponent, isDirectory: isFolder,
-                                 size: UInt64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast)
+                                 size: UInt64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast,
+                                 isPackage: values.isPackage == true)
             }.sorted { $0.isDirectory != $1.isDirectory ? $0.isDirectory : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             error = nil
         } catch { self.error = error.localizedDescription }
@@ -754,7 +761,8 @@ enum TransferFigures {
 
 /// The local terminal's view of the sidebar: this Mac's folders, starting at home.
 private struct LocalTreePanel: View {
-    @ObservedObject var model: WorkspaceModel
+    /// Only for actions; the panel redraws when its tab, folders, or transfers change, not with every workspace change.
+    let model: WorkspaceModel
     @ObservedObject var tab: SessionTab
     @ObservedObject var tree: LocalTreeState
     @ObservedObject var queue: TransferQueue
@@ -770,7 +778,7 @@ private struct LocalTreePanel: View {
                         if tree.root != "/" { TreeParentRow { openParent() } }
                         ForEach(visibleRows) { row in rowView(row) }
                         if tree.children[tree.root]?.isEmpty == true {
-                            Text(T("This folder is empty")).font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                            Text(T("This folder is empty")).appFont(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -803,17 +811,17 @@ private struct LocalTreePanel: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Button { openParent() } label: { Image(systemName: "arrow.up") }
+                Button { openParent() } label: { Image(systemName: "arrow.up").iconHitArea() }
                     .help(T("Parent folder")).disabled(tree.root == "/")
-                Button { tree.open(LocalTreeState.home) } label: { Image(systemName: "house") }.help(T("Home folder"))
-                TextField(T("Local folder"), text: $pathDraft).textFieldStyle(.roundedBorder).font(.system(size: 11))
+                Button { tree.open(LocalTreeState.home) } label: { Image(systemName: "house").iconHitArea() }.help(T("Home folder"))
+                TextField(T("Local folder"), text: $pathDraft).textFieldStyle(.roundedBorder).appFont(.system(size: 11))
                     .onSubmit { tree.open(pathDraft.isEmpty ? LocalTreeState.home : pathDraft) }
-                Button { tree.refresh() } label: { Image(systemName: "arrow.clockwise") }.help(T("Refresh"))
+                Button { tree.refresh() } label: { Image(systemName: "arrow.clockwise").iconHitArea() }.help(T("Refresh"))
                 FollowFolderButton(model: model, tab: tab)
             }
             .buttonStyle(.borderless).controlSize(.small)
             if let error = tree.error {
-                Label(T(error), systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.red).lineLimit(3)
+                Label(T(error), systemImage: "exclamationmark.triangle.fill").appFont(.caption).foregroundStyle(.red).lineLimit(3)
             }
         }
     }
@@ -860,20 +868,20 @@ private struct LocalTreePanel: View {
                 tree.selection = row.path; listFocused = true
                 tree.toggle(row.path)
             }
-            let isPackage = !row.item.isDirectory && (try? row.item.url.resourceValues(forKeys: [.isPackageKey]).isPackage) == true
+            let isPackage = !row.item.isDirectory && row.item.isPackage
             // Apps and other packages show their own icon, as in Finder.
             if isPackage {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: row.path)).resizable().frame(width: 14, height: 14)
             } else {
-                Image(systemName: row.item.isDirectory ? "folder.fill" : "doc").font(.system(size: 11))
+                Image(systemName: row.item.isDirectory ? "folder.fill" : "doc").appFont(.system(size: 11))
                     .foregroundStyle(row.item.isDirectory ? Color.accentColor : .secondary)
             }
-            Text(row.item.name).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+            Text(row.item.name).appFont(.system(size: 12)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 4)
             // Packages have no single size to show, as in Finder.
             if !row.item.isDirectory, !isPackage {
                 Text(ByteCountFormatter.string(fromByteCount: Int64(clamping: row.item.size), countStyle: .file))
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .appFont(.system(size: 10)).foregroundStyle(.secondary)
             }
         }
         .padding(.leading, CGFloat(row.depth) * 12 + 2).padding(.vertical, 3).padding(.trailing, 4)
@@ -916,7 +924,7 @@ private struct TreeDisclosure: View {
 
     var body: some View {
         if isDirectory {
-            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            Image(systemName: "chevron.right").appFont(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 .rotationEffect(.degrees(expanded ? 90 : 0)).animation(.easeOut(duration: 0.12), value: expanded)
                 .frame(width: 16, height: 18).contentShape(Rectangle())
                 .onTapGesture(perform: toggle)
@@ -976,8 +984,8 @@ private struct TreeParentRow: View {
     var body: some View {
         HStack(spacing: 4) {
             Color.clear.frame(width: 16, height: 1)
-            Image(systemName: "folder.fill").font(.system(size: 11)).foregroundStyle(Color.accentColor)
-            Text("..").font(.system(size: 12))
+            Image(systemName: "folder.fill").appFont(.system(size: 11)).foregroundStyle(Color.accentColor)
+            Text("..").appFont(.system(size: 12))
             Spacer(minLength: 4)
         }
         .padding(.leading, 2).padding(.vertical, 3).padding(.trailing, 4)
@@ -988,5 +996,18 @@ private struct TreeParentRow: View {
         .help(T("Parent folder"))
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(T("Parent folder"))
+    }
+}
+
+/// A spinner and a word, centered in the files panel while a session connects or its first folder loads.
+private struct SidebarLoading: View {
+    let title: String
+    var body: some View {
+        VStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(title).appFont(.callout).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }

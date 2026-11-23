@@ -29,7 +29,7 @@ struct GloamuxApplication: SwiftUI.App {
     private let shortcuts = GloamuxShortcuts.self
     var body: some Scene {
         WindowGroup("Gloamux", id: WorkspaceWindowID.main) {
-            WorkspaceWindow(store: store, applicationDelegate: applicationDelegate)
+            WorkspaceWindow(store: store, applicationDelegate: applicationDelegate).appTextSize()
         }
             .defaultSize(width: 1320, height: 840)
             .windowToolbarStyle(.unified(showsTitle: false))
@@ -47,24 +47,61 @@ struct GloamuxApplication: SwiftUI.App {
         // redraw every view that reads a setting, which updates the item again, without end.
         MenuBarExtra(isInserted: Binding(get: { showsMenuBarExtra },
                                          set: { if $0 != showsMenuBarExtra { showsMenuBarExtra = $0 } })) {
-            if let workspace = store.workspace { MenuBarPanel(model: workspace) }
+            if let workspace = store.workspace { MenuBarPanel(model: workspace).appTextSize() }
             else { ProgressView().padding().task { await store.load() } }
         } label: {
             Image(systemName: "terminal")
         }
         .menuBarExtraStyle(.window)
         // A plain window rather than a `Settings` scene: the system would add its own untranslated Settings… item.
-        Window("Settings", id: SettingsWindow.id) {
-            if let workspace = store.workspace { PreferencesView(model: workspace) }
-            else { ProgressView("Opening workspace").padding().task { await store.load() } }
+        Window(UIStrings.text("Settings"), id: SettingsWindow.id) {
+            if let workspace = store.workspace { PreferencesView(model: workspace).appTextSize() }
+            else { ProgressView(UIStrings.text("Opening workspace")).padding().task { await store.load() } }
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+        // Settings opens from the app menu with Command-comma; it is not a document window for the Window menu.
+        .commandsRemoved()
     }
 }
 
 @MainActor final class GloamuxApplicationDelegate: NSObject, NSApplicationDelegate {
     var newWindow: (() -> Void)?
+    /// The open workspace windows, once the workspace has loaded.
+    var workspaces: (() -> [WorkspaceModel])?
+    private var quitting = false
+    private var repliedToQuit = false
+
+    /// Quitting ends every connection the way closing its tab does: each SSH server is told the session is over, so it
+    /// ends the login at once instead of finding it dropped. Open tabs are saved first, so they still reopen at launch.
+    /// The app quits when that is done, or after five seconds with a server that does not answer.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A second Quit while connections are closing waits for the first.
+        guard !quitting else { return .terminateCancel }
+        guard let models = workspaces?(), !models.isEmpty else { return .terminateNow }
+        quitting = true
+        Task { @MainActor in
+            for model in models { await model.closeWorkspaceWindow(lockingVault: true) }
+            finishQuitting(sender)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            finishQuitting(sender)
+        }
+        return .terminateLater
+    }
+
+    private func finishQuitting(_ sender: NSApplication) {
+        guard !repliedToQuit else { return }
+        repliedToQuit = true
+        sender.reply(toApplicationShouldTerminate: true)
+    }
+
+    /// Gloamux draws its own tab bar. The system's window tabs would add a second set of tab commands to the View and
+    /// Window menus (Show Tab Bar, Merge All Windows) that do something different from the app's.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
@@ -220,8 +257,10 @@ struct WorkspaceWindow: View {
     var body: some View {
         Group {
             if let workspace { DesktopView(model: workspace) }
-            else if let failure = store.failure { ContentUnavailableView("Workspace could not be opened", systemImage: "exclamationmark.triangle", description: Text(failure)).frame(width: 600, height: 300) }
-            else { ProgressView("Opening workspace").frame(width: 600, height: 300) }
+            else if let failure = store.failure {
+                ContentUnavailableView(UIStrings.text("Workspace could not be opened"), systemImage: "exclamationmark.triangle",
+                                       description: Text(UIStrings.text(failure))).frame(width: 600, height: 300)
+            } else { ProgressView(UIStrings.text("Opening workspace")).frame(width: 600, height: 300) }
         }
         .background(WorkspaceWindowAttachment { attached in
             guard window !== attached else { return }
@@ -248,12 +287,15 @@ struct WorkspaceWindow: View {
             guard !Task.isCancelled, window === attached else { return }
             workspace = store.attach(attached)
             applicationDelegate.newWindow = { openWindow(id: WorkspaceWindowID.main) }
+            applicationDelegate.workspaces = { [weak store] in store?.openWindows ?? [] }
             if arguments.contains("--show-preferences") { openWindow(id: SettingsWindow.id) }
             if arguments.contains("--show-command-palette") { store.workspace?.showCommandPalette() }
             if let index = arguments.firstIndex(of: "--preview-theme"), index + 1 < arguments.count, let model = store.workspace {
                 model.beginThemePreview()
                 do { try model.focusThemePreview(arguments[index + 1]) } catch { model.error = error.localizedDescription }
             }
+            PopoverProbe.scheduleIfRequested(touch: { store.workspace?.objectWillChange.send() },
+                                            changes: { store.workspace?.objectWillChange.map { _ in () }.eraseToAnyPublisher() })
             SmokeCapture.scheduleIfRequested {
                 guard let model = store.workspace else { return [:] }
                 return ["savedTheme": model.themeID, "displayedTheme": model.displayedThemeID, "previewOpen": model.themePreview != nil,

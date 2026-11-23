@@ -59,6 +59,54 @@ import XCTest
         XCTAssertEqual(edited.parent, session.parent)
     }
 
+    func testXshellBackupImportsItsSessionsAndAMissingUserNameTakesTheMacUser() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-xts-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let content = root.appendingPathComponent("content")
+        for folder in ["Xshell/Lab", "Xftp", "xsl/ColorScheme Files"] {
+            try FileManager.default.createDirectory(at: content.appendingPathComponent(folder), withIntermediateDirectories: true)
+        }
+        // Xshell leaves UserName empty when it asks for the name on connecting.
+        try Data("[CONNECTION]\r\nHost=192.0.2.10\r\nPort=22\r\nProtocol=SSH\r\n[CONNECTION:AUTHENTICATION]\r\nUserName=\r\nPassword=\r\n".utf8)
+            .write(to: content.appendingPathComponent("Xshell/Lab/edge.xsh"))
+        try Data("[SessionInfo]\r\nHost=files.example\r\nUserName=ops\r\nProtocol=SFTP\r\n".utf8)
+            .write(to: content.appendingPathComponent("Xftp/files.xfp"))
+        try Data("[Names]\r\n".utf8).write(to: content.appendingPathComponent("xsl/ColorScheme Files/Dark.scs"))
+        let archive = root.appendingPathComponent("xbackup.xts")
+        let zip = Process()
+        zip.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        zip.currentDirectoryURL = content
+        zip.arguments = ["-qr", archive.path, "."]
+        try zip.run(); zip.waitUntilExit()
+        XCTAssertEqual(zip.terminationStatus, 0)
+
+        let draft = try ProfileImport.scan(archive, localUser: "me")
+        XCTAssertEqual(draft.name, "xbackup")
+        XCTAssertEqual(draft.folders, [["Lab"]], "The backup's own Xshell folder is not a level of its own")
+        let edge = try XCTUnwrap(draft.entries.first { $0.path == "Lab / edge.xsh" })
+        XCTAssertEqual(edge.connection?.host, "192.0.2.10")
+        XCTAssertEqual(edge.connection?.username, "me")
+        XCTAssertTrue(edge.notes.contains { $0.contains("asks for the user name") })
+        let files = try XCTUnwrap(draft.entries.first { $0.path == "files.xfp" })
+        XCTAssertEqual(files.connection?.opensFiles, true)
+        XCTAssertEqual(files.connection?.username, "ops")
+        XCTAssertTrue(files.notes.isEmpty)
+        XCTAssertEqual(draft.entries.count, 2, "Color schemes and other backup files are not sessions")
+        XCTAssertTrue(draft.skipped.isEmpty)
+
+        let empty = root.appendingPathComponent("empty.xts")
+        let other = Process()
+        other.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        other.currentDirectoryURL = content
+        other.arguments = ["-qr", empty.path, "xsl"]
+        try other.run(); other.waitUntilExit()
+        XCTAssertThrowsError(try ProfileImport.scan(empty)) { error in
+            XCTAssertEqual(error.localizedDescription, "No Xshell sessions were found in this backup.")
+        }
+        try Data("not a zip".utf8).write(to: root.appendingPathComponent("broken.xts"))
+        XCTAssertThrowsError(try ProfileImport.scan(root.appendingPathComponent("broken.xts")))
+    }
+
     func testQuickConnectTargetsAndMalformedInput() {
         XCTAssertEqual(SavedConnection.quickTarget("ssh ops@node.test:2201"),
                        SavedConnection(host: "node.test", port: 2201, username: "ops"))

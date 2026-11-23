@@ -1,6 +1,6 @@
 # Gloamux data protection inventory
 
-Reviewed on November 21, 2026, against the 0.10.0 working tree. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
+Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 0.13.0 source on November 23, 2026. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
 
 ## Protection classes
 
@@ -19,7 +19,7 @@ Gloamux stores working files in `~/Library/Application Support/Gloamux`. The dir
 |---|---|---|---|---|
 | Saved sign-ins (passwords and key passphrases) | `saved-sign-ins.json` | S1 | Each entry is sealed with AES-GCM, with its ID bound as associated data, under a key derived (HKDF-SHA256) from a Secure Enclave P-256 key agreement. The file holds only the enclave's wrapped key handle, usable on this Mac only. No unlock is needed, so a session connects after a restart. A session can require Touch ID or the Mac password before each connection. The saved passwords list opens only after Touch ID or the Mac password, reveals a secret only on request, and clears a copied password from the clipboard after 60 seconds if nothing else was copied. | Any process running as the user can read the file and ask the Secure Enclave to rebuild the key, the same exposure as an unprotected Keychain item. No MAC over the entry list, so entries can be deleted or rolled back. Not cleared on lock. |
 | Passwords added to the vault | `password-vault.json` | S1 | PBKDF2-HMAC-SHA256 (210,000 iterations) derives a key from the master password. Each entry is sealed with AES-GCM. | Entry IDs are not bound as associated data, so sealed entries can be swapped between IDs without detection. No automatic lock. PBKDF2 iteration count is below the current OWASP guidance of 600,000 for PBKDF2-HMAC-SHA256, and PBKDF2 is not memory-hard. |
-| Master password and derived key | Memory only | S1 | Manual lock discards the unwrapped key. On a compatible Mac, Gloamux retains a copy sealed with a key derived through Secure Enclave key agreement, gated by the current Touch ID enrollment. The sealed copy lasts for the app process. | No lock after idle, sleep, screen lock, or app deactivation. Swift `String` and `SymmetricKey` copies cannot be reliably zeroed. |
+| Master password and derived key | Memory only | S1 | Manual lock discards the unwrapped key. On a compatible Mac, Gloamux retains a copy sealed with a key derived through Secure Enclave key agreement, gated by the current Touch ID enrollment. The sealed copy lasts for the app process. | No lock after idle, sleep, screen lock, or app deactivation. The optional workspace idle lock (`workspace.lock-after-minutes`, off by default) only covers the terminals until Touch ID or the Mac password; it does not lock the vault or clear remembered passwords. Swift `String` and `SymmetricKey` copies cannot be reliably zeroed. |
 | Passwords remembered for the session | `CredentialVault.sessionPasswords` in memory | S1 | A password or key passphrase that signs in is saved to `saved-sign-ins.json` at once, with or without a vault. On a Mac without a Secure Enclave it goes to the vault when it is unlocked, otherwise at the next unlock. Entries read from the locked vault with Touch ID for one connection are held here too. Cleared on vault lock. | Not cleared on idle or sleep. Kept after the tab closes until the vault is locked. |
 | Password, key passphrase, and jump host secret fields | `SessionTab` published properties | S1 | Cleared after connect and on disconnect. | Values live in SwiftUI state while typed. Acceptable, but keep them out of view-state restoration and diagnostics. |
 | Private key files | User path in `identityPath` | S1 | Gloamux stores only the path. The passphrase is used for a single load. | The decrypted key stays in memory for the session. A planned key manager, key generation, and import must not write unencrypted keys. |
@@ -30,15 +30,18 @@ Gloamux stores working files in `~/Library/Application Support/Gloamux`. The dir
 | RDP and VNC endpoints | Session catalog | S2 | The catalog records host, port, optional RDP username, and any approved RDP certificate fingerprint. | Catalog files have no independent tamper detection. |
 | RDP and VNC passwords | Memory in Gloamux and its bundled helper | S1 | Passed to the helper over a private pipe. RDP verifies the server's certificate before sign-in. Passwords are entered for each connection. | Classic VNC authentication and desktop traffic have no transport encryption. |
 | Quick commands | `quick-commands.json` | S2 | Plaintext JSON, `0600`. | Users often paste tokens, passwords, or internal URLs into commands. |
-| Terminal scrollback | Memory, 1,000 lines per terminal | S2 | Not persisted. | Output can contain secrets. Future search, logs, and MCP excerpts read from it. |
-| Clipboard | System pasteboard | S2 | Gloamux reads it on paste. | Planned copy-on-select and OSC 52 writes could place secrets on the shared pasteboard and Universal Clipboard. |
+| Terminal scrollback | Memory, 5,000 lines per terminal by default (1,000 to 50,000) | S2 | Not persisted unless a session log or recording is on. | Output can contain secrets. Find, the CLI's `tabs read`, session logs, recordings, and excerpts the user shares with agents read from it. |
+| Session logs and recordings | Plaintext log and asciicast files, `0600`, in `0700` folders | S2 | Written only when the user turns logging or recording on. Likely secrets (private key blocks, access tokens, `password=` values) are masked before anything is written. | Masking is pattern-based and misses secrets it does not recognize. The files are not encrypted and are copied into backups. |
+| Agent access and activity | `agent-access.json`, `agent-activity.json` | I and S2 | Plaintext JSON, `0600`. Access is off until the user turns it on and allows sessions in Gloamux. | No tamper detection. A process running as the user can allow sessions or remove history entries. |
+| Clipboard | System pasteboard | S2 | Gloamux reads it on paste. OSC 52 writes from remote programs are refused unless `terminal.allow-clipboard-writes` is on (off by default). | With clipboard writes on, a remote program can place secrets on the shared pasteboard and Universal Clipboard. Copy-on-select is still planned. |
 | SFTP downloads | User-chosen folder plus `.gloamux-<UUID>.partial` | S2 | The partial file is removed on failure. | Partial files use default permissions. Downloaded files are the user's responsibility, but the partial file should be `0600`. |
+| Settings backup | User-chosen `.gloamuxconfig` file and its `.sha256` | S1 and S2 | Written `0600`. Carries `password-vault.json` exactly as stored, sealed under the master password; the master password, passwords remembered on this Mac, and the Secure Enclave keys are not included. Restore replaces the vault only when the backup has one, after copying the current vault to `Backups/`. | The rest of the backup is plaintext. Whoever has the file can guess the master password offline at the vault's PBKDF2 cost, so the vault is only as strong as that password. The `.sha256` file detects damage, not deliberate changes. |
 | Appearance and layout | `appearance.json`, `layout.json` | L | `0600`. | None. |
 | Language | `UserDefaults` | L | System defaults. | None. |
 
 ### Other findings
 
-- `writePrivate` writes atomically and then sets `0600`. The temporary file is created with the process umask, usually `0644`. The `0700` directory blocks other users, but an existing directory with wider permissions is not corrected. Create files with `0600` from the start and verify directory permissions on launch.
+- `writePrivate` creates its temporary file as `0600` with `O_EXCL | O_NOFOLLOW` and renames it into place, so no file is ever readable by other users. Folders are created as `0700`, but an existing folder with wider permissions is not corrected. Verify directory permissions on launch.
 - The vault salt uses `UInt8.random(in:)`, which uses the system random generator on Apple platforms. Use `SecRandomCopyBytes` or `SymmetricKey(size:)` explicitly so the source of randomness is clear in review.
 - The vault file has no version-bound integrity check over the full set of entries. An attacker who can write the file can delete or roll back individual entries.
 
@@ -70,7 +73,7 @@ Each planned feature must meet its class requirements before release.
 3. **Host trust integrity.** Add an HMAC to `known-hosts.json` with a key stored in the Keychain. Treat a failed check as an untrusted host and prompt again with a clear warning.
 4. **Lock policy.** Lock after a configurable idle time, on sleep, on screen lock, and on quit. Clear remembered session passwords on lock.
 5. **Memory handling.** Keep secrets in `Data` or byte buffers where possible and overwrite them after use. Do not place secrets in view-state restoration, undo stacks, or diagnostics.
-6. **File handling.** Create private files with `0600` directly. Verify `0700` on the workspace directory at launch. Create SFTP partial files with `0600`.
+6. **File handling.** Private files are already created as `0600` directly. Verify `0700` on the workspace directory at launch. Create SFTP partial files with `0600`.
 
 ## Verification
 

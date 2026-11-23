@@ -10,6 +10,15 @@ import XCTest
         XCTAssertEqual(SidebarWidth.files.direction, -1)
     }
 
+    func testWidePanelsLeaveRoomForTheCenterWhenTheWindowNarrows() {
+        let widths = WorkspaceSidebarWidths(left: 520, right: 560)
+        XCTAssertEqual(widths.fitting(in: 1_200, reservingRight: 220), widths)
+        XCTAssertEqual(widths.fitting(in: 698, reservingRight: 220),
+                       WorkspaceSidebarWidths(left: 478, right: 220))
+        XCTAssertEqual(SidebarWidth.left.clamp(500, upTo: 400), 400)
+        XCTAssertEqual(SidebarWidth.files.clamp(530, upTo: 350), 350)
+    }
+
     func testFinishedTransfersStayTenSecondsThenLeave() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-strip-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

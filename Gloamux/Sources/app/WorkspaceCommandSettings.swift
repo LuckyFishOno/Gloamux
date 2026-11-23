@@ -25,10 +25,12 @@ extension WorkspaceCommand {
     }
 
     @MainActor static let settingsTable: [Setting] = [
+        Setting(name: "app.font-size", key: AppTextSize.key, kind: .number(AppTextSize.sizes, AppTextSize.defaultSize)),
         Setting(name: "terminal.font", key: TerminalPreferences.fontKey, kind: .text("")),
         Setting(name: "terminal.font-size", key: TerminalPreferences.fontSizeKey, kind: .number(TerminalPreferences.fontSizes, TerminalPreferences.defaultFontSize)),
         Setting(name: "terminal.cursor", key: TerminalPreferences.cursorKey, kind: .choice(CursorShape.allCases.map(\.rawValue), CursorShape.block.rawValue)),
         Setting(name: "terminal.cursor-blinks", key: TerminalPreferences.blinkKey, kind: .bool(false)),
+        Setting(name: "terminal.new-tab-local", key: TerminalPreferences.newTabLocalKey, kind: .bool(false)),
         Setting(name: "terminal.opacity", key: TerminalPreferences.opacityKey, kind: .number(0.3...1, 1)),
         Setting(name: "terminal.scrollback", key: TerminalPreferences.scrollbackKey,
                 kind: .choice(TerminalPreferences.scrollbackChoices.map(String.init), String(TerminalPreferences.defaultScrollback))),
@@ -98,7 +100,10 @@ extension WorkspaceCommand {
             try count(args, 2...2)
             let raw = args[1]
             if args[0] == "language" {
-                guard let language = AppLanguage(rawValue: raw) else { throw Usage("Choose system, en, or zh-Hant.") }
+                guard let language = AppLanguage(rawValue: raw) else {
+                    let choices = AppLanguage.allCases.map(\.rawValue).joined(separator: ", ")
+                    throw Usage("Choose a language: \(choices).")
+                }
                 guard live else { throw WorkspaceError.invalid("Open Gloamux to change its language.") }
                 model.language = language
                 return ["language": language.rawValue]

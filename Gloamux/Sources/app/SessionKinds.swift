@@ -3,12 +3,13 @@ import SwiftUI
 import Terminal
 
 enum NewConnectionType: String, CaseIterable {
-    case ssh, rdp, vnc, other
+    /// This Mac's own shell, opened with one click. Chosen last, it leaves every other section closed.
+    case local, ssh, rdp, vnc, other
 
-    /// The kind of saved session the form makes; nil for SSH, which has its own form.
+    /// The kind of saved session the form makes; nil for SSH, which has its own form, and for Local, which has none.
     var editorTool: ContainerSession.Tool? {
         switch self {
-        case .ssh: return nil
+        case .local, .ssh: return nil
         case .rdp: return .rdp
         case .vnc: return .vnc
         case .other: return .serial
@@ -33,11 +34,22 @@ enum NewConnectionType: String, CaseIterable {
         set { if !newValue.opensDesktop { WorkspaceCommand.preferences.set(newValue.rawValue, forKey: lastOtherToolKey) } }
     }
 
-    var title: String { editorTool?.title ?? "SSH" }
-    var shortTitle: String { self == .other ? "Other connection" : rawValue.uppercased() }
+    /// Whether a tab of this kind fills in the SSH form. A tab that is no longer a new connection (nil) connects as
+    /// it is; Local and the saved-session kinds do not.
+    static func usesSSHForm(_ type: NewConnectionType?) -> Bool { type == nil || type == .ssh }
+
+    var title: String { self == .local ? "Local terminal" : editorTool?.title ?? "SSH" }
+    var shortTitle: String {
+        switch self {
+        case .local: return "Local"
+        case .other: return "Other connection"
+        default: return rawValue.uppercased()
+        }
+    }
     /// What each one is for, beside its name in the new-connection list.
     var subtitle: String {
         switch self {
+        case .local: return "This Mac's shell at 127.0.0.1"
         case .ssh: return "Terminal and files on a server"
         case .rdp: return "Windows desktop"
         case .vnc: return "Mac or Linux desktop"

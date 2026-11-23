@@ -451,6 +451,23 @@ extension NIOSSHHandler {
 // MARK: Disconnect
 
 extension NIOSSHHandler {
+    /// Tells the peer this side is closing the connection (SSH_MSG_DISCONNECT, reason 11, "disconnected by application"),
+    /// so a server ends the login session at once instead of when it notices the connection has gone. Call on the
+    /// channel's event loop; the future completes once the message is written. Does nothing on a connection that has
+    /// already been disconnected.
+    public func sendDisconnect(description: String) throws -> EventLoopFuture<Void> {
+        guard let context = self.context else { throw ChannelError.ioOnClosedChannel }
+        guard self.stateMachine.hasActivated, !self.stateMachine.disconnected else { return context.eventLoop.makeSucceededVoidFuture() }
+        let promise = context.eventLoop.makePromise(of: Void.self)
+        do {
+            try self.writeMessage(.init(.disconnect(.init(reason: 11, description: description, tag: ""))), context: context, promise: promise)
+            context.flush()
+        } catch {
+            promise.fail(error)
+        }
+        return promise.futureResult
+    }
+
     // This function is for testing purposes only.
     func _disconnect() throws {
         // As this is test-only there are a bunch of preconditions in here, we don't really mind if we hit them in testing.

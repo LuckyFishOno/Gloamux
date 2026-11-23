@@ -1,9 +1,12 @@
 import CryptoKit
 import Foundation
+import MasterPassword
 
 /// One file that holds all of Gloamux's configuration, for moving it to another Mac or keeping a copy. It carries
-/// sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, and
-/// settings. It never carries a password: the vault and the passwords and key this Mac remembers stay here.
+/// sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings,
+/// and the password vault as it is stored: sealed under its master password, which is not in the file and is needed
+/// to open the vault again. Passwords remembered on this Mac and this Mac's key stay here; they are sealed with this
+/// Mac's Secure Enclave and would not open anywhere else.
 /// A `.sha256` file is written next to it, and restoring checks it when it is there.
 public enum ConfigBackup {
     public static let fileExtension = "gloamuxconfig"
@@ -12,12 +15,16 @@ public enum ConfigBackup {
     static let files = ["sessions.json", "quick-commands.json", "triggers.json", "known-hosts.json",
                         "host-key-history.json", "appearance.json", "layout.json"]
     static let runbookFolder = "runbooks"
+    /// Kept apart from `files`: a backup without a vault leaves the current vault alone instead of removing it.
+    static let vaultFile = "password-vault.json"
     static let limit = 32 * 1024 * 1024
 
     public struct Backup {
         let files: [String: Data]
         let runbooks: [String: Data]
         let settings: [String: Any]
+        /// The sealed vault file, when the backup has one.
+        let vault: Data?
         public let created: String
         /// True when a `.sha256` file next to the backup matched it; false when there was none.
         public let verified: Bool
@@ -54,8 +61,12 @@ public enum ConfigBackup {
             if let value = preferences.object(forKey: setting.key) { settings[setting.name] = value }
         }
         let dates = ISO8601DateFormatter()
-        let document: [String: Any] = ["format": format, "created": dates.string(from: Date()),
+        var document: [String: Any] = ["format": format, "created": dates.string(from: Date()),
                                        "files": files, "runbooks": runbooks, "settings": settings]
+        let vault = storage.appendingPathComponent(vaultFile)
+        if FileManager.default.fileExists(atPath: vault.path) {
+            document["vault"] = try JSONSerialization.jsonObject(with: Data(contentsOf: vault))
+        }
         let data = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
         try writePrivate(data, to: url)
         let checksum = checksumURL(url)
@@ -105,7 +116,14 @@ public enum ConfigBackup {
         for name in settings.keys where !WorkspaceCommand.settingsTable.contains(where: { $0.name == name }) {
             throw WorkspaceError.invalid("This Gloamux backup has an unknown setting: \(name).")
         }
-        let backup = Backup(files: files, runbooks: runbooks, settings: settings,
+        var vault: Data?
+        if let value = document["vault"] {
+            guard JSONSerialization.isValidJSONObject(value),
+                  let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+                  (try? MasterVault.load(data)) != nil else { throw WorkspaceError.invalid("The password vault in this Gloamux backup is damaged.") }
+            vault = data
+        }
+        let backup = Backup(files: files, runbooks: runbooks, settings: settings, vault: vault,
                             created: document["created"] as? String ?? "", verified: verified)
         try validate(backup)
         return backup
@@ -138,8 +156,9 @@ public enum ConfigBackup {
     // MARK: Restore
 
     /// Replaces the workspace's configuration with the backup. The current files and settings are first copied to
-    /// `Backups/Before restore <date>` in the workspace folder, which is returned. Passwords, the vault, and this
-    /// Mac's key are left as they are. Reopen the workspace afterward to load the restored files.
+    /// `Backups/Before restore <date>` in the workspace folder, which is returned. The vault is replaced only when the
+    /// backup has one; passwords remembered on this Mac and this Mac's key are left as they are. Reopen the workspace
+    /// afterward to load the restored files.
     @discardableResult @MainActor
     public static func restore(_ backup: Backup, storage: URL, preferences: UserDefaults? = nil) throws -> URL {
         let preferences = preferences ?? WorkspaceCommand.preferences
@@ -153,6 +172,8 @@ public enum ConfigBackup {
         }
         let runbooks = storage.appendingPathComponent(runbookFolder, isDirectory: true)
         if manager.fileExists(atPath: runbooks.path) { try manager.copyItem(at: runbooks, to: safety.appendingPathComponent(runbookFolder)) }
+        let vault = storage.appendingPathComponent(vaultFile)
+        if backup.vault != nil, manager.fileExists(atPath: vault.path) { try manager.copyItem(at: vault, to: safety.appendingPathComponent(vaultFile)) }
         var previous: [String: Any] = [:]
         for setting in WorkspaceCommand.settingsTable {
             if let value = preferences.object(forKey: setting.key) { previous[setting.name] = value }
@@ -167,6 +188,7 @@ public enum ConfigBackup {
         }
         if manager.fileExists(atPath: runbooks.path) { try manager.removeItem(at: runbooks) }
         for (name, data) in backup.runbooks { try writePrivate(data, to: runbooks.appendingPathComponent(name)) }
+        if let data = backup.vault { try writePrivate(data, to: vault) }
         for setting in WorkspaceCommand.settingsTable {
             if let value = backup.settings[setting.name] { preferences.set(value, forKey: setting.key) }
             else { preferences.removeObject(forKey: setting.key) }

@@ -23,6 +23,7 @@ enum TerminalPreferences {
     static let terminalTypeKey = "Gloamux.terminal.type"
     static let terminalTypes = ["xterm-256color", "xterm", "screen-256color", "tmux-256color", "linux", "vt220", "vt100"]
     static let reconnectKey = "Gloamux.ssh.reconnect"
+    static let newTabLocalKey = "Gloamux.terminal.newTabOpensLocal"
 
     static let defaultFontSize = 13.0
     static let fontSizes = 8.0...36.0
@@ -37,6 +38,8 @@ enum TerminalPreferences {
     }
     static var cursor: CursorShape { defaults.string(forKey: cursorKey).flatMap(CursorShape.init(rawValue:)) ?? .block }
     static var cursorBlinks: Bool { defaults.bool(forKey: blinkKey) }
+    /// The + buttons open a terminal on this Mac instead of the New connection form.
+    static var newTabOpensLocal: Bool { defaults.bool(forKey: newTabLocalKey) }
     static var opacity: Double { min(max(defaults.object(forKey: opacityKey) as? Double ?? 1, 0.3), 1) }
     static var scrollback: Int { defaults.object(forKey: scrollbackKey) as? Int ?? defaultScrollback }
     static var bell: BellStyle { defaults.string(forKey: bellKey).flatMap(BellStyle.init(rawValue:)) ?? .flash }

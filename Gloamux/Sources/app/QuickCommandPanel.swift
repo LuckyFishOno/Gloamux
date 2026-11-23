@@ -15,9 +15,9 @@ struct QuickCommandPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(T("Quick commands")).font(.headline)
+                Text(T("Quick commands")).appFont(.headline)
                 Spacer()
-                Button(action: close) { Image(systemName: "xmark").font(.caption.weight(.semibold)) }
+                Button(action: close) { Image(systemName: "xmark").appFont(.caption.weight(.semibold)) }
                     .buttonStyle(.plain)
                     .accessibilityLabel(T("Close quick commands"))
             }
@@ -42,11 +42,11 @@ struct QuickCommandPanel: View {
             } icon: {
                 Image(systemName: "terminal")
             }
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(.secondary)
 
             if let message = store.loadError ?? error {
-                Text(T(message)).font(.caption).foregroundStyle(.red)
+                Text(T(message)).appFont(.caption).foregroundStyle(.red)
             }
 
             ScrollView {
@@ -54,7 +54,7 @@ struct QuickCommandPanel: View {
                     let commands = store.matching(query)
                     if commands.isEmpty, store.loadError == nil {
                         Text(T(store.entries.isEmpty ? "Add commands you use often." : "No matching commands."))
-                            .font(.callout).foregroundStyle(.secondary).padding(.vertical, 7)
+                            .appFont(.callout).foregroundStyle(.secondary).padding(.vertical, 7)
                     }
                     ForEach(commands) { command in
                         commandRow(command)
@@ -76,14 +76,14 @@ struct QuickCommandPanel: View {
     private func commandRow(_ command: QuickCommand) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(command.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(command.name).appFont(.subheadline.weight(.semibold)).lineLimit(1)
                 Spacer()
                 Button { draft = command } label: { Image(systemName: "pencil") }
                     .buttonStyle(.plain)
                     .help(T("Edit command"))
                     .accessibilityLabel(T("Edit command"))
             }
-            Text(command.text).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2)
+            Text(command.text).appFont(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2)
                 .help(command.text)
             HStack(spacing: 6) {
                 Button(T("Insert")) {
@@ -105,12 +105,12 @@ struct QuickCommandPanel: View {
     private func confirmationSheet(_ request: QuickCommandRequest) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Text(T("Run saved command?")).font(.headline)
+                Text(T("Run saved command?")).appFont(.headline)
                 InfoButton(T("Gloamux inserts the command and presses Return. Any text already entered stays on the line."))
             }
-            Label(request.destination, systemImage: "terminal").font(.subheadline)
+            Label(request.destination, systemImage: "terminal").appFont(.subheadline)
             ScrollView {
-                Text(request.command.text).font(.body.monospaced())
+                Text(request.command.text).appFont(.body.monospaced())
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
@@ -161,15 +161,15 @@ private struct QuickCommandEditor: View {
     var body: some View {
         let editing = store.entries.contains { $0.id == id }
         VStack(alignment: .leading, spacing: 12) {
-            Text(T(editing ? "Edit command" : "Add command")).font(.headline)
+            Text(T(editing ? "Edit command" : "Add command")).appFont(.headline)
             TextField(T("Command name"), text: $name)
                 .accessibilityIdentifier("quickCommandName")
             TextField(T("Command text"), text: $text, axis: .vertical)
-                .font(.body.monospaced())
+                .appFont(.body.monospaced())
                 .lineLimit(3...6)
                 .accessibilityIdentifier("quickCommandText")
             Text(T(error ?? "Use one line. Saved commands are stored locally as plain text."))
-                .font(.callout).foregroundStyle(error == nil ? Color.secondary : .red)
+                .appFont(.callout).foregroundStyle(error == nil ? Color.secondary : .red)
             HStack {
                 if editing {
                     Button(T("Delete"), role: .destructive) { confirmsDeletion = true }

@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import AppKit
 @testable import App
 
 @MainActor final class ThemeTests: XCTestCase {
@@ -10,7 +11,7 @@ import Foundation
     }
     func testCatalogUsesPinnedStandaloneAssetsAndResolvesInheritedColors() throws {
         let themes = try ThemeCatalog.bundled()
-        XCTAssertEqual(themes.count, 72)
+        XCTAssertEqual(themes.count, 73)
         let modern = try XCTUnwrap(themes.first { $0.id == "Dark Modern" })
         XCTAssertEqual(modern.background, ThemeColor(hex: "#1f1f1f"))
         XCTAssertEqual(modern.sidebar, ThemeColor(hex: "#181818"))
@@ -67,7 +68,8 @@ import Foundation
         XCTAssertTrue(ThemeSearch.filter(themes, matching: "no-such-theme").isEmpty)
         XCTAssertNil(themes.first { $0.id == "gloamux" })
         XCTAssertEqual(themes.first?.id, WorkspaceTheme.native.id)
-        XCTAssertEqual(WorkspaceTheme.native.id, "midnight")
+        XCTAssertEqual(WorkspaceTheme.native.id, "gloam")
+        XCTAssertNotNil(themes.first { $0.id == "midnight" }, "Midnight stays available after Gloam became the default.")
     }
     func testPresetPreviewAppliesWorkspaceAndTerminalColorsTogether() throws {
         let storage = try directory()
@@ -96,6 +98,20 @@ import Foundation
 
         try model.selectTheme(paper.id)
         assertMatchesPaper(try WorkspaceModel(storage: storage).theme)
+    }
+
+    func testTitlebarColorIsAppliedToTheWindowOnlyWhenItChanges() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        let view = ThemeTitlebar.TitlebarView()
+        window.contentView?.addSubview(view)
+        view.color = WorkspaceTheme.native.header.nsColor
+        XCTAssertEqual(window.backgroundColor, WorkspaceTheme.native.header.nsColor)
+        // An update with the same color, as SwiftUI sends on every redraw, leaves the window alone.
+        window.backgroundColor = .red
+        view.color = WorkspaceTheme.native.header.nsColor
+        XCTAssertEqual(window.backgroundColor, .red)
+        view.color = ThemeColor(hex: "#102030")?.nsColor
+        XCTAssertEqual(window.backgroundColor, ThemeColor(hex: "#102030")?.nsColor)
     }
 
     func testColorDecodingPreservesAlphaAndRejectsInvalidInputs() {

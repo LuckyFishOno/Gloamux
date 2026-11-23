@@ -19,12 +19,12 @@ struct LoginChallengeSheet: View {
         let challenge = prompt.challenge
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 6) {
-                Label(T("Sign-in questions"), systemImage: "person.badge.key").font(.title2.bold())
+                Label(T("Sign-in questions"), systemImage: "person.badge.key").appFont(.title2.bold())
                 InfoButton(T("The server asks these questions, for example for a password or a verification code. Gloamux sends the answers only to this server and does not save them."))
             }
-            Text(prompt.endpoint).font(.headline)
+            Text(prompt.endpoint).appFont(.headline)
             if !challenge.name.isEmpty {
-                Text(verbatim: Self.shown(challenge.name, limit: 200)).font(.subheadline.bold())
+                Text(verbatim: Self.shown(challenge.name, limit: 200)).appFont(.subheadline.bold())
             }
             if !challenge.instruction.isEmpty {
                 ScrollView {
@@ -37,7 +37,7 @@ struct LoginChallengeSheet: View {
             }
             ForEach(Array(challenge.prompts.enumerated()), id: \.offset) { index, question in
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(verbatim: Self.label(question.text)).font(.caption).foregroundStyle(.secondary)
+                    Text(verbatim: Self.label(question.text)).appFont(.caption).foregroundStyle(.secondary)
                     Group {
                         if question.hidden { SecureField("", text: $answers[index]) }
                         else { TextField("", text: $answers[index]) }
