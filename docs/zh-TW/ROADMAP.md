@@ -2,7 +2,11 @@
 
 [English](../en/ROADMAP.md) · [繁體中文](ROADMAP.md) · [回到 README](../../README.zh-TW.md)
 
+2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+
 [功能待辦](FEATURE-BACKLOG.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
+
+目前版本為 **Gloamux 1.2 (build 3)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
 
 ## 第一階段里程碑
 
@@ -51,7 +55,7 @@
 - [x] 分頁上的輸出和中斷指示，以及長時間指令完成和響鈴的標示。
 - [x] 終端寬度改變時重新換行。
 - [ ] 擴大 Vim、tmux 和中文輸入法的相容性測試。
-- [x] 連線匯入和匯出，包含 MobaXterm 和 CSV。支援與團隊分享設定檔而不含憑證。匯入也能讀 PuTTY 和 KiTTY 的登錄檔匯出及 Gloamux 連線檔；匯出會寫成不含密碼的 Gloamux 連線檔和 CSV。
+- [x] 連線匯入和匯出，包含 MobaXterm 和 CSV。支援與團隊分享設定檔而不含憑證。匯入也能讀 PuTTY 和 KiTTY 的登錄檔匯出及 Gloamux 連線檔；匯出會寫成不含密碼的 Gloamux 連線檔、CSV 和 OpenSSH 設定。
 
 ## 其他連線
 

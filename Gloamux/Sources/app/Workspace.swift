@@ -40,7 +40,13 @@ struct HostKeyChange: Identifiable {
     var savedSessionID: UUID?
     @Published var jumpSessionID: UUID?
     @Published var jumpSecret = ""
-    @Published var transportLost = false
+    /// Where the tab's connection is. One value, so a tab is never both connected and lost.
+    @Published private(set) var connectionState: ConnectionState = .disconnected
+    /// The connection dropped without the user ending it; Reconnect, or the automatic reconnect, can bring it back.
+    var transportLost: Bool {
+        get { connectionState == .lost }
+        set { if newValue { moveConnection(to: .lost) } else if connectionState == .lost { moveConnection(to: .disconnected) } }
+    }
     /// "Follow terminal folder" for this tab. Off for every new tab, so the file tree only moves when asked.
     @Published var followsFolder = false
     var pendingJump: SSHSession?
@@ -58,7 +64,6 @@ struct HostKeyChange: Identifiable {
     @Published var forwardingErrors: [String] = []
     var forwardStarts: Set<UUID> = []
     var savedConnectionTask: Task<Void, Never>?
-    var fileCommandAccess: FileCommandAccess?
     @Published public var title = "New connection"
     /// The user named this tab, so connecting keeps that name.
     @Published var renamed = false
@@ -90,7 +95,11 @@ struct HostKeyChange: Identifiable {
     @Published public var status = "Disconnected"
     @Published public var error: String?
     @Published public var busy = false
-    @Published public var connected = false
+    /// Signed in: an SSH or FTP session, a local shell, or a desktop on screen.
+    public var connected: Bool {
+        get { connectionState == .connected }
+        set { if newValue { moveConnection(to: .connected) } else if connectionState == .connected { moveConnection(to: .disconnected) } }
+    }
     @Published public var command = ""
     @Published public var remotePath = "."
     @Published public var entries: [RemoteEntry] = []
@@ -98,7 +107,13 @@ struct HostKeyChange: Identifiable {
     /// Plain text of the scrollback and screen. Built on demand: rebuilding it after every chunk of
     /// output cost more than drawing the terminal.
     public var transcript: String { lines.joined(separator: "\n") }
-    @Published public var screenRevision = 0
+    /// What the terminal shows changes with every chunk of output. Only views that draw it observe `output`, so the
+    /// rest of the pane (header, sign-in form, sheets) is not evaluated again for each chunk.
+    let output = TerminalOutput()
+    public var screenRevision: Int {
+        get { output.revision }
+        set { output.revision = newValue }
+    }
     @Published var terminalFocusRequest = 0
     @Published public var hostKeyPrompt: HostKeyPrompt?
     @Published public var loginChallenge: LoginChallengePrompt?
@@ -173,8 +188,15 @@ struct HostKeyChange: Identifiable {
     /// The character encoding of the session's output and input.
     @Published var encoding = TerminalEncoding.utf8 { didSet { if encoding != oldValue { decoder = TerminalDecoder(encoding: encoding) } } }
     var decoder = TerminalDecoder(encoding: .utf8)
+    /// The SSH settings this tab connects with, from its form.
+    var sshTarget: SavedConnection {
+        SavedConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: Int(port) ?? 22, username: username,
+                        proxyHost: useProxy ? proxyHost : nil, proxyPort: useProxy ? Int(proxyPort) : nil, identityPath: identityPath,
+                        jumpSessionID: jumpSessionID, usesAgent: useAgent, agentSocket: agentSocket,
+                        proxyKind: proxyKind, confirmsEachConnection: confirmsEachConnection)
+    }
     public var credentialID: String {
-        (ftpSecurity == nil ? "" : "ftp:") + "\(username.isEmpty && ftpSecurity != nil ? "anonymous" : username)@\(KnownHosts.endpoint(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: Int(port) ?? 22))"
+        ConnectionService.credentialID(username: username, host: host, port: Int(port) ?? 22, ftp: ftpSecurity != nil)
     }
     public var lines: [String] { screen.scrollback.map { String($0.filter { $0.width != 0 }.map(\.character)) } + screen.lines }
     public init() {
@@ -184,6 +206,34 @@ struct HostKeyChange: Identifiable {
         screen.feed(text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n"))
         screenRevision += 1
     }
+
+    /// Changes the connection state; a change to the same state announces nothing.
+    func moveConnection(to state: ConnectionState) {
+        assert(connectionState.canMove(to: state), "\(connectionState) cannot become \(state)")
+        if connectionState != state { connectionState = state }
+    }
+}
+
+/// The states of a tab's connection and the moves between them.
+enum ConnectionState: Equatable {
+    /// Never connected, or ended on purpose.
+    case disconnected
+    case connected
+    /// Ended by the network or the server.
+    case lost
+
+    /// A connection is lost only while it was up, or while a reconnect after a loss failed again.
+    func canMove(to next: ConnectionState) -> Bool {
+        switch (self, next) {
+        case (.disconnected, .lost): return false
+        default: return true
+        }
+    }
+}
+
+/// Counts changes to what a terminal shows. Views that draw the terminal, or follow it, observe this instead of the tab.
+@MainActor final class TerminalOutput: ObservableObject {
+    @Published var revision = 0
 }
 
 @MainActor public final class WorkspaceModel: ObservableObject {
@@ -471,7 +521,8 @@ struct HostKeyChange: Identifiable {
         for target in targets where !target.readOnly {
             // In a production session (or another environment set to confirm), a risky command waits for a yes.
             if let command = riskyCommand(in: target, typing: bytes) {
-                target.riskyCommand = RiskyCommandPrompt(command: command, bytes: bytes, environment: target.environment ?? .production)
+                target.riskyCommand = RiskyCommandPrompt(command: command, bytes: bytes, environment: target.environment ?? .production,
+                                                         terminalID: target.terminalID)
                 continue
             }
             if enqueueTerminalInput(target, bytes: bytes) { trackTyping(target, bytes) }
@@ -481,8 +532,11 @@ struct HostKeyChange: Identifiable {
     /// Sends a held risky command after the user confirms it.
     func confirmRiskyCommand(_ tab: SessionTab, run: Bool) {
         guard let prompt = tab.riskyCommand else { return }
+        // While the window is locked the question waits; it is answered once the owner unlocks.
+        if run, workspaceLocked { return }
         tab.riskyCommand = nil
-        if run, enqueueTerminalInput(tab, bytes: prompt.bytes) { trackTyping(tab, prompt.bytes) }
+        guard run, tab.terminalID == prompt.terminalID else { return }
+        if enqueueTerminalInput(tab, bytes: prompt.bytes) { trackTyping(tab, prompt.bytes) }
     }
 
     /// The command line that `bytes` would run in a confirming environment, when it matches a risky pattern.
@@ -676,9 +730,10 @@ struct HostKeyChange: Identifiable {
         tab.transferOpening = nil; tab.remoteTree.reset(); tab.remoteBrowser.clear()
         recordings.stop(tab)
         logs.stop(tab)
-        tab.session = nil; tab.transfer = nil; tab.connected = false; tab.busy = false; tab.progress = nil; tab.status = "Disconnected"
+        tab.session = nil; tab.transfer = nil; tab.busy = false; tab.progress = nil; tab.status = "Disconnected"
         tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecret = ""; tab.filesLoaded = false; tab.entries = []
-        tab.transportLost = lost
+        // Straight to the end state: a lost connection was up until now.
+        tab.moveConnection(to: lost ? .lost : .disconnected)
         if lost {
             tab.status = "Connection lost"
             tab.error = nil
@@ -729,23 +784,15 @@ struct HostKeyChange: Identifiable {
             await connectFTP(tab, host: host, port: port, security: security)
             return
         }
-        guard let port = Int(tab.port), (1...65535).contains(port), !host.isEmpty, !tab.username.isEmpty,
+        guard Int(tab.port).map({ (1...65535).contains($0) }) == true, !host.isEmpty, !tab.username.isEmpty,
               !tab.useProxy || (!tab.proxyHost.isEmpty && Int(tab.proxyPort).map { (1...65535).contains($0) } == true) else {
             tab.error = "Enter a host, username and valid TCP ports."
             return
         }
-        let target = SavedConnection(host: host, port: port, username: tab.username, proxyHost: tab.useProxy ? tab.proxyHost : nil,
-                                     proxyPort: tab.useProxy ? Int(tab.proxyPort) : nil, identityPath: tab.identityPath,
-                                     jumpSessionID: tab.jumpSessionID, usesAgent: tab.useAgent, agentSocket: tab.agentSocket,
-                                     proxyKind: tab.proxyKind, confirmsEachConnection: tab.confirmsEachConnection)
+        let target = tab.sshTarget
+        let service = connections
         let hops: [SavedConnection]
-        do {
-            try target.validate()
-            guard let chain = sessionTree.jumpChain(for: target, excluding: tab.savedSessionID) else {
-                throw WorkspaceError.invalid("Choose an available jump host in Connection settings.")
-            }
-            hops = chain
-        } catch {
+        do { hops = try service.jumpHosts(for: target, excluding: tab.savedSessionID) } catch {
             tab.error = message(for: error)
             return
         }
@@ -759,54 +806,12 @@ struct HostKeyChange: Identifiable {
         let secret = tab.identityPath == nil ? (tab.useAgent ? "" : tab.password) : tab.keyPassphrase
         let jumpSecret = tab.jumpSecret
         tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecret = ""
-        var openingJump: SavedConnection?
         defer { if tab.epoch == epoch { tab.busy = false } }
         do {
-            // An unlocked password vault already confirmed the owner for this launch, so it does not ask per connection.
-            // While it is locked, a session marked to ask on every connection asks: Touch ID or the Mac password.
-            let vaultUnlocked = await vault.state == "Unlocked"
-            let asks = !vaultUnlocked
-                && ((target.asksEachConnection && secret.isEmpty) || hops.contains(where: \.asksEachConnection))
-            let reason = String(format: T("connect to %@"), "\(target.username)@\(host)")
-            var confirmed = false
-            // A password that only the locked vault holds is read with Touch ID for this one connection. That prompt is
-            // also the per-connection check; the vault stays locked.
-            if !vaultUnlocked, await vault.touchIDEnrolled {
-                let accounts = (secret.isEmpty ? [target] : []) + hops
-                let needed = Set(accounts.flatMap { connection in
-                    ["\(connection.username)@\(KnownHosts.endpoint(host: connection.host, port: connection.port))"]
-                        + (connection.identityPath.map { [Self.passphraseID($0)] } ?? [])
-                })
-                let locked = await vault.lockedVaultIDs(needed)
-                if !locked.isEmpty {
-                    tab.status = "Waiting for Touch ID…"
-                    try await vault.readWithTouchID(ids: locked, reason: reason)
-                    guard tab.epoch == epoch else { return }
-                    confirmed = true
-                    tab.status = "Connecting…"
-                }
+            let signIn = TabSignIn(model: self, tab: tab, epoch: epoch)
+            let ssh = try await service.openSSH(target, hops: hops, secret: secret, jumpSecret: jumpSecret, handler: signIn) { server in
+                if tab.epoch == epoch { tab.pendingJump = server }
             }
-            if asks, !confirmed {
-                tab.status = "Waiting for Touch ID…"
-                do { try await confirmOwner(reason) }
-                catch { throw WorkspaceError.invalid("This session asks for Touch ID or the Mac password before it connects.") }
-                guard tab.epoch == epoch else { return }
-                tab.status = "Connecting…"
-            }
-            // Each hop is reached through the one before it. The typed jump secret belongs to the host the
-            // destination is reached from; earlier hops use their key or the password remembered for this session.
-            for (index, hop) in hops.enumerated() {
-                openingJump = hop
-                tab.status = "Connecting to jump host…"
-                let server = try await establish(hop, secret: index == hops.count - 1 ? jumpSecret : "", tab: tab,
-                                                 epoch: epoch, via: tab.pendingJump)
-                guard tab.epoch == epoch else { try? await server.close(); return }
-                tab.pendingJump = server
-                openingJump = nil
-                tab.status = "Connecting…"
-            }
-            let ssh = try await establish(target, secret: secret, tab: tab, epoch: epoch, via: tab.pendingJump)
-            guard tab.epoch == epoch else { try? await ssh.close(); return }
             tab.pendingJump = nil
             tab.session = ssh
             tab.connected = true
@@ -817,11 +822,11 @@ struct HostKeyChange: Identifiable {
                 await ssh.waitForDisconnect()
                 guard !Task.isCancelled, let self, let tab, tab.epoch == epoch else { return }
                 await self.endConnection(tab, lost: true)
-                if tab.fileCommandAccess == nil { self.scheduleReconnect(tab) }
+                self.scheduleReconnect(tab)
             }
             tab.reconnectAttempts = 0
             startKeepAlive(tab, session: ssh, epoch: epoch)
-            if tab.fileCommandAccess == nil { await startSavedForwards(tab, epoch: epoch) }
+            await startSavedForwards(tab, epoch: epoch)
         } catch {
             guard tab.epoch == epoch else { return }
             let server = tab.pendingJump
@@ -829,101 +834,16 @@ struct HostKeyChange: Identifiable {
             answerHostKey(tab, approve: false)
             answerLogin(tab, answers: nil)
             tab.status = "Connection failed"
-            let detail = tab.error ?? message(for: error)
-            if let hop = openingJump {
-                let label = hops.count > 1 ? "\(hop.host) – " + T(detail) : T(detail)
-                tab.error = String(format: T("Jump host: %@"), label)
-            } else {
-                tab.error = detail
-            }
+            tab.error = ConnectionService.failureText(error, reported: tab.error)
             try? await server?.close()
-        }
-    }
-
-    private func establish(_ configuration: SavedConnection, secret: String, tab: SessionTab, epoch: UUID,
-                           via jump: SSHSession? = nil) async throws -> SSHSession {
-        let endpoint = KnownHosts.endpoint(host: configuration.host, port: configuration.port)
-        let id = "\(configuration.username)@\(endpoint)"
-        let settings = SSHConnectionSettings(host: configuration.host, port: configuration.port, username: configuration.username)
-        let credentialGeneration = await vault.sessionGeneration
-        let credential: SSHCredential
-        let password: String?
-        var keySecret: (id: String, value: String)?
-        if configuration.usesKeys {
-            var agent: SSHAgentClient?
-            if configuration.usesAgent == true {
-                agent = configuration.agentSocket.map { SSHAgentClient(socketPath: $0) } ?? SSHAgentClient.environment()
-                if agent == nil && configuration.identityPath == nil { throw SSHAgentError.unavailable }
-            }
-            let file = configuration.identityPath.map { URL(fileURLWithPath: $0) }
-            // A passphrase typed once is kept in the vault under the key's path.
-            var passphrase = secret
-            if passphrase.isEmpty, let path = configuration.identityPath {
-                passphrase = (try? await vault.password(id: Self.passphraseID(path))) ?? ""
-            }
-            credential = try await Task.detached(priority: .userInitiated) { [agent, passphrase] in
-                try SSHCredential.keys(agent: agent, identityFile: file, passphrase: passphrase)
-            }.value
-            keySecret = configuration.identityPath.map { (Self.passphraseID($0), passphrase) }
-            password = nil
-        } else {
-            let value = secret.isEmpty ? try await vault.password(id: id) : secret
-            credential = .password(value)
-            password = value
-        }
-        guard tab.epoch == epoch else { throw CancellationError() }
-        let policy: HostKeyPolicy = .confirm { [weak self, weak tab] key in
-            guard let self, let tab else { throw WorkspaceError.rejectedHostKey }
-            try await self.confirmKey(tab, endpoint: endpoint, key: key, epoch: epoch)
-        }
-        let asked = LoginAsked()
-        let answer: SSHLoginAnswerer = { [weak self, weak tab] challenge in
-            guard let self, let tab else { throw SSHError.signInCancelled }
-            asked.value = true
-            return try await self.askLogin(tab, endpoint: endpoint, challenge: challenge, epoch: epoch)
-        }
-        do {
-            let ssh: SSHSession
-            if let jump {
-                ssh = try await SSHSession.connect(settings: settings, credential: credential, via: jump, hostKey: policy, answer: answer)
-            } else {
-                ssh = try await SSHSession.connect(settings: settings, credential: credential, proxy: configuration.proxy, hostKey: policy,
-                                                   answer: answer)
-            }
-            if tab.fileCommandAccess == nil, tab.epoch == epoch, let password {
-                await vault.rememberWorking(id: id, secret: password, generation: credentialGeneration)
-            }
-            if tab.fileCommandAccess == nil, tab.epoch == epoch, let keySecret {
-                await vault.rememberWorking(id: keySecret.id, secret: keySecret.value, generation: credentialGeneration)
-            }
-            if tab.fileCommandAccess == nil { await refreshVault() }
-            return ssh
-        } catch SSHError.authenticationFailed {
-            // Answers the user typed were refused, not the saved password or key, so nothing is forgotten.
-            if asked.value { throw WorkspaceError.invalid("Sign-in failed. Check your answers and try again.") }
-            guard let password else {
-                throw WorkspaceError.invalid("SSH authentication failed. Check the username and private key.")
-            }
-            if tab.fileCommandAccess == nil, secret.isEmpty, tab.epoch == epoch, tab.error == nil {
-                await vault.forgetForSession(id: id, matching: password, generation: credentialGeneration)
-            }
-            throw SSHError.authenticationFailed
         }
     }
 
     /// The vault entry that holds a private key's passphrase.
     static func passphraseID(_ path: String) -> String { "passphrase:" + path }
 
-    private func confirmKey(_ tab: SessionTab, endpoint: String, key: String, epoch: UUID) async throws {
+    func confirmKey(_ tab: SessionTab, endpoint: String, key: String, epoch: UUID) async throws {
         guard tab.epoch == epoch else { throw WorkspaceError.rejectedHostKey }
-        if let access = tab.fileCommandAccess {
-            if try knownHosts.isTrusted(endpoint: endpoint, key: key) { return }
-            let fingerprint = try KnownHosts.fingerprint(key)
-            guard access.hostKeys.contains(fingerprint) else {
-                throw WorkspaceError.invalid("Unrecognized SSH host key for \(endpoint): \(fingerprint). Verify it before using --host-key.")
-            }
-            return
-        }
         do { if try knownHosts.isTrusted(endpoint: endpoint, key: key) { return } }
         catch WorkspaceError.changedHostKey {
             guard let savedKey = knownHosts.trustedKey(for: endpoint) else { throw WorkspaceError.rejectedHostKey }
@@ -938,14 +858,8 @@ struct HostKeyChange: Identifiable {
         try await withCheckedThrowingContinuation { continuation in tab.trustContinuation = continuation; tab.hostKeyPrompt = prompt }
         guard tab.epoch == epoch else { throw WorkspaceError.rejectedHostKey }
     }
-    private func askLogin(_ tab: SessionTab, endpoint: String, challenge: SSHLoginChallenge, epoch: UUID) async throws -> [String] {
+    func askLogin(_ tab: SessionTab, endpoint: String, challenge: SSHLoginChallenge, epoch: UUID) async throws -> [String] {
         guard tab.epoch == epoch, tab.loginContinuation == nil else { throw SSHError.signInCancelled }
-        if let access = tab.fileCommandAccess {
-            guard let answer = access.answer else {
-                throw WorkspaceError.invalid("SSH requires interactive sign-in. Use --interactive from a terminal.")
-            }
-            return try await answer(challenge)
-        }
         let prompt = LoginChallengePrompt(endpoint: endpoint, challenge: challenge)
         let answers = try await withCheckedThrowingContinuation { continuation in
             tab.loginContinuation = continuation
@@ -972,11 +886,7 @@ struct HostKeyChange: Identifiable {
         let prompt = tab.hostKeyPrompt
         tab.trustContinuation = nil; tab.hostKeyPrompt = nil
         do {
-            guard approve, let prompt else {
-                if let prompt { knownHosts.record(.declined, endpoint: prompt.endpoint, key: prompt.key) }
-                throw WorkspaceError.rejectedHostKey
-            }
-            try knownHosts.trust(endpoint: prompt.endpoint, key: prompt.key)
+            try Self.settleHostKey(prompt, approve: approve, knownHosts: knownHosts)
             continuation.resume()
         } catch { continuation.resume(throwing: error) }
     }
@@ -1066,7 +976,9 @@ struct HostKeyChange: Identifiable {
             case .bell: ringBell(tab)
             case .title(let title):
                 let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
-                tab.programTitle = trimmed.isEmpty ? nil : trimmed
+                // Shells set the title at every prompt; an unchanged one would redraw every view of the tab.
+                let programTitle = trimmed.isEmpty ? nil : trimmed
+                if tab.programTitle != programTitle { tab.programTitle = programTitle }
             case .clipboard(let text):
                 // OSC 52 lets a program on the server write the Mac's clipboard, so it is off unless turned on.
                 if TerminalPreferences.allowsClipboardWrites {
@@ -1220,14 +1132,7 @@ struct HostKeyChange: Identifiable {
         guard let ssh = tab.session else { throw WorkspaceError.disconnected }
         let epoch = tab.epoch
         let choice = tab.fileProtocol
-        let opening = Task { () async throws -> any RemoteFileSystem in
-            if choice == .scp { return try await SCPTransfer.open(ssh) }
-            do { return try await SFTPTransfer.open(ssh) } catch {
-                // Servers without an SFTP subsystem still copy files with scp.
-                guard choice == nil, !(error is CancellationError) else { throw error }
-                return try await SCPTransfer.open(ssh)
-            }
-        }
+        let opening = Task { try await ConnectionService.openFiles(ssh, choice: choice) }
         tab.transferOpening = opening
         let transfer: any RemoteFileSystem
         do { transfer = try await opening.value } catch {
@@ -1412,31 +1317,6 @@ struct HostKeyChange: Identifiable {
         if settings.isFTP { tab.showsFiles = true }
     }
 
-    /// Connects the desktop's saved SSH gateway out of sight and forwards a port on 127.0.0.1 to the desktop through
-    /// it, returning that port. The gateway's host key prompt shows in the desktop pane. The desktop session closes
-    /// the forward and the gateway when it stops.
-    func openDesktopTunnel(_ desktop: RemoteDesktopSession, gateway id: UUID, host: String, port: Int) async throws -> Int {
-        guard let item = sessionTree.node(id), let settings = item.connection, !settings.isFTP else {
-            throw WorkspaceError.invalid("The SSH session this desktop connects through no longer exists.")
-        }
-        let gateway = SessionTab()
-        configureSaved(gateway, item, settings)
-        gateway.showsFiles = false
-        desktop.gatewayTab = gateway
-        desktop.closeTunnel = { [weak self, weak gateway] in
-            guard let self, let gateway else { return }
-            Task { await self.disconnect(gateway) }
-        }
-        await connect(gateway)
-        guard gateway.connected, let ssh = gateway.session else {
-            throw WorkspaceError.invalid(String(format: T("Cannot connect to %@ to reach the desktop."), item.name)
-                                         + (gateway.error.map { " " + T($0) } ?? ""))
-        }
-        let forward = try await ssh.startLocalForward(localPort: 0, targetHost: host, targetPort: port)
-        // Kept with the gateway so disconnecting it closes the forward too.
-        gateway.forwards.append(SessionForward(rule: ForwardingRule(kind: .local, listenPort: forward.port, host: host, port: port), handle: forward))
-        return forward.port
-    }
     /// A container, pod, or SSM shell: a local terminal that runs `docker`, `kubectl`, or `aws`.
     private func openContainer(_ item: SessionTreeNode, _ container: ContainerSession, inNewWindow: Bool) -> SessionTab {
         let launch = container.tool.runsCommand ? LocalLaunch.command(container.commandLine) : nil
@@ -1687,9 +1567,4 @@ func message(for error: Error) -> String {
 struct FilesRequest: Equatable {
     let tab: UUID
     let nonce = UUID()
-}
-
-/// Set once the server's sign-in questions went to the user.
-private final class LoginAsked: @unchecked Sendable {
-    var value = false
 }

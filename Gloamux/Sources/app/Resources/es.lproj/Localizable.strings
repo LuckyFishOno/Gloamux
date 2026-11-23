@@ -377,6 +377,8 @@
 "No remote session" = "No hay sesión remota";
 "No result" = "Sin resultado";
 "No result: the command did not finish in time." = "Sin resultado: el comando no terminó a tiempo.";
+"Not run: the workspace is locked." = "No se ejecutó: el espacio de trabajo está bloqueado.";
+"Not run: the session reconnected." = "No se ejecutó: la sesión se volvió a conectar.";
 "No runbooks" = "No hay runbooks";
 "No saved forwarding rules" = "No hay reglas de reenvío guardadas";
 "No saved passwords" = "No hay contraseñas guardadas";
@@ -469,6 +471,14 @@
 "Recent" = "Recientes";
 "Reconnect" = "Reconectar";
 "Recording saved" = "Grabación guardada";
+"Recording not saved" = "Grabación no guardada";
+"Quit Anyway" = "Salir de todos modos";
+"Don’t Quit" = "No salir";
+"Couldn’t save the recording. Gloamux keeps it until you try again or discard it." = "No se pudo guardar la grabación. Gloamux la conserva hasta que vuelvas a intentarlo o la descartes.";
+"Discard the unsaved recording?" = "¿Descartar la grabación no guardada?";
+"The recorded output is lost." = "La salida grabada se perderá.";
+"Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again." = "No se pudo leer triggers.json en la carpeta del espacio de trabajo. Revisa sus permisos y vuelve a intentarlo.";
+"triggers.json in the workspace folder is damaged. Repair or restore it, then try again." = "triggers.json en la carpeta del espacio de trabajo está dañado. Repáralo o restáuralo y vuelve a intentarlo.";
 "Recordings" = "Grabaciones";
 "Recordings you save appear here." = "Las grabaciones que guardes aparecen aquí.";
 "Recordings…" = "Grabaciones";

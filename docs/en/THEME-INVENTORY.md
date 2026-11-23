@@ -2,7 +2,9 @@
 
 [English](THEME-INVENTORY.md) · [繁體中文](../zh-TW/THEME-INVENTORY.md) · [Back to README](../../README.md)
 
-Researched on November 20, 2026. This inventory lists candidate color themes from Linux distribution terminals and the most installed Visual Studio Code themes. It records where each palette comes from and how reliable the values are.
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
+Researched on November 20, 2026. Bundled inventory rechecked against Gloamux 1.1 (build 2) on November 23, 2026. Marketplace rankings remain the November 20 snapshot. This inventory lists candidate color themes from Linux distribution terminals and the most installed Visual Studio Code themes. It records where each palette comes from and how reliable the values are.
 
 **Bundled so far:** seven Linux presets in `ThemeGallery.swift` (`linuxPresets`): Ubuntu, Kali Dark, GNOME Dark, GNOME Light, Breeze, Tango, and Linux Console. Kali-Dark was cross-checked against a second independent copy of the colorscheme file, and Linux Console matches the default palette in the kernel's `drivers/tty/vt/vt.c`. Window chrome colors are derived. Text on every chrome and selection color has at least 4.5:1 contrast.
 

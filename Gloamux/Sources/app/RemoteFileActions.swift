@@ -265,8 +265,7 @@ extension WorkspaceModel {
                 try await transfer.upload(localURL: edit.localURL, to: partial)
                 // The new copy keeps the permissions of the file it replaces, such as a script's execute bit.
                 if let mode = current?.permissions ?? edit.permissions { try? await transfer.setPermissions(partial, mode: mode) }
-                if current != nil { try await transfer.removeFile(edit.remotePath) }
-                try await transfer.rename(from: partial, to: edit.remotePath)
+                try await transfer.commitUpload(partial, to: edit.remotePath, replacing: current != nil)
             } catch {
                 try? await transfer.removeFile(partial)
                 throw error

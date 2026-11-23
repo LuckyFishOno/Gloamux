@@ -8,15 +8,21 @@ extension WorkspaceCommand {
         guard !model.workspaceLocked else { throw WorkspaceError.invalid("Unlock this workspace in Gloamux first.") }
     }
 
-    /// Finds a tab by ID in any open workspace window, including a session moved to a window of its own.
+    /// Finds a tab by ID in any open workspace window, including a session moved to a window of its own. A tab in a
+    /// locked window is refused here, so no command reads, types into, or changes it until that window is unlocked.
     @MainActor static func tab(_ id: String, _ windows: [WorkspaceModel]) throws -> (model: WorkspaceModel, tab: SessionTab) {
         if let value = UUID(uuidString: id) {
             for model in windows {
-                if let tab = model.tabs.first(where: { $0.id == value }) ?? model.sessionWindows[value]?.tab { return (model, tab) }
+                if let tab = model.tabs.first(where: { $0.id == value }) ?? model.sessionWindows[value]?.tab {
+                    guard !model.workspaceLocked else { throw WorkspaceError.invalid(lockedTab) }
+                    return (model, tab)
+                }
             }
         }
         throw WorkspaceError.invalid("No open tab with that ID. Run gloamux tabs list.")
     }
+
+    static let lockedTab = "That tab is in a locked Gloamux window. Unlock the window first."
 
     @MainActor static func kind(_ tab: SessionTab) -> String {
         if let container = tab.container { return container.tool.rawValue }
@@ -26,7 +32,12 @@ extension WorkspaceCommand {
     }
 
     @MainActor static func describe(_ tab: SessionTab, in model: WorkspaceModel, window: Int) -> [String: Any] {
+        // A locked window shows only its tab bar, so a list gives no more than that for its tabs.
+        if model.workspaceLocked {
+            return ["id": tab.id.uuidString, "title": tab.title, "kind": kind(tab), "window": window, "locked": true]
+        }
         var info: [String: Any] = [
+            "locked": false,
             "id": tab.id.uuidString, "title": tab.title, "kind": kind(tab), "window": window,
             "selected": tab.id == model.selection, "ownWindow": model.sessionWindows[tab.id] != nil,
             "connected": tab.isLocal || tab.connected, "terminalReady": tab.terminalReady, "readOnly": tab.readOnly,
@@ -171,10 +182,15 @@ extension WorkspaceCommand {
             var info: [String: Any] = ["id": tab.id.uuidString]
             if wanted, !owner.recordings.isRecording(tab) {
                 owner.recordings.start(tab)
-            } else if !wanted, let saved = owner.recordings.stop(tab) {
-                // The same notice as Stop recording in the menu.
-                owner.recordingSaved = saved
-                info["file"] = saved.lastPathComponent
+            } else if !wanted {
+                switch await owner.recordings.stop(tab).value {
+                case .saved(let saved):
+                    // The same notice as Stop recording in the menu.
+                    owner.recordingSaved = saved
+                    info["file"] = saved.lastPathComponent
+                case .failed(let problem): throw WorkspaceError.invalid(problem)
+                case .nothingRecorded: break
+                }
             }
             info["recording"] = owner.recordings.isRecording(tab)
             return info
@@ -259,7 +275,8 @@ extension WorkspaceCommand {
               var plain = TerminalKeyboard.pasteBytes(text, bracketed: false) else { throw Usage("Enter text of up to 64 KB.") }
         if pressReturn { bytes.append(0x0D); plain.append(0x0D) }
         if let command = model.riskyCommand(in: tab, typing: plain) {
-            tab.riskyCommand = RiskyCommandPrompt(command: command, bytes: bytes, environment: tab.environment ?? .production)
+            tab.riskyCommand = RiskyCommandPrompt(command: command, bytes: bytes, environment: tab.environment ?? .production,
+                                                  terminalID: tab.terminalID)
             model.reveal(tab: tab.id)
             return ["id": tab.id.uuidString, "status": "waiting for confirmation in Gloamux"]
         }

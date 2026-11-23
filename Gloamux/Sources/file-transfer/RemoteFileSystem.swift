@@ -33,6 +33,12 @@ public protocol RemoteFileSystem: Actor {
 
 extension RemoteFileSystem {
     public func replace(from: String, to: String) async throws { try await rename(from: from, to: to) }
+    /// Moves a finished temporary upload to `destination`. A file already there is swapped out in one step with
+    /// `replace` and is never deleted first, so a refused or broken move leaves it as it was. A server that cannot
+    /// replace in one step refuses the overwrite instead.
+    public func commitUpload(_ partial: String, to destination: String, replacing: Bool) async throws {
+        if replacing { try await replace(from: partial, to: destination) } else { try await rename(from: partial, to: destination) }
+    }
     public func listDirectory(_ path: String) async throws -> [RemoteEntry] { try await readDirectory(path).entries }
     public func download(remotePath: String, to localURL: URL) async throws { try await download(remotePath: remotePath, to: localURL, progress: nil) }
     public func upload(localURL: URL, to remotePath: String) async throws { try await upload(localURL: localURL, to: remotePath, progress: nil) }

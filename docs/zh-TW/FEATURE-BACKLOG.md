@@ -2,6 +2,8 @@
 
 [English](../en/FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.md) · [回到 README](../../README.zh-TW.md)
 
+2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+
 基準於 2026 年 11 月 20 日審閱。本待辦涵蓋 Xshell 8 和 MobaXterm 26.6 有文件記載的產品功能、設定和整合工作流程，包含 Professional Customizer 和 11 月 11 日的 Xshell 更新。Windows 專屬的工作流程在下方列出 macOS 的對應做法。每個核取方塊都是一項 Gloamux 開發項目，未完成的項目可能已包含 App 現有的部分功能。Gloamux 不打算做的選用項目已於 2026 年 11 月 22 日移除。
 
 - **Xshell** · [功能與規格](https://www.netsarang.com/en/xshell-all-features/) · [第 8 版手冊](https://www.netsarang.com/docs/Xshell8_manual.pdf) · [新功能](https://www.xshell.com/en/whats-new/) · [更新紀錄](https://www.xshell.com/en/xshell-update-history/)
@@ -12,7 +14,7 @@
 - [x] 啟動時開本機終端分頁。已存連線放在可搜尋的資料夾樹，支援新增、編輯、重新命名、以複製貼上複製、移動和刪除。
 - [x] 在分頁或獨立視窗開啟已存連線。預覽 Xshell 資料夾匯入，並保留匯入的資料夾階層。
 - [x] 以左右或上下排列顯示兩個獨立終端。
-- [x] 從頂列和 CLI 提供預設、經典和工作台版面，下次啟動 App 時套用儲存的版面。
+- [x] 從頂列和 CLI 提供預設、經典和工作台版面，變更會立即套用，並保留到下次啟動。
 - [x] 從指令面板連到 `user@host`；從指令面板、選單列、Spotlight、捷徑和 `gloamux://` 連結開啟已存連線和分頁。
 - [x] 從經典版面的網址列以 `ssh://user@host:port`、`user@host` 或主機名稱連線。
 - [x] 以分頁重新打開上次啟動的已存連線和本機終端（設定 › 一般）。某個啟動連線失敗時，其他分頁仍會開著。
@@ -22,7 +24,7 @@
 - [x] 從經典和工作台版面的工具列，以及從視窗本身進入全螢幕。
 - [x] 從經典版面的工具列開始記錄檔、匯入醒目提示組、打開觸發和鎖定工作區。
 - [x] 從工作台版面的功能區同時輸入到視窗中所有終端（MultiExec）、啟動 XQuartz、打開已存密碼，以及列出每個已連線 SSH 工作階段的通道和連線數。CLI 以 `gloamux tabs multiexec`、`gloamux xserver`、`gloamux signins` 和 `gloamux forwards live-list` 做同樣的事。
-- [x] 預覽後匯入 Xshell 資料夾、MobaXterm 匯出、OpenSSH 設定、CSV、PuTTY 和 KiTTY 登錄檔匯出，以及 Gloamux 連線檔。匯出 Gloamux 連線檔和 CSV。
+- [x] 預覽後匯入 Xshell 資料夾、MobaXterm 匯出、OpenSSH 設定、CSV、PuTTY 和 KiTTY 登錄檔匯出，以及 Gloamux 連線檔。匯出 Gloamux 連線檔、CSV 和 OpenSSH 設定。
 - [x] 為團隊匯出不含密碼的設定檔。每個 macOS 帳號的儲存空間各自獨立。
 
 ## SSH、信任與網路
@@ -61,7 +63,7 @@
 - [x] 在每個新 shell 中輸入已存連線的啟動指令。
 - [x] 新增以一般文字或正規表示式比對的輸出觸發，可發出通知、播放聲音或標記分頁。設定 › 觸發可列出、編輯和停用規則，每條規則在每個終端中每 10 秒最多觸發一次。
 - [ ] 發布與 GUI 操作對等的正式 CLI。使用相同的應用程式操作和工作區、穩定的連線 ID、終端模式、機器可讀輸出、取消、結束代碼和 Shell 補全。撰寫安裝說明，並為每項 GUI 功能測試兩個入口。
-- [x] 提供 `gloamux` 執行檔，包含跨 SFTP、SCP、FTP 和 FTPS 的檔案指令、連線和資料夾管理、匯入與匯出、SSH 信任檢視、作用中視窗的分頁控制、已存與即時轉發、快速指令、配色、JSON、結束代碼，以及 Bash 和 Zsh 補全。
+- [x] 提供 `gloamux` 執行檔，包含跨 SFTP、SCP、FTP 和 FTPS 的檔案指令、連線和資料夾管理、匯入與匯出、SSH 信任檢視、跨視窗的分頁控制、已存與即時轉發、快速指令、配色、JSON、結束代碼，以及 Bash 和 Zsh 補全。
 - [x] 提供給核可連線用的本機 MCP 伺服器。提供簡短的分享終端片段、提議的指令、可見的活動、依連線設定的權限、指令執行前的審閱，以及撤銷。代理的檔案傳輸操作尚未實作。憑證資料留在 Gloamux 的控制下。
 
 ## 檔案傳輸與遠端編輯
@@ -137,5 +139,5 @@
 
 - [ ] 在 macOS 執行器上加入 GitHub Actions CI，進行建置和 Swift 測試。在有作用中視窗工作階段的獨立工作中執行 AppKit 互動測試。
 - [ ] 加入以 vttest 為基礎的自動化終端相容性測試，並對跳脫序列解析器做模糊測試。
-- [x] 加入 Sparkle 更新：**Gloamux › 檢查更新** 和每日檢查，更新清單以 EdDSA 簽署並隨每個 GitHub release 上傳。
-- [ ] 為發布版本簽署與公證，並發布 Homebrew cask。
+- [x] 加入 Sparkle 更新：**Gloamux › 檢查更新** 和每日檢查，更新清單帶有 DMG 的 EdDSA 簽章，並隨每個 GitHub release 上傳。
+- [ ] 以 Developer ID 簽署發布版本、完成公證，並發布 Homebrew cask。

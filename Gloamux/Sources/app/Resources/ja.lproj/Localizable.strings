@@ -377,6 +377,8 @@
 "No remote session" = "リモートセッションはありません";
 "No result" = "結果なし";
 "No result: the command did not finish in time." = "結果なし: コマンドが時間内に終了しませんでした。";
+"Not run: the workspace is locked." = "未実行: ワークスペースがロックされています。";
+"Not run: the session reconnected." = "未実行: セッションが再接続されました。";
 "No runbooks" = "Runbook はありません";
 "No saved forwarding rules" = "保存済みの転送ルールはありません";
 "No saved passwords" = "保存済みのパスワードはありません";
@@ -469,6 +471,14 @@
 "Recent" = "最近";
 "Reconnect" = "再接続";
 "Recording saved" = "録画を保存しました";
+"Recording not saved" = "録画を保存できませんでした";
+"Quit Anyway" = "終了する";
+"Don’t Quit" = "終了しない";
+"Couldn’t save the recording. Gloamux keeps it until you try again or discard it." = "録画を保存できませんでした。再試行するか破棄するまで、Gloamux が保持します。";
+"Discard the unsaved recording?" = "保存されていない録画を破棄しますか？";
+"The recorded output is lost." = "録画した出力は失われます。";
+"Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again." = "ワークスペースフォルダ内の triggers.json を読み込めませんでした。アクセス権を確認してから、再試行してください。";
+"triggers.json in the workspace folder is damaged. Repair or restore it, then try again." = "ワークスペースフォルダ内の triggers.json が破損しています。修復または復元してから、再試行してください。";
 "Recordings" = "録画";
 "Recordings you save appear here." = "保存した録画はここに表示されます。";
 "Recordings…" = "録画";

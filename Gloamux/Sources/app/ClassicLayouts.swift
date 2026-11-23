@@ -365,6 +365,24 @@ private struct ClassicStatusBar: View {
         .background(model.theme.header.color)
     }
 
+    /// The cells that change with output: the cursor position, or the bytes received and sent.
+    private struct OutputStatus: View {
+        let tab: SessionTab
+        @ObservedObject var output: TerminalOutput
+        let cursor: Bool
+        var body: some View {
+            if cursor {
+                StatusCell(text: String(format: T("Ln %d, Col %d"), tab.screen.cursorRow + 1, tab.screen.cursorCol + 1))
+            } else {
+                StatusCell(text: "↓ " + Self.bytes(tab.bytesReceived) + "  ↑ " + Self.bytes(tab.bytesSent))
+                    .help(T("Received and sent in this session"))
+            }
+        }
+        private static func bytes(_ count: Int) -> String {
+            ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .binary)
+        }
+    }
+
     private struct TabStatus: View {
         @ObservedObject var tab: SessionTab
         var body: some View {
@@ -378,16 +396,10 @@ private struct ClassicStatusBar: View {
                 StatusCell(text: tab.isLocal ? T("Local") : "SSH2")
                 StatusCell(text: tab.isLocal ? "xterm-256color" : TerminalPreferences.terminalType)
                 StatusCell(text: "⇲ \(tab.screen.cols)×\(tab.screen.rows)")
-                StatusCell(text: String(format: T("Ln %d, Col %d"), tab.screen.cursorRow + 1, tab.screen.cursorCol + 1))
-                    .id(tab.screenRevision)
+                OutputStatus(tab: tab, output: tab.output, cursor: true)
                 if tab.selectedLines > 0 { StatusCell(text: String(format: T("%d lines selected"), tab.selectedLines)) }
-                StatusCell(text: "↓ " + Self.bytes(tab.bytesReceived) + "  ↑ " + Self.bytes(tab.bytesSent))
-                    .id(tab.screenRevision)
-                    .help(T("Received and sent in this session"))
+                OutputStatus(tab: tab, output: tab.output, cursor: false)
             }
-        }
-        private static func bytes(_ count: Int) -> String {
-            ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .binary)
         }
         private var address: String {
             if tab.isLocal { return T("Local shell") + "  \(tab.username)" }
@@ -641,7 +653,7 @@ private struct SideRailFiles: View {
         }
         .onChange(of: tab.followsFolder) { _, on in if on { hookIfNeeded(); followed = nil; follow() } }
         .onChange(of: tab.terminalReady) { _, ready in if ready && tab.followsFolder { hookIfNeeded() } }
-        .onChange(of: tab.screenRevision) { _, _ in follow() }
+        .onReceive(tab.output.$revision.dropFirst()) { _ in follow() }
         .onAppear { if tab.followsFolder { hookIfNeeded() }; follow() }
     }
 

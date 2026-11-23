@@ -44,36 +44,7 @@ struct CLIArguments {
 }
 
 enum ProductCLI {
-    static let usage = """
-    Usage: gloamux <command> [options]
-
-      ssh          Open a saved SSH session in this terminal
-      files        Browse, transfer, and manage files over SFTP, SCP, FTP, or FTPS
-      sessions     List and manage saved sessions and folders
-      hosts        List and review saved SSH host keys
-      tabs         Control tabs and terminals in the running app
-      forwards     Manage SSH forwarding rules
-      commands     Manage saved quick commands and type them into tabs
-      triggers     Manage output triggers
-      runbooks     Manage and run Markdown runbooks
-      recordings   List, export, or remove terminal recordings
-      appearance   Manage the workspace theme
-      settings     Get or change settings
-      layout       Get or set the workspace layout
-      config       Export or import all settings in one file
-      mcp          Serve allowed sessions to an AI agent over MCP
-      agents       Show agent access and its history, or revoke it
-      vault        Show or lock the password vault
-      signins      List or remove saved passwords
-      workspace    Lock the workspace
-      xserver      Check or start XQuartz for remote X11 programs
-      completion   Print shell completion setup
-      benchmark    Benchmark the terminal
-      --version    Print the app version
-      --self-test  Check bundled features
-
-    Run gloamux <command> --help for details.
-    """
+    static var usage: String { CLICatalog.usage }
 
     static func writeError(_ text: String) {
         FileHandle.standardError.write(Data((safe(text) + "\n").utf8))
@@ -102,8 +73,7 @@ enum ProductCLI {
             case "files": try await FilesCommand.run(rest)
             case "ssh": return try await SSHCommand.run(rest)
             case "mcp": try await MCPServer.run(rest)
-            case "completion": try await ManagementCommands.run(command, rest)
-            case _ where ManagementCommands.operations[command] != nil: try await ManagementCommands.run(command, rest)
+            case _ where ManagementCommands.handles(command): try await ManagementCommands.run(command, rest)
             default: throw CLIUsageError("Unknown command \(command). Run gloamux --help.")
             }
             return 0

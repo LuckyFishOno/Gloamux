@@ -4,9 +4,9 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.1 (build 2)**.
+Current release: **Gloamux 1.2 (build 3)**.
 
-Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and every action in the window is also available from the `gloamux` command line.
+Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/LuckyFishOno/Gloamux?display_name=tag"></a>
@@ -49,8 +49,8 @@ Gloamux is for people who look after servers from a Mac and would rather not jug
 | **Files next to the shell** | A Finder-style file sidebar that follows the focused pane, plus a two-pane transfer view. |
 | **Sign in once** | Passwords stay on this Mac behind the Secure Enclave, with an optional master-password vault. |
 | **Guard rails for production** | Tag environments, and confirm risky commands before they run on a production server. |
-| **Scriptable** | The `gloamux` command line and a local MCP server for AI agents mirror what the window does. |
-| **Private by default** | No account, no telemetry, and no network traffic except the connections you open and an update check you can turn off. |
+| **Scriptable** | The `gloamux` command line provides session, terminal, and file operations. The local MCP server gives AI agents access to approved sessions. |
+| **Private by default** | No account or telemetry. Saved-host reachability probes and update checks can each be turned off in Settings. |
 
 ## See it
 
@@ -90,7 +90,7 @@ Intel Macs are not currently supported.
 
 ## First launch
 
-The downloadable build is ad hoc signed and is not notarized, so macOS asks you to approve it the first time. This is expected for an app distributed outside the Mac App Store.
+The downloadable build is ad hoc signed and is not notarized, so macOS asks you to approve it the first time. Follow the approval steps below for this build.
 
 If macOS shows **“Gloamux” Not Opened**:
 
@@ -199,6 +199,8 @@ Saved connections, host keys, quick commands, runbooks, recordings, and logs are
 Gloamux was called Termac, and MShell before that. The first launch moves data and settings from the newest earlier name, and older exports still import.
 
 ## Documentation
+
+Local architecture changes completed automated and stress verification on November 24, 2026. See the [verification record](docs/en/VERIFICATION.md) for coverage and remaining checks.
 
 Every document has an English and a Traditional Chinese version, in [`docs/en`](docs/en) and [`docs/zh-TW`](docs/zh-TW).
 

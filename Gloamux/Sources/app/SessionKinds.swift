@@ -316,6 +316,8 @@ struct RiskyCommandPrompt: Identifiable, Equatable {
     let command: String
     let bytes: [UInt8]
     let environment: SessionEnvironment
+    /// The connection the command was typed into; after a reconnect the prompt no longer applies.
+    let terminalID: UUID
 }
 
 /// Saved sessions opened most recently, newest first, kept in the workspace folder.

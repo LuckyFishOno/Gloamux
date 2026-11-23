@@ -2,7 +2,9 @@
 
 [English](../en/THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 20 日調查。本清單列出來自 Linux 發行版終端和安裝數最多的 Visual Studio Code 主題的候選配色，記錄每組配色的來源和數值的可靠程度。
+2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+
+2026 年 11 月 20 日調查，2026 年 11 月 23 日依 Gloamux 1.1 (build 2) 重新核對內附清單。Marketplace 排名仍保留 11 月 20 日的快照。本清單列出來自 Linux 發行版終端和安裝數最多的 Visual Studio Code 主題的候選配色，記錄每組配色的來源和數值的可靠程度。
 
 **目前已內附：** `ThemeGallery.swift`（`linuxPresets`）中有七組 Linux 預設：Ubuntu、Kali Dark、GNOME Dark、GNOME Light、Breeze、Tango 和 Linux Console。Kali-Dark 已與另一份獨立的 colorscheme 檔交叉核對，Linux Console 與核心 `drivers/tty/vt/vt.c` 的預設配色一致。視窗外框顏色是衍生出來的。每種外框和選取顏色上的文字對比都至少 4.5:1。
 

@@ -13,7 +13,14 @@ import FileTransfer
     @Published var picked: Set<String> = []
     @Published var error: String?
 
+    /// Counts tree openings and resets; a reply from an earlier one is dropped.
+    private var generation = 0
+    /// The latest request for each folder, so an older reply for the same folder cannot replace a newer one.
+    private var requests: [String: Int] = [:]
+    private var requestCount = 0
+
     func reset() {
+        generation += 1; requests = [:]
         root = nil; children = [:]; expanded = []; loading = []; selection = nil; picked = []; error = nil
     }
 
@@ -39,22 +46,44 @@ import FileTransfer
 
     /// Opens `path` (the login folder when nil) as the top of the tree.
     func open(_ path: String?, model: WorkspaceModel, tab: SessionTab) async {
+        generation += 1
+        let mine = generation
         do {
-            let resolved = try await model.sftp(for: tab).resolve(path ?? ".")
-            root = resolved; expanded = []; children = [:]; selection = nil; picked = []; error = nil
+            let transfer = try await model.sftp(for: tab)
+            let epoch = tab.epoch
+            let resolved = try await transfer.resolve(path ?? ".")
+            guard generation == mine, tab.epoch == epoch else { return }
+            root = resolved; expanded = []; children = [:]; requests = [:]; loading = []; selection = nil; picked = []; error = nil
             await load(resolved, model: model, tab: tab)
-        } catch { self.error = message(for: error) }
+        } catch {
+            guard generation == mine else { return }
+            self.error = message(for: error)
+        }
     }
 
+    /// Lists one folder. Several folders can load at once; each keeps only its latest reply, and replies from before
+    /// the tree was opened again, reset, or reconnected are dropped.
     func load(_ folder: String, model: WorkspaceModel, tab: SessionTab) async {
-        loading.insert(folder); defer { loading.remove(folder) }
+        let tree = generation
+        requestCount += 1
+        let mine = requestCount
+        requests[folder] = mine
+        func current() -> Bool { generation == tree && requests[folder] == mine }
+        loading.insert(folder)
+        defer { if current() { loading.remove(folder); requests[folder] = nil } }
         do {
-            let entries = try await model.sftp(for: tab).listDirectory(folder)
+            let transfer = try await model.sftp(for: tab)
+            let epoch = tab.epoch
+            let entries = try await transfer.listDirectory(folder)
+            guard current(), tab.epoch == epoch else { return }
             children[folder] = entries.sorted {
                 $0.isDirectory != $1.isDirectory ? $0.isDirectory : $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
             error = nil
-        } catch { self.error = message(for: error) }
+        } catch {
+            guard current() else { return }
+            self.error = message(for: error)
+        }
     }
 
     func toggle(_ folder: String, model: WorkspaceModel, tab: SessionTab) async {
@@ -164,7 +193,7 @@ private struct FollowFolderButton: View {
         .accessibilityIdentifier("followTerminalFolderButton")
         .onChange(of: tab.followsFolder) { _, on in if on { hook(); follow(force: true) } }
         .onChange(of: tab.terminalReady) { _, ready in if ready && tab.followsFolder { hook() } }
-        .onChange(of: tab.screenRevision) { _, _ in follow(force: false) }
+        .onReceive(tab.output.$revision.dropFirst()) { _ in follow(force: false) }
         .onAppear { if tab.followsFolder { hook(); follow(force: false) } }
     }
 

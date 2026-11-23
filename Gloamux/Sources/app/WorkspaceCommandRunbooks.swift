@@ -76,9 +76,10 @@ extension WorkspaceCommand {
             guard !library.running.contains(key) else { throw WorkspaceError.invalid("The runbook is already running.") }
             library.running.insert(key)
             owner.reveal(tab: tab.id)
+            let terminal = tab.terminalID
             Task {
                 for block in chosen {
-                    let result = await owner.runBlock(block.code, in: tab)
+                    let result = await owner.runBlock(block.code, in: tab, terminal: terminal)
                     library.record(result, block: block.index, in: url)
                     if (result.exitCode ?? 0) != 0 { break }
                 }

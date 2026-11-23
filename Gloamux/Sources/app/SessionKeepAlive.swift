@@ -41,14 +41,17 @@ extension WorkspaceModel {
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self, let tab, tab.transportLost, !tab.connected, !tab.busy else { return }
             await self.connect(tab)
-            if !tab.connected, tab.hostKeyChange == nil, tab.hostKeyPrompt == nil, !tab.loginCancelled {
+            // Disconnecting or closing the tab cancels this task; the attempt it ended is not a reason to try again.
+            guard !Task.isCancelled else { return }
+            if !tab.connected,tab.hostKeyChange == nil, tab.hostKeyPrompt == nil, !tab.loginCancelled {
                 tab.transportLost = true
                 self.scheduleReconnect(tab)
             }
         }
     }
 
-    static let reconnectDelays = [2, 5, 10, 30, 60]
+    /// Seconds before each attempt. Tests shorten them.
+    static var reconnectDelays = [2, 5, 10, 30, 60]
 
     /// After sleep, a connection may be dead without either side knowing. Checks each one at once so a dead one is
     /// reconnected now rather than after the next keystroke times out.

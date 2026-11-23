@@ -5,34 +5,7 @@ import Foundation
 import Ssh
 
 enum FilesCommand {
-    static let usage = """
-    Usage: gloamux files <operation> --session <name-or-id> [options] [paths]
-      ls [REMOTE]                  List a directory (default: .)
-      pwd                          Print the remote working directory
-      stat REMOTE                  Show file attributes
-      get REMOTE LOCAL             Download a file, or a folder with --recursive
-      put LOCAL REMOTE             Upload a file, or a folder with --recursive
-      mkdir REMOTE                 Create a directory
-      mv FROM TO                   Rename or move a remote item
-      rm REMOTE                    Remove a file, or a folder and its contents with --recursive
-      rmdir REMOTE                 Remove an empty directory
-      chmod MODE REMOTE            Set octal permissions (for example, 0644)
-
-    Options:
-      --workspace PATH             Use a separate Gloamux workspace
-      --protocol sftp|scp|ftp|ftps Override SFTP/SCP or require the saved profile's protocol
-      --password-stdin             Read the password or key passphrase as one line
-      --vault-password-stdin       Unlock the vault for this command (first line if both are set)
-      --host-key FINGERPRINT       Permit a verified new SSH host key for this run (repeatable)
-      --interactive                Answer SSH keyboard-interactive prompts on the terminal
-      --allow-plain-ftp            Allow cleartext FTP from a saved FTP profile
-      --overwrite                  Replace an existing download or upload
-      --resume                     Continue a partial download or upload by its current size
-      --recursive                  Copy or remove a folder with everything in it; LOCAL or REMOTE
-                                   names the folder itself. Symbolic links on this Mac are skipped.
-      --json                       Print a JSON result
-      --                           Treat remaining arguments as paths
-    """
+    static var usage: String { CLICatalog.command("files")?.help ?? "" }
 
     @MainActor static func run(_ arguments: [String]) async throws {
         if arguments == ["--help"] || arguments == ["-h"] { print(usage); return }
@@ -41,9 +14,7 @@ enum FilesCommand {
                                                "--allow-plain-ftp", "--overwrite", "--resume", "--recursive"], repeated: ["--host-key"])
         guard let selector = args.option("--session"), let op = args.operands.first else { throw CLIUsageError(usage) }
         let paths = Array(args.operands.dropFirst())
-        let counts = ["ls": 0...1, "pwd": 0...0, "stat": 1...1, "get": 2...2, "put": 2...2,
-                      "mkdir": 1...1, "mv": 2...2, "rm": 1...1, "rmdir": 1...1, "chmod": 2...2]
-        guard let count = counts[op], count.contains(paths.count) else { throw CLIUsageError("Invalid operation or path count. Run gloamux files --help.") }
+        guard let count = CLICatalog.filePaths[op], count.contains(paths.count) else { throw CLIUsageError("Invalid operation or path count. Run gloamux files --help.") }
         let overwrite = args.has("--overwrite"), resume = args.has("--resume")
         guard !(overwrite && resume), !(overwrite || resume) || ["get", "put"].contains(op) else {
             throw CLIUsageError("Use --overwrite or --resume with get or put.")
@@ -270,11 +241,8 @@ enum FilesCommand {
             if !overwrite, try await fs.entry(at: remote) != nil {
                 throw WorkspaceError.invalid("Remote file appeared during upload.")
             }
-            if overwrite, try await fs.entry(at: remote) != nil {
-                try await fs.replace(from: partial, to: remote)
-            } else {
-                try await fs.rename(from: partial, to: remote)
-            }
+            let replacing = overwrite ? try await fs.entry(at: remote) != nil : false
+            try await fs.commitUpload(partial, to: remote, replacing: replacing)
         } catch {
             try? await fs.removeFile(partial)
             throw error

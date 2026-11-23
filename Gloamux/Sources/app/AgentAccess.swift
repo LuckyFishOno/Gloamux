@@ -205,6 +205,7 @@ extension WorkspaceModel {
             agents.record(client: proposal.client, action: "Command declined", session: proposal.session, detail: proposal.command, outcome: "declined")
             return
         }
+        guard !workspaceLocked else { return }
         guard agents.allows(proposal.sessionID), tab.terminalID == proposal.terminalID, tab.connected, tab.terminalReady, !tab.readOnly,
               let bytes = TerminalKeyboard.pasteBytes(proposal.command, bracketed: tab.screen.bracketedPaste),
               enqueueTerminalInput(tab, bytes: bytes + [0x0D]) else {

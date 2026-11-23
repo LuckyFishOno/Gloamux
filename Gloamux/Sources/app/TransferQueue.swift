@@ -299,8 +299,7 @@ enum TransferDirection: Sendable {
             try await transfer.resumeUpload(localURL: url, to: partial, offset: offset) { progress in
                 Task { @MainActor in item.bytes = base + progress.bytesTransferred }
             }
-            if existing != nil { try await transfer.removeFile(destination) }
-            try await transfer.rename(from: partial, to: destination)
+            try await transfer.commitUpload(partial, to: destination, replacing: existing != nil)
             item.partials[destination] = nil
             item.completed.insert(destination)
         } catch is CancellationError {

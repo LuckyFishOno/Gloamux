@@ -71,7 +71,7 @@ struct RemoteDesktopPane: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background { if let gateway = connection.gatewayTab { GatewayHostKey(model: model, gateway: gateway) } }
+        .background { if let gateway = connection.gateway { GatewayHostKey(model: model, gateway: gateway) } }
         // The desktop size an RDP server is asked for follows this view.
         .background(GeometryReader { proxy in
             Color.clear
@@ -180,20 +180,25 @@ struct RemoteDesktopPane: View {
 /// The host key check for the SSH session a desktop tunnels through, which has no pane of its own.
 private struct GatewayHostKey: View {
     let model: WorkspaceModel
-    @ObservedObject var gateway: SessionTab
+    @ObservedObject var gateway: DesktopGateway
 
     var body: some View {
-        Color.clear.loginChallengeSheet(model: model, tab: gateway).sheet(item: Binding(get: { gateway.hostKeyPrompt }, set: { _ in }),
-                          onDismiss: { model.answerHostKey(gateway, approve: false) }) { prompt in
+        Color.clear
+            .sheet(item: Binding(get: { gateway.loginChallenge }, set: { _ in })) { prompt in
+                LoginChallengeSheet(prompt: prompt) { gateway.answerLogin($0) }
+                    .onDisappear { if gateway.loginChallenge?.id == prompt.id { gateway.answerLogin(nil) } }
+            }
+            .sheet(item: Binding(get: { gateway.hostKeyPrompt }, set: { _ in }),
+                   onDismiss: { gateway.answerHostKey(approve: false, knownHosts: model.knownHosts) }) { prompt in
             VStack(alignment: .leading, spacing: 18) {
                 Label(T("Verify this server"), systemImage: "key.horizontal").appFont(.title2.bold())
                 Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
                 Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled)
                 HStack {
-                    Button(T("Cancel")) { model.answerHostKey(gateway, approve: false) }
+                    Button(T("Cancel")) { gateway.answerHostKey(approve: false, knownHosts: model.knownHosts) }
                     Spacer()
-                    Button(T("Trust and connect")) { model.answerHostKey(gateway, approve: true) }.buttonStyle(.appProminent)
+                    Button(T("Trust and connect")) { gateway.answerHostKey(approve: true, knownHosts: model.knownHosts) }.buttonStyle(.appProminent)
                 }
             }.padding(24).frame(width: 530)
         }

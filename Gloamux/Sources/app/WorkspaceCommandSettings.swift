@@ -154,6 +154,9 @@ extension WorkspaceCommand {
 
     @MainActor static func triggers(_ action: String, _ args: [String], _ model: WorkspaceModel) throws -> Any {
         let store = model.triggers
+        // A file that could not be used is read again, so a repaired one works without reopening Gloamux.
+        if store.loadError != nil { store.reload() }
+        if let problem = store.loadError { throw WorkspaceError.invalid(problem) }
         func find(_ raw: String) throws -> OutputTrigger {
             guard let id = UUID(uuidString: raw), let found = store.triggers.first(where: { $0.id == id }) else {
                 throw WorkspaceError.invalid("No trigger with that ID. Run gloamux triggers list.")

@@ -2,6 +2,8 @@
 
 [English](FEATURE-BACKLOG.md) · [繁體中文](../zh-TW/FEATURE-BACKLOG.md) · [Back to README](../../README.md)
 
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
 Baseline reviewed on November 20, 2026. The backlog covers documented product features, settings, and integration workflows in Xshell 8 and MobaXterm 26.6, including the Professional Customizer and the November 11 Xshell update. Windows-specific workflows have macOS counterparts below. Each checkbox is a Gloamux development item. An open item can include capabilities already present in the app. Optional items that Gloamux does not plan to build were removed on November 22, 2026.
 
 - **Xshell** · [Features and specifications](https://www.netsarang.com/en/xshell-all-features/) · [Version 8 manual](https://www.netsarang.com/docs/Xshell8_manual.pdf) · [What's new](https://www.xshell.com/en/whats-new/) · [Update history](https://www.xshell.com/en/xshell-update-history/)
@@ -12,7 +14,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Start with a local terminal tab. Keep saved sessions in a searchable folder tree with add, edit, rename, duplicate through copy/paste, move, and remove operations.
 - [x] Open saved sessions in tabs and in their own windows. Preview Xshell folder imports and keep the imported folder hierarchy.
 - [x] Show two independent terminals in side-by-side or stacked layouts.
-- [x] Offer Default, Classic, and Workbench layout presets from the top bar and CLI. Apply the saved layout on the next app launch.
+- [x] Offer Default, Classic, and Workbench layout presets from the top bar and CLI. Apply changes immediately and keep the choice for the next launch.
 - [x] Connect to `user@host` from the command palette, open saved sessions and tabs from the palette, the menu bar, Spotlight, Shortcuts, and `gloamux://` links.
 - [x] Connect from the Classic layout's address bar with `ssh://user@host:port`, `user@host`, or a host.
 - [x] Reopen the last launch's saved sessions and local terminals as tabs (Settings › General). A failed startup connection leaves the other tabs open.
@@ -22,7 +24,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Enter full screen from the Classic and Workbench layouts' toolbars, as well as from the window.
 - [x] Start the session log, import a highlight set, open the triggers, and lock the workspace from the Classic layout's toolbar.
 - [x] From the Workbench layout's ribbon, type into every terminal of the window (MultiExec), start XQuartz, open the saved passwords, and list every connected SSH session's tunnels with their connection counts. The CLI does the same with `gloamux tabs multiexec`, `gloamux xserver`, `gloamux signins`, and `gloamux forwards live-list`.
-- [x] Import Xshell folders, MobaXterm exports, OpenSSH config, CSV, PuTTY and KiTTY registry exports, and Gloamux sessions files with a preview. Export Gloamux sessions files and CSV.
+- [x] Import Xshell folders, MobaXterm exports, OpenSSH config, CSV, PuTTY and KiTTY registry exports, and Gloamux sessions files with a preview. Export Gloamux sessions files, CSV, and OpenSSH configuration.
 - [x] Export profiles for a team without passwords. Keep storage separate for each macOS account.
 
 ## SSH, trust, and networking
@@ -61,7 +63,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Type a saved session's startup commands into each new shell.
 - [x] Add output triggers with literal or regex patterns that notify, play a sound, or mark the tab. Settings › Triggers lists, edits, and disables rules, and each rule fires at most once every 10 seconds per terminal.
 - [ ] Release a supported CLI with operation parity across the GUI. Use the same application operations and workspace, stable session IDs, terminal mode, machine-readable output, cancellation, exit codes, and shell completion. Document installation and test both entry points for each GUI feature.
-- [x] Ship the `gloamux` executable product with file commands across SFTP, SCP, FTP, and FTPS, session and folder management, import and export, SSH trust review, active-window tab control, saved and live forwarding, quick commands, themes, JSON, exit codes, and Bash and Zsh completion.
+- [x] Ship the `gloamux` executable product with file commands across SFTP, SCP, FTP, and FTPS, session and folder management, import and export, SSH trust review, tab control across windows, saved and live forwarding, quick commands, themes, JSON, exit codes, and Bash and Zsh completion.
 - [x] Ship a local MCP server for approved sessions. Provide short shared terminal excerpts, proposed commands, visible activity, per-session permissions, review before a command runs, and revocation. File transfer actions for agents are not built. Leave credential material under Gloamux control.
 
 ## File transfer and remote editing
@@ -137,5 +139,5 @@ These items come from a November 20, 2026 brainstorm. They cover macOS-native, m
 
 - [ ] Add GitHub Actions CI on a macOS runner for build and Swift tests. Run AppKit interaction tests in a separate job that has an active window session.
 - [ ] Add automated terminal compatibility tests based on vttest, and fuzz the escape-sequence parser.
-- [x] Add Sparkle updates: **Gloamux › Check for Updates** and a daily check, from an EdDSA-signed feed uploaded with each GitHub release.
-- [ ] Sign and notarize releases, and publish a Homebrew cask.
+- [x] Add Sparkle updates: **Gloamux › Check for Updates** and a daily check, using a feed carrying the DMG's EdDSA signature, uploaded with each GitHub release.
+- [ ] Sign releases with Developer ID, notarize them, and publish a Homebrew cask.

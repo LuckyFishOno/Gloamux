@@ -153,8 +153,8 @@ private final class DesktopWorker: @unchecked Sendable {
     var openTunnel: ((UUID, String, Int) async throws -> Int)?
     /// Closes the tunnel and its gateway connection. Set when a tunnel opens.
     var closeTunnel: (() -> Void)?
-    /// The hidden SSH connection a tunnel goes through, so the pane can show its host key prompt.
-    @Published var gatewayTab: SessionTab?
+    /// The SSH connection a tunnel goes through, so the pane can show its host key and sign-in questions.
+    @Published var gateway: DesktopGateway?
 
     /// Clipboard text passed either way is cut at this many bytes.
     nonisolated static let clipboardLimit = 256 * 1024
@@ -319,7 +319,7 @@ private final class DesktopWorker: @unchecked Sendable {
 
     private func closeGateway() {
         closeTunnel?(); closeTunnel = nil
-        gatewayTab = nil
+        gateway = nil
     }
 
     /// After a broken connection, signs in again with the sign-in that worked, after 2, 5, 10, then 30 seconds.

@@ -2,6 +2,8 @@
 
 [English](RELEASING.md) · [繁體中文](../zh-TW/RELEASING.md) · [Back to README](../../README.md)
 
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
 This is the standard way to update the documentation, push `main`, build the DMG, and publish a GitHub release. It is written so that a person or a coding agent can follow it from start to finish. `Gloamux/scripts/release.sh` does the building, checking, and publishing; the steps around it are yours.
 
 ## Version numbers
@@ -10,12 +12,13 @@ This is the standard way to update the documentation, push `main`, build the DMG
 |---|---|---|---|
 | Gloamux 1.0 (build 1) | `v1.0` | `1.0` | `1` |
 | Gloamux 1.1 (build 2) | `v1.1` | `1.1` | `2` |
-| **Next: Gloamux 1.2 (build 3)** | `v1.2` | `1.2` | `3` |
+| Gloamux 1.2 (build 3) | `v1.2` | `1.2` | `3` |
+| **Next normal-release example: Gloamux 1.3 (build 4)** | `v1.3` | `1.3` | `4` |
 
 - The version is what users see. Raise the second number for a normal release (1.1, 1.2) and the first for a major one (2.0). Use a third number only for a fix-only release of a published version (1.1.1).
-- The build number goes up by one for every published release, whatever the version, and is never reused. A tag is never reused either, so a replacement for a broken DMG is a fix version with the next build number, for example 1.2.1 (build 4).
+- The build number goes up by one for every published release, whatever the version, and is never reused. A tag is never reused either, so a replacement for a broken DMG is a fix version with the next build number, for example 1.3.1 (build 5).
 - The release title is always `Gloamux VERSION (build BUILD)` and the tag is always `vVERSION`.
-- Local builds carry the same numbers as the latest release. They are the defaults in `Gloamux/scripts/package-app.sh` (`version=${GLOAMUX_VERSION:-1.1}` and `build_number=${GLOAMUX_BUILD:-2}` today), and the release commit raises them to the new release. `release.sh` refuses to build until they match.
+- Local builds carry the same numbers as the latest release. They are the defaults in `Gloamux/scripts/package-app.sh` (`version=${GLOAMUX_VERSION:-1.2}` and `build_number=${GLOAMUX_BUILD:-3}` today), and the release commit raises them to the new release. `release.sh` refuses to build until they match.
 
 ## Before you start
 
@@ -51,7 +54,7 @@ The newest release in that list tells you the last build number. The new build i
 
 Go through this list for every release, in both languages:
 
-- [ ] `Gloamux/scripts/package-app.sh`: set the defaults to the new release, for example `version=${GLOAMUX_VERSION:-1.2}` and `build_number=${GLOAMUX_BUILD:-3}`. Local builds then show the same version as the release.
+- [ ] `Gloamux/scripts/package-app.sh`: set the defaults to the new release, for example `version=${GLOAMUX_VERSION:-1.3}` and `build_number=${GLOAMUX_BUILD:-4}`. Local builds then show the same version as the release.
 - [ ] `README.md` and `README.zh-TW.md`: the line `Current release: **Gloamux VERSION (build BUILD)**.` (`目前版本：**Gloamux VERSION (build BUILD)**。`). `release.sh publish` refuses to run until both name the new release.
 - [ ] `docs/*/USER-GUIDE.md`: every user-facing change since the last release, in its chapter and in the menu, shortcut, settings, and command-line references, with names exactly as the app shows them (the Chinese guide uses the app's Traditional Chinese names).
 - [ ] `README` feature list and "Why use it" table, if a headline feature was added or removed.
@@ -59,6 +62,8 @@ Go through this list for every release, in both languages:
 - [ ] `docs/*/DATA-PROTECTION.md`: any new stored data, secret, or output path, and its "Reviewed on" line.
 - [ ] `docs/*/DEVELOPMENT.md`: new architecture, settings keys, or test instructions.
 - [ ] `docs/assets/*.png`: retake only when the interface changed visibly, following the screenshot rule above.
+- [ ] Check relative links and section anchors in both languages after moving or renaming documents. Compare the documented commands with the packaged CLI help.
+- [ ] Update the local `.agent-memory/status.md` checkpoint with the release commit, installed path, checks completed, and remaining verification. Keep this file local. Website maintenance notes live under `web/`, which is also excluded from public commits.
 
 Then check what you are about to commit:
 
@@ -74,16 +79,16 @@ Commit the code and documentation for the release. Use a short imperative subjec
 ```sh
 git add -A
 git status --short          # review: nothing secret, nothing generated
-git commit -m "Release Gloamux 1.2 (build 3)" -m "- Short list of the user-facing changes"
+git commit -m "Release Gloamux 1.3 (build 4)" -m "- Short list of the user-facing changes"
 ```
 
 ## 4. Build and check the DMG
 
 ```sh
-Gloamux/scripts/release.sh build 1.2 3
+Gloamux/scripts/release.sh build 1.3 4
 ```
 
-The working tree must be clean, because the DMG is built from the committed source. The script:
+The working tree must be clean, because the DMG is built from the committed source. Rebuild after any further source or documentation commit before publishing, so the archive matches the commit named by the release. The script:
 
 1. Refuses to run off `main`, with uncommitted changes, when `package-app.sh` does not carry this version and build, when the tag exists, or when the build number is not above the last published one.
 2. Runs the Swift tests and the Rust remote desktop tests. `--skip-tests` skips them; use it only when both suites already passed on this exact commit.
@@ -105,7 +110,7 @@ git push origin main
 Write the notes in English to `build/release/VERSION-BUILD/notes.md` (the `build/` folder is not committed). Do not add the build information section; `release.sh` appends it. Template:
 
 ```markdown
-**Gloamux 1.2 (build 3)** adds … and fixes ….
+**Gloamux 1.3 (build 4)** adds … and fixes ….
 
 ## Highlights
 - **Feature name.** What it does for the user, in one sentence.
@@ -134,10 +139,10 @@ Take the test counts from the output of step 4. Describe only what changed for u
 ## 7. Publish
 
 ```sh
-Gloamux/scripts/release.sh publish 1.2 3 build/release/1.2-3/notes.md
+Gloamux/scripts/release.sh publish 1.3 4 build/release/1.3-4/notes.md
 ```
 
-The script checks again that the tree is clean, that the DMG still matches its checksum, that both READMEs name the release, and that GitHub's `main` is the commit you built. It renders the notes to HTML (through GitHub's Markdown API) and writes `appcast.xml`, the update feed that installed copies read: the version, build number, notes, and the DMG's EdDSA signature (`Gloamux/scripts/appcast.sh`). It then creates the tag and the release `Gloamux 1.2 (build 3)` as the latest release, attaches `Gloamux.dmg` and `appcast.xml`, appends the build information, and checks that the README's download link (`releases/latest/download/Gloamux.dmg`) answers and that `releases/latest/download/appcast.xml` offers the new build. From this moment, Gloamux 1.1 and later offer the update through **Gloamux › Check for Updates** and the daily check.
+The script checks again that the tree is clean, that the DMG still matches its checksum, that both READMEs name the release, and that GitHub's `main` is the commit you built. It renders the notes to HTML (through GitHub's Markdown API) and writes `appcast.xml`, the update feed that installed copies read: the version, build number, notes, and the DMG's EdDSA signature (`Gloamux/scripts/appcast.sh`). It then creates the tag and the release `Gloamux 1.3 (build 4)` as the latest release, attaches `Gloamux.dmg` and `appcast.xml`, appends the build information, and checks that the README's download link (`releases/latest/download/Gloamux.dmg`) answers and that `releases/latest/download/appcast.xml` offers the new build. From this moment, Gloamux 1.1 and later offer the update through **Gloamux › Check for Updates** and the daily check.
 
 Gloamux 1.0 has no updater, so its users install a newer release by hand once. The 1.1 notes say so.
 
@@ -145,7 +150,7 @@ Gloamux 1.0 has no updater, so its users install a newer release by hand once. T
 
 - Open the release page and read it once as a user would.
 - Confirm that the README's **Download Gloamux** link downloads the new DMG.
-- On a Mac with the previous release installed (from 1.1 on), choose **Gloamux › Check for Updates** and confirm that it offers, installs, and reopens the new version.
+- On a Mac with the previous release installed (from 1.1 on), choose **Gloamux › Check for Updates** and confirm that it offers, installs, and reopens the new version. Record whether this check ran. Passing unit tests and feature self-checks alone does not establish update installation.
 - Report the release URL, the DMG's SHA-256, and the commit to the owner.
 
 ## When something goes wrong
@@ -164,4 +169,4 @@ Gloamux 1.0 has no updater, so its users install a newer release by hand once. T
 | `the update feed at ... does not offer build N` | GitHub can take a minute to serve a new asset. Wait and open the URL again. If `appcast.xml` is missing from the release, upload `build/release/VERSION-BUILD/appcast.xml` with `gh release upload vVERSION FILE -R LuckyFishOno/Gloamux`. |
 | `gh` asks to sign in | Run `gh auth login` and choose GitHub.com. |
 | A test fails during `release.sh build` | Run that test alone, for example `swift test --package-path Gloamux --filter SshTests.KeyFormatTests/testPEMAndPKCS8KeysSignIn`. A few tests that start processes or servers can fail when the whole suite runs at once and pass alone; if it passes alone, run `release.sh build` again. If it fails alone, it is a real bug: fix it in a new commit. |
-| A published DMG is broken | Do not replace the asset or move the tag. Fix it and publish a fix version with the next build number, for example 1.2.1 (build 4), and say in the notes which build it replaces. |
+| A published DMG is broken | Do not replace the asset or move the tag. Fix it and publish a fix version with the next build number, for example 1.3.1 (build 5), and say in the notes which build it replaces. |

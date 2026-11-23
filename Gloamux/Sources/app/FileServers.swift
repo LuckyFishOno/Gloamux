@@ -11,31 +11,12 @@ extension WorkspaceModel {
         if !tab.opensAutomatically && !tab.renamed { tab.title = (tab.username.isEmpty ? "" : tab.username + "@") + host }
         let typed = tab.password
         tab.password = ""
-        let account = tab.credentialID
         defer { if tab.epoch == epoch { tab.busy = false } }
         do {
-            let vaultUnlocked = await vault.state == "Unlocked"
-            if tab.confirmsEachConnection, !vaultUnlocked, typed.isEmpty {
-                tab.status = "Waiting for Touch ID…"
-                do { try await confirmOwner(String(format: T("connect to %@"), account)) }
-                catch { throw WorkspaceError.invalid("This session asks for Touch ID or the Mac password before it connects.") }
-                guard tab.epoch == epoch else { return }
-                tab.status = "Connecting…"
-            }
-            let generation = await vault.sessionGeneration
-            // Anonymous FTP has no saved password; anything else needs one typed or saved.
-            var password = typed
-            if password.isEmpty && !tab.username.isEmpty && tab.username != "anonymous" {
-                password = try await vault.password(id: account)
-            }
-            let settings = FTPSettings(host: host, port: port, username: tab.username, password: password,
-                                       security: security, trustedFingerprint: tab.ftpFingerprint)
-            let transfer = try await FTPTransfer.connect(settings)
-            guard tab.epoch == epoch else { try? await transfer.close(); return }
-            if tab.fileCommandAccess == nil {
-                if !password.isEmpty { await vault.rememberWorking(id: account, secret: password, generation: generation) }
-                await refreshVault()
-            }
+            let transfer = try await connections.openFTP(
+                host: host, port: port, username: tab.username, typedPassword: typed, security: security,
+                fingerprint: tab.ftpFingerprint, asksEachConnection: tab.confirmsEachConnection,
+                handler: TabSignIn(model: self, tab: tab, epoch: epoch))
             tab.transfer = transfer
             tab.connected = true; tab.transportLost = false; tab.showsFiles = true
             tab.status = "Connected"

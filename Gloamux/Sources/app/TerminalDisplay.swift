@@ -5,6 +5,8 @@ import Formats
 
 struct TerminalDisplay: NSViewRepresentable {
     @ObservedObject var tab: SessionTab
+    /// Redraws for new output without the views around it.
+    @ObservedObject private var output: TerminalOutput
     @ObservedObject var model: WorkspaceModel
     /// False for a recording being played back: it keeps the size it was recorded at.
     var resizes = true
@@ -14,6 +16,11 @@ struct TerminalDisplay: NSViewRepresentable {
     @AppStorage(TerminalPreferences.blinkKey) private var blinkSetting = false
     @AppStorage(TerminalPreferences.opacityKey) private var opacity = 1.0
     @AppStorage(TerminalPreferences.mouseKey) private var reportsMouse = true
+
+    init(tab: SessionTab, model: WorkspaceModel, resizes: Bool = true) {
+        self.tab = tab; self.model = model; self.resizes = resizes
+        output = tab.output
+    }
 
     final class Coordinator {
         var revision = -1
@@ -52,6 +59,7 @@ struct TerminalDisplay: NSViewRepresentable {
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? TerminalTextView else { return }
+        ViewEvaluations.note("TerminalDisplay")
         let coordinator = context.coordinator
         let screen = tab.screen
         view.input = { bytes in model.typeTerminal(tab, bytes: bytes) }

@@ -2,7 +2,11 @@
 
 [English](ROADMAP.md) · [繁體中文](../zh-TW/ROADMAP.md) · [Back to README](../../README.md)
 
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
+
+Current release is **Gloamux 1.2 (build 3)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
 
 ## First milestones
 
@@ -51,7 +55,7 @@ The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshel
 - [x] Output and disconnect indicators on tabs, besides a finished long command and the bell.
 - [x] Rewrap text when the terminal width changes.
 - [ ] Expand compatibility testing with Vim, tmux, and Chinese input methods.
-- [x] Session import and export, including MobaXterm and CSV. Support sharing profiles with a team without including credentials. Imports also read PuTTY and KiTTY registry exports and Gloamux sessions files; exports write Gloamux sessions files and CSV without passwords.
+- [x] Session import and export, including MobaXterm and CSV. Support sharing profiles with a team without including credentials. Imports also read PuTTY and KiTTY registry exports and Gloamux sessions files; exports write Gloamux sessions files, CSV, and OpenSSH configuration without passwords.
 
 ## Other connections
 

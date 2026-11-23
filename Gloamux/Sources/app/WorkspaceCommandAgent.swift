@@ -31,11 +31,14 @@ extension WorkspaceCommand {
             guard let node else { throw refuse("That session is not allowed for agents. Allow it in Gloamux, in Settings › Agents.") }
             return node
         }
-        func liveTabs(of node: SessionTreeNode) -> [(WorkspaceModel, SessionTab)] {
+        func allTabs(of node: SessionTreeNode) -> [(WorkspaceModel, SessionTab)] {
             open.flatMap { owner in
                 (owner.tabs + owner.sessionWindows.values.map(\.tab)).filter { $0.savedSessionID == node.id }.map { (owner, $0) }
             }
         }
+        /// Tabs of the session that agents may reach: none in a locked window.
+        func liveTabs(of node: SessionTreeNode) -> [(WorkspaceModel, SessionTab)] { allTabs(of: node).filter { !$0.0.workspaceLocked } }
+        func lockedOnly(_ node: SessionTreeNode) -> Bool { liveTabs(of: node).isEmpty && !allTabs(of: node).isEmpty }
         func tabInfo(_ tab: SessionTab) -> [String: Any] {
             ["tab": tab.id.uuidString, "connected": tab.connected, "ready": tab.terminalReady && tab.desktop == nil]
         }
@@ -56,6 +59,8 @@ extension WorkspaceCommand {
                 access.record(client: client, action: "Found open session", session: node.name, outcome: "shown")
                 return tabInfo(tab).merging(["status": "already open"]) { $1 }
             }
+            // A session open only in a locked window waits for the user rather than opening a second connection.
+            if lockedOnly(node) { throw refuse("That session is open in a locked Gloamux window. Ask the user to unlock it.", session: node.name) }
             guard let tab = model.openSaved(node) else { throw refuse("This session cannot be opened.", session: node.name) }
             model.reveal(tab: tab.id)
             access.record(client: client, action: "Opened session", session: node.name, outcome: "opened")
@@ -77,6 +82,7 @@ extension WorkspaceCommand {
             let requested = (input["tab"] as? String).flatMap(UUID.init(uuidString:))
             let candidates = liveTabs(of: node).filter { $0.1.connected && $0.1.terminalReady && $0.1.desktop == nil }
             guard let (owner, tab) = candidates.first(where: { requested == nil || $0.1.id == requested }) else {
+                if lockedOnly(node) { throw refuse("That session is open in a locked Gloamux window. Ask the user to unlock it.", session: node.name, detail: command) }
                 throw refuse("Open the session first with open_session, and wait until it is connected.", session: node.name, detail: command)
             }
             guard !tab.readOnly else { throw refuse("That terminal is read-only.", session: node.name, detail: command) }

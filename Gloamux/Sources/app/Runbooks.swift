@@ -196,9 +196,18 @@ struct RunbookResult: Codable, Equatable {
 extension WorkspaceModel {
     /// Sends a runbook block to a terminal and waits for the shell to report it finished. Without shell integration it
     /// returns as soon as the command is sent.
-    func runBlock(_ code: String, in tab: SessionTab, timeout: TimeInterval = 1800) async -> RunbookResult {
+    /// `terminal` is the connection the run started on; a later block is not sent to a reconnected session.
+    func runBlock(_ code: String, in tab: SessionTab, terminal: UUID? = nil, timeout: TimeInterval = 1800) async -> RunbookResult {
         let destination = UIStrings.text(tab.title, language: language)
         var result = RunbookResult(date: Date(), destination: destination, command: code)
+        guard !workspaceLocked else {
+            result.output = T("Not run: the workspace is locked."); result.exitCode = -1
+            return result
+        }
+        if let terminal, tab.terminalID != terminal {
+            result.output = T("Not run: the session reconnected."); result.exitCode = -1
+            return result
+        }
         guard tab.terminalReady, let bytes = TerminalKeyboard.pasteBytes(code, bracketed: tab.screen.bracketedPaste) else {
             result.output = T("The session is disconnected."); result.exitCode = -1
             return result
@@ -445,9 +454,10 @@ private struct RunbookDocumentView: View {
         let key = url.lastPathComponent
         library.running.insert(key)
         model.reveal(tab: tab.id)
+        let terminal = tab.terminalID
         Task {
             for block in blocks {
-                let result = await model.runBlock(block.code, in: tab)
+                let result = await model.runBlock(block.code, in: tab, terminal: terminal)
                 library.record(result, block: block.index, in: url)
                 if (result.exitCode ?? 0) != 0 { break }
             }

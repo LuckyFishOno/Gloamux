@@ -138,7 +138,7 @@ public enum ConfigBackup {
         do {
             let model = try WorkspaceModel(storage: scratch)
             if let error = model.quickCommands.loadError { throw WorkspaceError.invalid(error) }
-            if let data = backup.files["triggers.json"] { _ = try JSONDecoder().decode([OutputTrigger].self, from: data) }
+            if let error = model.triggers.loadError { throw WorkspaceError.invalid(error) }
             if let data = backup.files["appearance.json"] {
                 let id = try JSONDecoder().decode(ThemePreference.self, from: data).selectedID
                 guard model.themes.contains(where: { $0.id == id }) else { throw WorkspaceError.invalid("Unknown theme.") }

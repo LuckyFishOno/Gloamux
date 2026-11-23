@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Terminal
 
 /// Records what a terminal shows, in the asciinema v2 format (asciicast). Only output is recorded, never keystrokes,
@@ -13,11 +14,29 @@ import Terminal
         let size: Int
     }
 
+    /// What stopping a recording did.
+    enum StopResult: Equatable {
+        case saved(URL)
+        /// Nothing was being recorded, or the terminal showed nothing.
+        case nothingRecorded
+        /// The file could not be written; the recording waits in `unsaved` for another try.
+        case failed(String)
+    }
+
     let folder: URL
     @Published private(set) var active: [UUID: TerminalRecorder] = [:]
     @Published private(set) var saved: [Recording] = []
+    /// Stopped recordings whose file could not be written, oldest first, kept to try again.
+    @Published private(set) var unsaved: [RecordingSnapshot] = []
+    /// Stopped recordings still being masked and written.
+    @Published private(set) var saving = 0
     /// A recording stops by itself at this many bytes of output.
     static let limit = 32 * 1024 * 1024
+    /// At most this many unsaved recordings are kept; a further failure drops the oldest.
+    static let unsavedLimit = 4
+    static let saveFailed = "Couldn’t save the recording. Gloamux keeps it until you try again or discard it."
+    /// The last save in line. Saves run one at a time, in the order the recordings stopped.
+    private var lastSave: Task<StopResult, Never>?
 
     init(folder: URL) {
         self.folder = folder
@@ -36,27 +55,76 @@ import Terminal
     func output(_ tab: SessionTab, bytes: [UInt8]) {
         guard let recorder = active[tab.id] else { return }
         recorder.output(bytes)
-        if recorder.size > Self.limit { _ = stop(tab) }
+        if recorder.size > Self.limit { stop(tab) }
     }
 
     func resize(_ tab: SessionTab, rows: Int, columns: Int) {
         active[tab.id]?.resize(rows: rows, columns: columns)
     }
 
-    /// Stops and saves the tab's recording. Returns the file, or nil when nothing was recorded.
-    @discardableResult func stop(_ tab: SessionTab) -> URL? {
-        guard let recorder = active.removeValue(forKey: tab.id) else { return nil }
+    /// Stops the tab's recording at once and saves it in the background: masking secrets and writing a recording
+    /// near the size limit takes about a second, which would otherwise hold up every window. Await the task for
+    /// the result.
+    @discardableResult func stop(_ tab: SessionTab) -> Task<StopResult, Never> {
+        guard let recorder = active.removeValue(forKey: tab.id) else { return Task { .nothingRecorded } }
         tab.objectWillChange.send()
-        guard recorder.hasOutput else { return nil }
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"; formatter.locale = Locale(identifier: "en_US_POSIX")
-            let safe = recorder.title.map { "/:\\".contains($0) ? "_" : $0 }
-            let url = folder.appendingPathComponent("\(formatter.string(from: recorder.started)) \(String(safe.prefix(60))).cast")
-            try writePrivate(recorder.asciicast(), to: url)
-            reload()
-            return url
-        } catch { return nil }
+        guard recorder.hasOutput else { return Task { .nothingRecorded } }
+        return enqueue(recorder.snapshot)
+    }
+
+    /// Stops every recording, as quitting does, and saves each in the background.
+    func stopAll() {
+        for id in Array(active.keys) {
+            if let recorder = active.removeValue(forKey: id), recorder.hasOutput { enqueue(recorder.snapshot) }
+        }
+    }
+
+    /// Saves the recordings that could not be saved before. Returns the files written; any that fail again stay.
+    @discardableResult func retryUnsaved() async -> [URL] {
+        let waiting = unsaved
+        unsaved = []
+        var written: [URL] = []
+        for snapshot in waiting {
+            if case .saved(let url) = await enqueue(snapshot).value { written.append(url) }
+        }
+        return written
+    }
+
+    /// Drops the recordings that could not be saved.
+    func discardUnsaved() { unsaved = [] }
+
+    /// Waits for the saves under way, at most `seconds`. Returns false if one is still running then.
+    func finishSaving(within seconds: Double = 20) async -> Bool {
+        guard let last = lastSave, saving > 0 else { return true }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { _ = await last.value }
+            group.addTask { try? await Task.sleep(for: .seconds(seconds)) }
+            await group.next()
+            group.cancelAll()
+        }
+        return saving == 0
+    }
+
+    @discardableResult private func enqueue(_ snapshot: RecordingSnapshot) -> Task<StopResult, Never> {
+        let previous = lastSave, folder = folder
+        saving += 1
+        let task = Task { @MainActor [weak self] () -> StopResult in
+            _ = await previous?.value
+            let written = await Task.detached(priority: .utility) { Result { try snapshot.write(into: folder) } }.value
+            guard let self else { return .failed(Self.saveFailed) }
+            self.saving -= 1
+            switch written {
+            case .success(let url):
+                self.reload()
+                return .saved(url)
+            case .failure:
+                self.unsaved.append(snapshot)
+                if self.unsaved.count > Self.unsavedLimit { self.unsaved.removeFirst(self.unsaved.count - Self.unsavedLimit) }
+                return .failed(Self.saveFailed)
+            }
+        }
+        lastSave = task
+        return task
     }
 
     func reload() {
@@ -75,12 +143,57 @@ import Terminal
     }
 }
 
+/// A stopped recording: what was recorded, fixed, so it can be masked and written away from the main actor.
+struct RecordingSnapshot: Sendable {
+    struct Event: Sendable { let time: TimeInterval; let kind: String; let data: String }
+    let title: String
+    let started: Date
+    let columns: Int, rows: Int
+    let events: [Event]
+
+    func asciicast() throws -> Data {
+        let redacted = SecretRedaction.redact(events.filter { $0.kind == "o" }.map { ($0.time, $0.data) })
+        var outputs = redacted.makeIterator()
+        var lines: [String] = []
+        let duration = events.last?.time ?? 0
+        let header: [String: Any] = ["version": 2, "width": columns, "height": rows, "timestamp": Int(started.timeIntervalSince1970),
+                                     "duration": (duration * 1000).rounded() / 1000, "title": title,
+                                     "env": ["TERM": "xterm-256color"]]
+        lines.append(String(decoding: try JSONSerialization.data(withJSONObject: header, options: [.sortedKeys]), as: UTF8.self))
+        for event in events {
+            let data = event.kind == "o" ? (outputs.next()?.1 ?? "") : event.data
+            if event.kind == "o" && data.isEmpty { continue }
+            let line = try JSONSerialization.data(withJSONObject: [(event.time * 1_000_000).rounded() / 1_000_000, event.kind, data],
+                                                  options: [.fragmentsAllowed])
+            lines.append(String(decoding: line, as: UTF8.self))
+        }
+        return Data((lines.joined(separator: "\n") + "\n").utf8)
+    }
+
+    /// Writes the recording as a private `.cast` file named for its start time and title. Saves run one at a time,
+    /// so the name chosen here is still free when the file is written.
+    func write(into folder: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"; formatter.locale = Locale(identifier: "en_US_POSIX")
+        let safe = title.map { "/:\\".contains($0) ? "_" : $0 }
+        let base = "\(formatter.string(from: started)) \(String(safe.prefix(60)))"
+        // Two recordings with the same title can stop within one second; neither replaces the other.
+        var url = folder.appendingPathComponent(base + ".cast"), number = 1
+        while FileManager.default.fileExists(atPath: url.path) {
+            number += 1
+            url = folder.appendingPathComponent("\(base) \(number).cast")
+        }
+        try writePrivate(asciicast(), to: url)
+        return url
+    }
+}
+
 /// One recording in progress.
 final class TerminalRecorder {
     let title: String
     let started = Date()
     private let columns: Int, rows: Int
-    private var events: [(time: TimeInterval, kind: String, data: String)] = []
+    private var events: [RecordingSnapshot.Event] = []
     private var pending: [UInt8] = []
     private(set) var size = 0
 
@@ -103,31 +216,16 @@ final class TerminalRecorder {
         guard end > 0 else { return }
         let text = String(decoding: pending[..<end], as: UTF8.self)
         pending.removeFirst(end)
-        events.append((Date().timeIntervalSince(started), "o", text))
+        events.append(.init(time: Date().timeIntervalSince(started), kind: "o", data: text))
     }
 
     func resize(rows: Int, columns: Int) {
-        events.append((Date().timeIntervalSince(started), "r", "\(columns)x\(rows)"))
+        events.append(.init(time: Date().timeIntervalSince(started), kind: "r", data: "\(columns)x\(rows)"))
     }
 
-    func asciicast() throws -> Data {
-        let redacted = SecretRedaction.redact(events.filter { $0.kind == "o" }.map { ($0.time, $0.data) })
-        var outputs = redacted.makeIterator()
-        var lines: [String] = []
-        let duration = events.last?.time ?? 0
-        let header: [String: Any] = ["version": 2, "width": columns, "height": rows, "timestamp": Int(started.timeIntervalSince1970),
-                                     "duration": (duration * 1000).rounded() / 1000, "title": title,
-                                     "env": ["TERM": "xterm-256color"]]
-        lines.append(String(decoding: try JSONSerialization.data(withJSONObject: header, options: [.sortedKeys]), as: UTF8.self))
-        for event in events {
-            let data = event.kind == "o" ? (outputs.next()?.1 ?? "") : event.data
-            if event.kind == "o" && data.isEmpty { continue }
-            let line = try JSONSerialization.data(withJSONObject: [(event.time * 1_000_000).rounded() / 1_000_000, event.kind, data],
-                                                  options: [.fragmentsAllowed])
-            lines.append(String(decoding: line, as: UTF8.self))
-        }
-        return Data((lines.joined(separator: "\n") + "\n").utf8)
-    }
+    var snapshot: RecordingSnapshot { RecordingSnapshot(title: title, started: started, columns: columns, rows: rows, events: events) }
+
+    func asciicast() throws -> Data { try snapshot.asciicast() }
 }
 
 /// Masks likely secrets in recorded output. Matches are found across chunk boundaries: the mask goes in the chunk
@@ -221,5 +319,47 @@ enum Asciicast {
         }
         if header.duration == nil { header.duration = events.last?.time }
         return (header, events)
+    }
+}
+
+/// Shown while a stopped recording could not be written, until it is saved or discarded.
+struct UnsavedRecordingBanner: View {
+    @ObservedObject var recordings: TerminalRecordings
+    let saved: (URL) -> Void
+    @State private var confirmingDiscard = false
+
+    var body: some View {
+        if !recordings.unsaved.isEmpty {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text(T("Recording not saved")).fontWeight(.medium)
+                InfoButton(T(TerminalRecordings.saveFailed))
+                Button(T("Try again")) { Task { if let url = await recordings.retryUnsaved().last { saved(url) } } }
+                    .disabled(recordings.saving > 0)
+                Button(T("Discard")) { confirmingDiscard = true }
+            }
+            .appFont(.callout)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+            .padding(.bottom, 18)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .confirmationDialog(T("Discard the unsaved recording?"), isPresented: $confirmingDiscard) {
+                Button(T("Discard"), role: .destructive) { recordings.discardUnsaved() }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: {
+                Text(T("The recorded output is lost."))
+            }
+        }
+    }
+}
+
+extension WorkspaceModel {
+    /// Before the app quits: stops the recordings still running and waits for every save, at most `seconds`.
+    /// Returns false when a recording would be lost, because it could not be written or is still being written.
+    public func finishRecordingsBeforeQuit(within seconds: Double = 20) async -> Bool {
+        recordings.stopAll()
+        let finished = await recordings.finishSaving(within: seconds)
+        return finished && recordings.unsaved.isEmpty
     }
 }

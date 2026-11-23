@@ -377,6 +377,8 @@
 "No remote session" = "No remote session";
 "No result" = "No result";
 "No result: the command did not finish in time." = "No result: the command did not finish in time.";
+"Not run: the workspace is locked." = "Not run: the workspace is locked.";
+"Not run: the session reconnected." = "Not run: the session reconnected.";
 "No runbooks" = "No runbooks";
 "No saved forwarding rules" = "No saved forwarding rules";
 "No saved passwords" = "No saved passwords";
@@ -469,6 +471,14 @@
 "Recent" = "Recent";
 "Reconnect" = "Reconnect";
 "Recording saved" = "Recording saved";
+"Recording not saved" = "Recording not saved";
+"Quit Anyway" = "Quit Anyway";
+"Don’t Quit" = "Don’t Quit";
+"Couldn’t save the recording. Gloamux keeps it until you try again or discard it." = "Couldn’t save the recording. Gloamux keeps it until you try again or discard it.";
+"Discard the unsaved recording?" = "Discard the unsaved recording?";
+"The recorded output is lost." = "The recorded output is lost.";
+"Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again." = "Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again.";
+"triggers.json in the workspace folder is damaged. Repair or restore it, then try again." = "triggers.json in the workspace folder is damaged. Repair or restore it, then try again.";
 "Recordings" = "Recordings";
 "Recordings you save appear here." = "Recordings you save appear here.";
 "Recordings…" = "Recordings";

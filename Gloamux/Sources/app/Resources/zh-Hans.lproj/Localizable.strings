@@ -377,6 +377,8 @@
 "No remote session" = "没有远程会话";
 "No result" = "没有结果";
 "No result: the command did not finish in time." = "没有结果：命令没有在时限内完成。";
+"Not run: the workspace is locked." = "没有执行：工作区已锁定。";
+"Not run: the session reconnected." = "没有执行：会话已重新连接。";
 "No runbooks" = "没有运维手册";
 "No saved forwarding rules" = "没有已保存的转发规则";
 "No saved passwords" = "没有已保存的密码";
@@ -469,6 +471,14 @@
 "Recent" = "最近";
 "Reconnect" = "重新连接";
 "Recording saved" = "录像已保存";
+"Recording not saved" = "录像未保存";
+"Quit Anyway" = "仍然退出";
+"Don’t Quit" = "不退出";
+"Couldn’t save the recording. Gloamux keeps it until you try again or discard it." = "无法保存录像。Gloamux 会保留它，直到你重试或放弃。";
+"Discard the unsaved recording?" = "要放弃未保存的录像吗？";
+"The recorded output is lost." = "录下的输出会丢失。";
+"Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again." = "无法读取工作区文件夹中的 triggers.json。请检查它的权限，然后重试。";
+"triggers.json in the workspace folder is damaged. Repair or restore it, then try again." = "工作区文件夹中的 triggers.json 已损坏。请修复或恢复它，然后重试。";
 "Recordings" = "录像";
 "Recordings you save appear here." = "保存的录像会出现在这里。";
 "Recordings…" = "录像";

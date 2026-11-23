@@ -9,7 +9,7 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 // Data saved under the old name moves over before anything opens the default workspace.
 if !arguments.contains("--workspace") { LegacyName.migrate() }
 if arguments.first == "benchmark" { exit(TerminalBenchmark.run(arguments)) }
-if arguments.first.map({ ManagementCommands.operations[$0] != nil || ["help", "--help", "-h", "--version"].contains($0) }) == true {
+if arguments.first.map({ CLICatalog.command($0) != nil || ["help", "--help", "-h", "--version"].contains($0) }) == true {
     exit(await ProductCLI.run(arguments))
 }
 if arguments.contains("--theme-flow-trace") { ThemeFlowProbe.start() }
@@ -72,29 +72,53 @@ struct GloamuxApplication: SwiftUI.App {
     var workspaces: (() -> [WorkspaceModel])?
     private var quitting = false
     private var repliedToQuit = false
+    /// Counts Quit requests, so the work of one that was cancelled cannot finish a later one.
+    private var quitRound = 0
 
     /// Quitting ends every connection the way closing its tab does: each SSH server is told the session is over, so it
     /// ends the login at once instead of finding it dropped. Open tabs are saved first, so they still reopen at launch.
-    /// The app quits when that is done, or after five seconds with a server that does not answer.
+    /// The app quits when that is done, or after five seconds with a server that does not answer, once every recording
+    /// is written.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // A second Quit while connections are closing waits for the first.
         guard !quitting else { return .terminateCancel }
         guard let models = workspaces?(), !models.isEmpty else { return .terminateNow }
         quitting = true
+        quitRound += 1
+        let round = quitRound
         Task { @MainActor in
             for model in models { await model.closeWorkspaceWindow(lockingVault: true) }
-            finishQuitting(sender)
+            await finishQuitting(sender, models, round: round)
         }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(5))
-            finishQuitting(sender)
+            await finishQuitting(sender, models, round: round)
         }
         return .terminateLater
     }
 
-    private func finishQuitting(_ sender: NSApplication) {
-        guard !repliedToQuit else { return }
+    /// Quits once every recording is written. A recording that could not be written is not dropped without asking.
+    private func finishQuitting(_ sender: NSApplication, _ models: [WorkspaceModel], round: Int) async {
+        guard round == quitRound, !repliedToQuit else { return }
         repliedToQuit = true
+        var saved = true
+        for model in models {
+            if await !model.finishRecordingsBeforeQuit() { saved = false }
+        }
+        if !saved {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = UIStrings.text("Recording not saved")
+            alert.informativeText = UIStrings.text("Couldn’t save the recording. Gloamux keeps it until you try again or discard it.")
+            alert.addButton(withTitle: UIStrings.text("Don’t Quit"))
+            alert.addButton(withTitle: UIStrings.text("Quit Anyway"))
+            if alert.runModal() == .alertFirstButtonReturn {
+                quitting = false
+                repliedToQuit = false
+                sender.reply(toApplicationShouldTerminate: false)
+                return
+            }
+        }
         sender.reply(toApplicationShouldTerminate: true)
     }
 

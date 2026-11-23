@@ -55,7 +55,12 @@ public struct DesktopView: View {
                 .transition(.opacity)
             }
         }
-        .overlay(alignment: .bottom) { recordingBanner }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
+                UnsavedRecordingBanner(recordings: model.recordings) { model.recordingSaved = $0 }
+                recordingBanner
+            }
+        }
         .overlay { WorkspaceLockCover(model: model) }
         .animation(.easeOut(duration: 0.15), value: model.workspaceLocked)
         .animation(.easeOut(duration: 0.12), value: model.commandPaletteShown)
@@ -1072,6 +1077,7 @@ struct SessionPane: View {
     }
     private var live: Bool { tab.connected || tab.isLocal }
     var body: some View {
+        let _ = ViewEvaluations.note("SessionPane")
         if let desktop = tab.desktop {
             // The same slim header as a terminal, so every kind of session reads alike.
             VStack(spacing: 0) {
@@ -1219,7 +1225,8 @@ struct SessionPane: View {
 
     /// A thin Termius-style bar: what the pane is, and a few icon actions. Drag it to move the pane.
     private var header: some View {
-        HStack(spacing: 4) {
+        ViewEvaluations.note("SessionPane.header")
+        return HStack(spacing: 4) {
             HStack(spacing: 7) {
                 Circle().fill(tab.connected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                 Image(systemName: tab.container?.tool.symbol ?? (tab.isLocal ? "apple.logo" : "network")).appFont(.system(size: 11)).foregroundStyle(.secondary)

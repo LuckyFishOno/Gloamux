@@ -3,53 +3,18 @@ import Terminal
 import SwiftUI
 
 /// Runs a command line through the user's login shell, so `docker`, `kubectl`, `aws`, and `tailscale` are found
-/// where Terminal finds them, and returns its output. It is stopped after `timeout` seconds.
+/// where Terminal finds them, and returns its output. It is stopped after `timeout` seconds or when the calling task is
+/// cancelled, and output over 16 MB is an error rather than a cut-off result.
 enum LoginShellCommand {
-    /// Output collected on reader threads and the one-time result, behind a lock.
-    private final class State: @unchecked Sendable {
-        private let lock = NSLock()
-        private var finished = false
-        var output = Data(), errors = Data()
-        func claim() -> Bool { lock.lock(); defer { lock.unlock() }; if finished { return false }; finished = true; return true }
-        func set(output: Data? = nil, errors: Data? = nil) {
-            lock.lock(); defer { lock.unlock() }
-            if let output { self.output = output }
-            if let errors { self.errors = errors }
-        }
-        func read() -> (Data, Data) { lock.lock(); defer { lock.unlock() }; return (output, errors) }
-    }
+    static let outputLimit = 16 * 1024 * 1024
 
     static func run(_ command: String, timeout: TimeInterval = 20) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: LocalLaunch.userShell)
-            process.arguments = ["-l", "-c", command]
-            process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
-            let output = Pipe(), errors = Pipe()
-            process.standardOutput = output; process.standardError = errors; process.standardInput = FileHandle.nullDevice
-            let state = State()
-            let finish: @Sendable (Result<String, Error>) -> Void = { result in
-                if state.claim() { continuation.resume(with: result) }
-            }
-            // Read while the process runs so a large output cannot fill the pipe and stall it.
-            let group = DispatchGroup()
-            group.enter(); DispatchQueue.global().async { state.set(output: output.fileHandleForReading.readDataToEndOfFile()); group.leave() }
-            group.enter(); DispatchQueue.global().async { state.set(errors: errors.fileHandleForReading.readDataToEndOfFile()); group.leave() }
-            process.terminationHandler = { process in
-                group.wait()
-                let (data, errorData) = state.read()
-                if process.terminationStatus == 0 {
-                    finish(.success(String(decoding: data.prefix(16 * 1024 * 1024), as: UTF8.self)))
-                } else {
-                    let message = String(decoding: errorData.prefix(2000), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-                    finish(.failure(WorkspaceError.invalid(message.isEmpty ? "The command failed with exit code \(process.terminationStatus)." : message)))
-                }
-            }
-            do { try process.run() } catch { finish(.failure(error)); return }
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                if process.isRunning { process.terminate(); finish(.failure(WorkspaceError.invalid("The command took too long and was stopped."))) }
-            }
-        }
+        let result = try await BoundedCommand.run(LocalLaunch.userShell, ["-l", "-c", command],
+                                                  directory: FileManager.default.homeDirectoryForCurrentUser.path,
+                                                  timeout: timeout, outputLimit: outputLimit)
+        if result.status == 0 { return String(decoding: result.output, as: UTF8.self) }
+        let message = String(decoding: result.errors.prefix(2000), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        throw WorkspaceError.invalid(message.isEmpty ? "The command failed with exit code \(result.status)." : message)
     }
 }
 
@@ -174,16 +139,31 @@ enum HostDiscoveryParser {
     @Published var useSSM = false
     private let bonjour = BonjourSSHBrowser()
 
+    /// Runs a source's command; tests replace it.
+    var runCommand: (String) async throws -> String = { try await LoginShellCommand.run($0) }
+    /// The search under way, and a count of searches, so an earlier one cannot change the list or end `busy` after a
+    /// new search, a change of source, or Stop.
+    private var work: Task<Void, Never>?
+    private var generation = 0
+
     func scan() {
+        stop()
+        let mine = generation
         error = nil; hosts = []; chosen = []
-        bonjour.stop()
         switch source {
         case .bonjour:
             busy = true
-            bonjour.start { [weak self] hosts in self?.hosts = hosts }
-            Task { try? await Task.sleep(nanoseconds: 4_000_000_000); busy = false }
+            bonjour.start { [weak self] hosts in
+                guard let self, self.generation == mine else { return }
+                self.hosts = hosts
+            }
+            work = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard let self, self.generation == mine else { return }
+                self.busy = false
+            }
         case .tailscale:
-            run("(command -v tailscale >/dev/null && tailscale status --json) || /Applications/Tailscale.app/Contents/MacOS/Tailscale status --json") {
+            run("(command -v tailscale >/dev/null && tailscale status --json) || /Applications/Tailscale.app/Contents/MacOS/Tailscale status --json", mine) {
                 try HostDiscoveryParser.tailscale(Data($0.utf8))
             }
         case .aws:
@@ -193,20 +173,32 @@ enum HostDiscoveryParser {
             if let profile = Optional(awsProfile).nonEmpty { command += " --profile " + q(profile) }
             if let region = Optional(awsRegion).nonEmpty { command += " --region " + q(region) }
             let region = Optional(awsRegion).nonEmpty
-            run(command) { try HostDiscoveryParser.ec2(Data($0.utf8), region: region) }
+            run(command, mine) { try HostDiscoveryParser.ec2(Data($0.utf8), region: region) }
         }
     }
 
-    private func run(_ command: String, parse: @escaping (String) throws -> [DiscoveredHost]) {
+    private func run(_ command: String, _ mine: Int, parse: @escaping (String) throws -> [DiscoveredHost]) {
         busy = true
-        Task {
-            do { hosts = try parse(try await LoginShellCommand.run(command)) }
-            catch { self.error = error.localizedDescription }
-            busy = false
+        let runCommand = runCommand
+        work = Task { [weak self] in
+            let result: Result<[DiscoveredHost], Error>
+            do { result = .success(try parse(try await runCommand(command))) } catch { result = .failure(error) }
+            guard let self, self.generation == mine, !Task.isCancelled else { return }
+            switch result {
+            case .success(let found): self.hosts = found
+            case .failure(let failure): self.error = failure.localizedDescription
+            }
+            self.busy = false
         }
     }
 
-    func stop() { bonjour.stop() }
+    /// Stops the search under way: Bonjour, and the command of the other sources, whose results are then ignored.
+    func stop() {
+        generation += 1
+        bonjour.stop()
+        work?.cancel(); work = nil
+        busy = false
+    }
 
     /// The sessions to add: SSH for every host, or SSM for AWS instances when chosen.
     func sessions() -> [(String, SavedConnection?, ContainerSession?)] {
@@ -283,7 +275,7 @@ struct HostDiscoveryView: View {
             }
         }
         .padding(16)
-        .onChange(of: discovery.source) { _, _ in discovery.hosts = []; discovery.chosen = []; discovery.error = nil }
+        .onChange(of: discovery.source) { _, _ in discovery.stop(); discovery.hosts = []; discovery.chosen = []; discovery.error = nil }
         .onDisappear { discovery.stop() }
     }
 

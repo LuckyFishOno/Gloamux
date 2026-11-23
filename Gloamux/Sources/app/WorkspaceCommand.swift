@@ -15,6 +15,12 @@ public enum WorkspaceCommand {
                                       windows: [WorkspaceModel] = []) async throws -> Data {
         guard argv.count >= 2 else { throw Usage("Choose an operation. Run gloamux <command> --help.") }
         let command = argv[0], action = argv[1], args = Array(argv.dropFirst(2))
+        // Every public operation is listed in the catalog, so help, completion, and what runs here cannot drift apart.
+        // Checked first, so an unknown operation is a usage error with or without the running app.
+        if !CLICatalog.internalCommands.contains(command) {
+            guard let entry = CLICatalog.command(command), entry.runner == .workspace else { throw Usage("Unknown workspace command.") }
+            guard entry.operations.contains(action) else { throw Usage("Unknown \(command) operation.") }
+        }
         let open = [model] + windows.filter { $0 !== model }
         let result: Any
         switch command {
@@ -372,7 +378,11 @@ public enum WorkspaceCommand {
         var result: [[String: Any]] = []
         for (index, owner) in windows.enumerated() {
             for tab in owner.tunnelTabs {
-                result.append(["id": tab.id.uuidString, "title": tab.title, "window": index + 1,
+                guard !owner.workspaceLocked else {
+                    result.append(["id": tab.id.uuidString, "title": tab.title, "window": index + 1, "locked": true])
+                    continue
+                }
+                result.append(["id": tab.id.uuidString, "title": tab.title, "window": index + 1, "locked": false,
                                "forwards": (try? await liveForwards(tab)) ?? []])
             }
         }

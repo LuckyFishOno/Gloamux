@@ -4,9 +4,9 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.1 (build 2)**。
+目前版本：**Gloamux 1.2 (build 3)**。
 
-Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，視窗裡的每個動作也都能用 `gloamux` 命令列完成。
+Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/LuckyFishOno/Gloamux?display_name=tag"></a>
@@ -49,8 +49,8 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 | **檔案就在 shell 旁邊** | 像 Finder 的檔案側欄會跟著目前的窗格，另有雙欄傳輸畫面。 |
 | **登入一次就好** | 密碼只留在這台 Mac，由 Secure Enclave 保護，也可以另用主密碼保護的密碼庫。 |
 | **正式環境的防護** | 為環境加上標籤，高風險指令在正式伺服器執行前先確認。 |
-| **可寫腳本** | `gloamux` 命令列和給 AI 代理用的本機 MCP 伺服器，能做的事和視窗一致。 |
-| **預設就重視隱私** | 不用帳號、沒有遙測，除了你開的連線和可關閉的更新檢查之外不會連網。 |
+| **可寫腳本** | `gloamux` 命令列提供連線、終端和檔案操作；本機 MCP 伺服器讓 AI 代理在核可範圍內操作。 |
+| **預設就重視隱私** | 不用帳號、沒有遙測。已存主機的連通性探測和更新檢查，都能各自在設定中關閉。 |
 
 ## 畫面
 
@@ -90,7 +90,7 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 
 ## 第一次開啟
 
-可下載的版本是 ad hoc 簽署，沒有經過 Apple 公證，所以第一次開啟時 macOS 會要你確認。這是 Mac App Store 以外發布的 App 常見的情況。
+可下載的版本是 ad hoc 簽署，沒有經過 Apple 公證，所以第一次開啟時 macOS 會要你確認。請依下方步驟核可這個版本。
 
 如果 macOS 顯示 **無法打開「Gloamux」**：
 
@@ -199,6 +199,8 @@ Gloamux 的資料都放在你的 Mac 上：
 Gloamux 曾名為 Termac，更早叫 MShell。第一次啟動會從最近一個舊名稱搬移資料和設定，舊的匯出檔也能照常匯入。
 
 ## 文件
+
+本機架構修改於 2026 年 11 月 24 日完成自動化與壓力測試，範圍和待驗證項目見[驗證紀錄](docs/zh-TW/VERIFICATION.md)。
 
 每份文件都有英文版和繁體中文版，分別放在 [`docs/en`](docs/en) 和 [`docs/zh-TW`](docs/zh-TW)。
 

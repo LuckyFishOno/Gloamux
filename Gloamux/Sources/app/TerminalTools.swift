@@ -111,7 +111,8 @@ extension WorkspaceModel {
     func toggleRecording(_ tab: SessionTab? = nil) {
         guard let tab = tab ?? selected else { return }
         if recordings.isRecording(tab) {
-            if let url = recordings.stop(tab) { recordingSaved = url }
+            let saving = recordings.stop(tab)
+            Task { if case .saved(let url) = await saving.value { recordingSaved = url } }
         } else if tab.terminalReady {
             recordings.start(tab)
         }

@@ -2,7 +2,9 @@
 
 [English](USER-GUIDE.md) · [繁體中文](../zh-TW/USER-GUIDE.md) · [Back to README](../../README.md)
 
-This guide covers everything Gloamux does, in the order you are likely to need it. Menu, button, and setting names are written exactly as the app shows them in English. The last sections are references: every menu item, keyboard shortcut, setting, and command-line command.
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
+This guide covers everything Gloamux does, in the order you are likely to need it. Menu, button, and setting names follow the English interface. The last sections provide menu, keyboard shortcut, settings, and command-line references.
 
 ## Contents
 
@@ -73,7 +75,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 ### Open a new connection
 
 1. Choose **File › New connection** (⇧⌘N), or **New connection** in the toolbar.
-2. The new connection tab lists **SSH**, **RDP**, **VNC**, and **Other connection** from top to bottom. It opens on the section, and the kind of other connection, that you used last.
+2. The new connection tab lists **Local**, **SSH**, **RDP**, **VNC**, and **Other connection** from top to bottom. **Local** opens this Mac's login shell in the current tab. The form remembers the last section and other connection kind you used. After choosing Local, the next form starts with the other sections collapsed.
 3. Fill in the host, port, and username, and choose **Connect**.
 4. After the connection works, choose **Save** to keep it in the tree. Gloamux asks for a name.
 
@@ -85,7 +87,7 @@ For a terminal on this Mac, choose **File › New local terminal** (⌘T). With 
 |---|---|
 | **Name**, **Host**, **Port**, **Username** | Where to connect. |
 | **Protocol** | SSH, or FTP, **FTPS (explicit, AUTH TLS)**, or **FTPS (implicit TLS)** for file-only connections. |
-| Key picker | **Choose key file**, **Generate new key file**, or **Gloamux key (Secure Enclave)**. See [Keys](#keys). |
+| Key picker | **Choose private key** opens a private key file. Its menu also offers **Generate new key file**. **Create public key** / **Show public key** manages the Gloamux Secure Enclave key. See [Keys](#keys). |
 | **Confirm each connection with Touch ID** | Asks for Touch ID before each connection that uses a remembered password. |
 | **SSH jump host** | Another saved session to connect through. Jump hosts can be chained, up to eight. |
 | **Proxy type**, **Proxy host**, **Proxy port** | SOCKS4, SOCKS4a, SOCKS5, or HTTP CONNECT. |
@@ -120,7 +122,7 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 
 ### Discover hosts
 
-**Discover hosts** finds SSH services on this network through Bonjour, Tailscale peers, and running EC2 instances through the AWS command-line tool with your own profile. Review the list, choose a username, and add the ones you want to a new folder. EC2 instances can be added as AWS Systems Manager (SSM) sessions. Nothing is added until you choose.
+**Discover hosts** finds SSH services on this network through Bonjour, Tailscale peers, and running EC2 instances through the AWS command-line tool with your own profile. Review the list, choose a username, and add the ones you want to a new folder. EC2 instances can be added as AWS Systems Manager (SSM) sessions. Nothing is added until you choose. Switching the source or closing the sheet stops the search in progress. The Tailscale and AWS tools must finish within their time limit and print at most 16 MB.
 
 ## 3. SSH
 
@@ -139,7 +141,7 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 
 - Typing `exit` or `logout` closes the tab.
 - If the connection drops, the tab stays open with **Reconnect**, and the tab shows a red mark.
-- With **Reconnect automatically** on in **Settings › Terminal**, a saved session connects again after 2, 5, 10, 30, and 60 seconds. After the Mac wakes, every connection is checked at once.
+- With **Reconnect automatically** on in **Settings › Terminal**, a saved session connects again after 2, 5, 10, 30, and 60 seconds. **Disconnect** or closing the tab stops it, even during an attempt. After the Mac wakes, every connection is checked at once.
 
 ### Port forwarding
 
@@ -175,14 +177,16 @@ The vault is a separate store sealed under a master password.
 
 ### Keys
 
-- **Choose key file** uses an existing private key. **Generate new key file** creates one, with an optional passphrase and comment.
-- **Gloamux key (Secure Enclave)**: choose **Create public key** next to the key picker. Gloamux creates a P-256 key in this Mac's Secure Enclave. The button then becomes **Show public key**, which shows the OpenSSH public key to copy, or **Regenerate**.
+- **Choose private key** uses an existing private key, such as an EC2 `.pem` file. Its menu includes **Choose key file** and **Generate new key file**. Generation writes an Ed25519 private key and its `.pub` file in `~/.ssh`, with an optional passphrase and comment. Keep the private key on your Mac and put the public key in the server's `~/.ssh/authorized_keys`.
+- **Create public key** creates a P-256 key in this Mac's Secure Enclave. **Show public key** shows that Gloamux key's OpenSSH public key, independently of any private key file selected beside it. Choose **Use for this connection** to use the Secure Enclave key. **Regenerate** replaces it, so servers must receive the new public key.
 - Removing a key with × asks first. The saved session stops using it, and while the vault is unlocked, the account's saved password and the key's passphrase are deleted too.
 - An older Secure Enclave key that still asks for Touch ID shows **Needs Touch ID**. Switch to the Gloamux key to stop the prompt.
 
 ### Lock the workspace
 
 **Window › Lock workspace** (⌃⌘L) covers every terminal until you unlock Gloamux with Touch ID or the Mac password. **Settings › General › Lock the workspace** locks it after a time without use.
+
+Each window locks on its own. While a window is locked, `gloamux` commands and agents cannot read, type into, or change its tabs, even when they are sent through another window. `gloamux tabs list` shows only their names, and a runbook or a confirmed command does not continue there until you unlock it.
 
 ## 5. Terminal
 
@@ -222,6 +226,9 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 - **Terminal › Start recording** (⌥⌘R) records what a terminal shows, never what you type.
 - Access keys, tokens, private keys, and password values are replaced with `[REDACTED]` when the recording is saved.
 - **Terminal › Recordings** replays them at up to 4× speed and exports them as asciinema `.cast` files.
+- Stopping a recording returns at once; Gloamux masks and writes the file in the background, so the window keeps working. Two recordings of the same tab stopped within one second get separate files.
+- If a recording cannot be saved, **Recording not saved** appears at the bottom of the window. Gloamux keeps the recording until you choose **Try again** or **Discard**.
+- Quitting stops running recordings and waits until they are written. If one cannot be saved, Gloamux asks before quitting: **Don’t Quit** keeps it for another try, **Quit Anyway** discards it.
 
 ### Colors
 
@@ -273,7 +280,7 @@ This Mac is on the left, a connected server on the right, and the transfer queue
 - Open it with **Terminal | File Transfer** in the Default toolbar (the tab bar picks the server), the Classic **File Transfer** button, or **Two-pane** in the Workbench SFTP panel.
 - Drag files between the panes or use the arrow buttons. Folders copy with everything inside them.
 - When names are already taken, choose **Replace** or **Skip existing**.
-- Transfers write to a temporary name first, so a failed or cancelled transfer leaves the existing file intact. A broken connection is retried after 2, 5, and 10 seconds, and SFTP and FTP copies continue where they stopped. A failed transfer has **Try again** in the queue.
+- Transfers write to a temporary name first and then replace an existing file in one step, so a failed or cancelled transfer leaves the existing file intact. An SFTP server that cannot replace a file in one step refuses the overwrite and keeps its file. A broken connection is retried after 2, 5, and 10 seconds, and SFTP and FTP copies continue where they stopped. A failed transfer has **Try again** in the queue.
 - Right-click a remote item for **Download**, **Edit on this Mac**, **Change permissions**, **Rename**, **Copy path**, **Quick Look**, **New remote folder**, and **Delete**. Right-click a local item for **Upload**, **Quick Look**, **Show in Finder**, **Rename**, **New folder**, and **Move to Trash**.
 - Press Space for Quick Look. Drag a remote item to Finder to copy it there.
 
@@ -293,10 +300,10 @@ SSH sessions use SFTP, legacy SCP, or SFTP with SCP fallback when the server has
 
 1. Choose **New connection** and expand **RDP** (Windows Remote Desktop) or **VNC** (including macOS Screen Sharing).
 2. Enter the host and account. **Remember password** keeps the password after the first successful sign-in.
-3. To carry the whole connection over SSH, choose a saved SSH session under **Through SSH**. VNC encrypts only its sign-in, so this is recommended for VNC.
+3. To carry the whole connection over SSH, choose a saved SSH session under **Through SSH**. VNC desktop traffic is unencrypted, so an SSH tunnel protects it. Mac account sign-in encrypts the credentials. Classic VNC password authentication does not encrypt the desktop stream. The desktop opens only its own tunnel through that session, not the session's saved port forwards, and asks about the session's host key and sign-in questions in the desktop pane.
 
 - RDP checks the server certificate and supports Network Level Authentication. VNC supports a classic VNC password, or a Mac account name and password for Screen Sharing.
-- An RDP desktop follows the size of its pane. In the connection settings, choose a fixed **Resolution** (scaled to fit), **Optimize for Retina displays** for sharper text, and a **Connection quality** from Best quality (LAN) to Fastest (slow network).
+- An RDP desktop follows the size of its pane. In the connection settings, **Resolution** can fix the remote size, with the image scaled to fit the pane. **Optimize for Retina displays** is available when fitting to the window. **Connection quality** ranges from Best quality (LAN) to Fastest (slow network).
 - With **Share clipboard** on, text copied on either side can be pasted on the other, for RDP and VNC.
 - The header has a full screen button. A dropped connection reconnects on its own when **Reconnect automatically** is on.
 - Printers, smart cards, sound, microphones, cameras, and shared folders are not redirected.
@@ -327,6 +334,8 @@ The **Quick commands** sidebar saves single-line commands.
 ### Output triggers
 
 **Settings › Triggers** watches every terminal's output. **Add trigger**, then set a **Name**, a **Pattern** (text or regular expression, with **Match case**), and the **Action**: show a notification, play a sound, or mark the tab. Each rule fires at most once every 10 seconds per terminal. Triggers never type anything.
+
+If `triggers.json` in the workspace folder cannot be read or is damaged, **Settings › Triggers** says so and Gloamux does not change the file. Repair or restore it, then choose **Try again**.
 
 ### Runbooks
 
@@ -372,7 +381,7 @@ Choose **Import sessions** from the toolbar's **New connection** menu, or **Impo
 
 | Source | File |
 |---|---|
-| Xshell | A session file or a folder of them |
+| Xshell | A session file, a folder of sessions, or a supported `.xts` backup |
 | OpenSSH | `~/.ssh/config` or another configuration file |
 | MobaXterm | `.mxtsessions` or `MobaXterm.ini` |
 | PuTTY and KiTTY | Sessions exported from the registry (`.reg`) |
@@ -383,7 +392,7 @@ Gloamux keeps folders and reads users, ports, keys, proxies, and jump hosts. Mob
 
 ### Export sessions
 
-**Export all sessions** in the **+** menu, or **Export folder** from a folder's right-click menu, writes a Gloamux sessions file or a CSV file. Neither includes passwords, so the file can be shared with a team. Key paths in your home folder are written as `~/…`.
+**Export all sessions** in the **+** menu, or **Export folder** from a folder's right-click menu, writes a Gloamux sessions file, a CSV file, or OpenSSH configuration. These exports contain connection details and key paths. Review them before sharing. Passwords and private key contents are excluded. Key paths in your home folder are written as `~/…`.
 
 CSV columns: `host` (required), and optionally `folder` (for example `Team/Prod`), `name`, `port`, `username`, `protocol` (`ssh` or `sftp`), `identity file`, `proxy type`, `proxy host`, `proxy port`, and `jump` (another row's `folder/name`, or `user@host:port`).
 
@@ -432,7 +441,7 @@ What an agent can do:
 
 - **Gloamux › Check for Updates** looks for a newer release on GitHub, shows what changed, and installs it after checking its signature against the key built into Gloamux. Then Gloamux reopens.
 - The second time Gloamux opens, it asks whether to check automatically once a day. **Check for updates automatically** in **Settings › General** changes that.
-- A check sends only the app's name and version.
+- Update checks request the feed from GitHub over HTTPS. The User-Agent includes the app and Sparkle versions. GitHub receives the network request and source IP. Gloamux leaves Sparkle system profiling disabled. See [Data protection](DATA-PROTECTION.md).
 - Updates start with Gloamux 1.1. Gloamux 1.0 has no updater, so replace it once with the newer DMG.
 
 ## 17. Menu reference
@@ -591,7 +600,9 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 export PATH="/Applications/Gloamux.app/Contents/Resources/bin:$PATH"
 ```
 
-Every command takes `--workspace PATH` to use a separate Gloamux workspace. Management commands print JSON. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux COMMAND --help` for details.
+Workspace commands take `--workspace PATH` to use a separate Gloamux workspace. Utility commands such as `--version` and `completion` do not use a workspace. Management commands print JSON. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux COMMAND --help` for details.
+
+While Gloamux is open, workspace commands run in the app. A command that waits for Touch ID or a host search does not hold up other commands. If Gloamux does not pick a command up within 20 seconds, the command is withdrawn and did not run, so it is safe to retry. If Gloamux picked it up but has not answered after 5 minutes, or quits while running it, the command says so and is not retried; check whether it took effect first. A setting that waits for Touch ID is not saved if the session changed during the wait; run the command again.
 
 | Command | Operations |
 |---|---|
@@ -618,6 +629,7 @@ Every command takes `--workspace PATH` to use a separate Gloamux workspace. Mana
 | `gloamux completion` | `zsh`, `bash`. |
 | `gloamux benchmark` | Measures terminal throughput, redraw, and echo time. |
 | `gloamux --version` | Prints the app version. |
+| `gloamux --self-test` | Checks the nine bundled feature contracts. |
 
 Examples:
 

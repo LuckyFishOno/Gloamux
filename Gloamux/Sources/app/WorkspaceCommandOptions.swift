@@ -71,7 +71,12 @@ extension WorkspaceCommand {
         if asks != connection.asksEachConnection {
             // As in the form, changing whether a session asks on every connection needs the owner, in Gloamux.
             guard live else { throw WorkspaceError.invalid("Open Gloamux to change confirm: it asks for Touch ID or the Mac password.") }
+            let before = node
             guard await model.authorizeAskChange() else { throw WorkspaceError.invalid("Touch ID or the Mac password is required to change this setting.") }
+            // The session may have changed while Gloamux waited; saving the copy made before the wait would undo that.
+            guard let now = tree.node(node.id), now == before else {
+                throw WorkspaceError.invalid("The session changed while Gloamux waited for confirmation. Nothing was saved; run the command again.")
+            }
             connection.confirmsEachConnection = asks
         }
         try tree.updateConnection(node.id, name: node.name, connection: connection)

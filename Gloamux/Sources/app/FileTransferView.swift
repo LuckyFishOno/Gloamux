@@ -146,21 +146,39 @@ struct LocalItem: Identifiable, Hashable {
     @Published var folder = FileManager.default.homeDirectoryForCurrentUser
     @Published var items: [LocalItem] = []
     @Published var showsHidden = false
+    @Published private(set) var loading = false
     @Published var error: String?
 
-    func load(_ url: URL? = nil) {
+    /// Counts navigations, so only the latest one may show its folder, its error, or end the loading state.
+    private var generation = 0
+
+    /// Lists the folder away from the main actor: a large folder or a network volume can take a long time to read.
+    @discardableResult func load(_ url: URL? = nil) -> Task<Void, Never> {
         let target = (url ?? folder).standardizedFileURL
-        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
-        do {
-            let urls = try FileManager.default.contentsOfDirectory(at: target, includingPropertiesForKeys: keys,
-                                                                    options: showsHidden ? [] : [.skipsHiddenFiles])
-            items = urls.compactMap { url in
-                guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
-                return LocalItem(url: url, name: url.lastPathComponent, isDirectory: values.isDirectory == true,
-                                 size: UInt64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast)
+        let hidden = showsHidden
+        generation += 1
+        let mine = generation
+        loading = true
+        return Task { @MainActor [weak self] in
+            let listed = await Task.detached(priority: .userInitiated) { Result { try Self.list(target, showsHidden: hidden) } }.value
+            guard let self, self.generation == mine else { return }
+            self.loading = false
+            switch listed {
+            case .success(let items): self.items = items; self.folder = target; self.error = nil
+            case .failure(let error): self.error = error.localizedDescription
             }
-            folder = target; error = nil
-        } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    nonisolated static func list(_ folder: URL, showsHidden: Bool) throws -> [LocalItem] {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+        let urls = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys,
+                                                                options: showsHidden ? [] : [.skipsHiddenFiles])
+        return urls.compactMap { url in
+            guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
+            return LocalItem(url: url, name: url.lastPathComponent, isDirectory: values.isDirectory == true,
+                             size: UInt64(values.fileSize ?? 0), modified: values.contentModificationDate ?? .distantPast)
+        }
     }
 }
 
@@ -183,20 +201,33 @@ struct RemoteItem: Identifiable, Hashable {
     @Published var loading = false
     @Published var error: String?
 
+    /// Counts navigations, so only the latest one may show its folder, its error, or end the loading state.
+    private var generation = 0
+
     func load(_ path: String?, model: WorkspaceModel, tab: SessionTab) async {
-        loading = true; defer { loading = false }
+        generation += 1
+        let mine = generation
+        loading = true
+        defer { if generation == mine { loading = false } }
         do {
             let transfer = try await model.sftp(for: tab)
+            // A reply from a connection that has since ended or been replaced is dropped, even after it arrives.
+            let epoch = tab.epoch
             let directory = try await transfer.readDirectory(path ?? folder ?? ".")
+            guard generation == mine, tab.epoch == epoch else { return }
             items = directory.entries.map {
                 RemoteItem(path: RemoteTreeState.child(directory.path, $0.name), name: $0.name, isDirectory: $0.isDirectory,
                            size: $0.size ?? 0, modified: $0.modified ?? .distantPast, permissions: $0.permissions)
             }
             folder = directory.path; error = nil
-        } catch { self.error = message(for: error) }
+        } catch {
+            guard generation == mine else { return }
+            self.error = message(for: error)
+        }
     }
 
-    func clear() { folder = nil; items = []; error = nil }
+    /// Forgets the folder and makes every request still under way stale.
+    func clear() { generation += 1; folder = nil; items = []; error = nil; loading = false }
 }
 
 // MARK: - Two-pane view
@@ -473,6 +504,7 @@ private struct LocalFilePane: View {
                 download(paths); return true
             } isTargeted: { dropTargeted = $0 }
             .overlay { if dropTargeted { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: 2).allowsHitTesting(false) } }
+            .overlay { if local.loading && local.items.isEmpty { ProgressView() } }
         }
         .padding(10)
         .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)

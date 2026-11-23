@@ -2,6 +2,8 @@
 
 [English](../en/DEVELOPMENT.md) · [繁體中文](DEVELOPMENT.md) · [回到 README](../../README.zh-TW.md)
 
+2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+
 ## 目錄
 
 1. [原始碼結構](#原始碼結構)
@@ -96,7 +98,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 工具列的版面選單和 `gloamux layout` 都會設定 `layout.json`。選單會立即套用；App 開著時 CLI 的變更也一樣，否則下次啟動才套用。
 - `layout set` 接受 `default`、`classic` 和 `workbench`，分別存成 `macos`、`terminal` 和 `transfer`。`xshell`、`mobaxterm` 等舊名稱仍然可用。
 - 經典和工作台的外框程式碼在 `ClassicLayouts.swift`，模型支援（網址列、輸入列、跟隨資料夾、主機監控）在 `ClassicWorkspace.swift`。
-- 預設版面的工具列可以在檔案傳輸和終端之間切換。新連線分頁可以從 SSH、RDP 或 VNC 開始；選擇桌面協定會取代該分頁中的終端表單。
+- 預設版面的工具列可以在檔案傳輸和終端之間切換。新連線分頁列出本機、SSH、RDP、VNC 和其他連線。本機會在原分頁啟動登入 shell；其他通訊協定會開啟各自的表單。
 
 ### 視窗與多重執行
 
@@ -104,6 +106,22 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 新視窗以本機終端開始。第一個視窗擁有已存分頁的快照。關閉工作區會清理它的工作階段和工具視窗，關閉最後一個會結束 App。
 - 多重執行（`WorkspaceModel.multiExec`）屬於單一視窗。`typeTerminal` 會把輸入送到該視窗中每個就緒的終端，包括移到獨立視窗的分頁，並略過唯讀終端和遠端桌面。每個目標仍會套用高風險指令檢查。
 - 通道視窗和 `gloamux forwards live-list` 共用 `WorkspaceModel.tunnelTabs`，它只列出已連線的 SSH 分頁，因為沒連線的分頁顯示的是新連線表單。
+
+### 所有權
+
+- **所有視窗共用：** 連線目錄、已知主機、密碼庫、常用指令、觸發器、最近使用和 runbook，只建立一次，再傳給每個新的 `WorkspaceModel`（`sharing:`）。
+- **單一視窗：** 它的分頁、選取、分割、版面狀態、工具視窗、多重執行和鎖定。
+- **單一連線：** `SessionTab` 擁有它的 SSH 工作階段、尚在建立的跳板主機、檔案通道、shell、轉送、保持連線與重新連線的工作，以及 `epoch`。`disconnect` 會關閉這些並更換 `epoch`，為舊連線開始的工作會結束或被忽略。它也會取消 `reconnectTask`；被取消的重新連線嘗試不會再排下一次。把分頁移到自己的視窗（`moveTabToWindow`）再移回來，連線保持不變；關閉那個視窗會中斷連線，關閉工作區視窗也會一併關閉這些視窗。
+- `ConnectionService`（`model.connections`）只用共用資料開啟 SSH 與 FTP 連線：擁有者確認、以 Touch ID 讀取密碼庫、跳板主機、登入、保存憑證，以及檔案通道（`openFiles`）。每次連線都帶一個 `SignInHandler`。`TabSignIn` 在分頁中顯示主機金鑰與登入問題、保存成功的憑證，分頁的 `epoch` 一變就停止；`CommandSignIn` 只接受已信任或 `--host-key` 指定的金鑰、用 `--interactive` 回答，且不保存任何東西。回傳的連線由呼叫端擁有。
+- `SessionTab.connectionState` 是 `disconnected`、`connected` 或 `lost`，`moveConnection(to:)` 會拒絕不合法的變化（從未連上的分頁不會變成連線中斷）。`connected` 與 `transportLost` 都由它讀出。
+- 經 SSH 連到的遠端桌面擁有一個 `DesktopGateway`：只有 SSH 連線和本機轉送，沒有隱藏的終端機分頁。`GatewaySignIn` 在桌面窗格中顯示主機金鑰與登入問題。`WorkspaceModel.settleHostKey` 是信任或取代金鑰的唯一位置，分頁和閘道共用。
+
+### 主執行緒與重繪
+
+- 大量工作不在主執行緒上執行。`TerminalRecordings.stop` 會立刻移除錄製器並回傳一個 task；`RecordingSnapshot` 在分離的 task 中遮蔽並寫入檔案，一次存一個，依停止的順序。檔名已被使用時會加上「 2」、「 3」等。存檔失敗的錄製會留在 `unsaved`，直到按**重試**。結束 App 時會等待 `finishRecordingsBeforeQuit`，要捨棄未存的錄製前會先詢問。
+- `LocalBrowserState.load` 在主執行緒之外列出資料夾。較新的載入會勝過較舊、較慢的載入，第一次列表出現前 `loading` 會顯示轉圈。
+- 終端機輸出只會增加 `TerminalOutput.revision`，只有終端機畫面和跟著輸出的小畫面（游標或位元組數、側邊檔案列表）會觀察它。`SessionTab.screenRevision` 讀寫的就是它，所以大量輸出不再重繪工作階段窗格、它的標題列或分頁列。`ViewEvaluations` 在除錯版本中計算畫面的求值次數，讓測試能檢查這點；正式版本中它不做任何事。
+- `CLICatalog.localPaths` 標出哪些參數是本機路徑，命令列會先依自己的工作資料夾解析它們，再把請求送到 App。
 
 ## 憑證與密碼庫
 
@@ -175,7 +193,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - SSH 預設用 SFTP，子系統被拒絕後改用 SCP。設定檔可以強制使用其中一種。OpenSSH SFTP 的取代使用伺服器宣告的 `posix-rename@openssh.com` 擴充。
 - FTP 使用被動式資料連線。明確和隱含 FTPS 會加密兩條連線，在資料連線上重用控制連線的 TLS 工作階段，並使用系統信任或已驗證的憑證釘選。
 - 檔案傳輸都經過 `TransferQueue`，由 `WorkspaceModel.transfers` 在檔案側欄（`RemoteFileSidebar`，本機終端時顯示 `LocalTreeState`）、雙欄的 `FileTransferView` 和所有版面之間共用。預設版面在 `workspaceMode` 為 `.files` 時於主視窗顯示 `FileTransferView`，並跟著選取的分頁；經典和工作台則在附伺服器選單的 `FileTransferWindow` 中顯示。
-- 佇列在分頁的 SFTP 通道上一次執行一個項目。上傳會先寫入暫存的 `.name.gloamux-….partial` 檔再改名就位；下載會在目的地旁寫入隱藏的暫存檔。CLI 上傳也會先放在遠端的暫存名稱。
+- 佇列在分頁的 SFTP 通道上一次執行一個項目。上傳會先寫入暫存的 `.name.gloamux-….partial` 檔，再用 `RemoteFileSystem.commitUpload` 放到定位；已有檔案時使用 `replace`，不會先刪除舊檔。下載會在目的地旁寫入隱藏的暫存檔。CLI 上傳和 **在這台 Mac 編輯** 也會先放在遠端的暫存名稱，再用同樣方式提交。
 - `SFTPTransfer` 同時保持 16 個 32 KiB 的讀取或寫入，並在工作取消時停止。
 - 遠端快速查看會把一個最多 100 MB 的檔案複製到私有暫存資料夾，並在下一次預覽和結束時刪除。
 - 已存的轉發規則與連線一起存在 `sessions.json`。本機和動態轉發在這台 Mac 的回送介面上監聽；反向轉發會請伺服器在它的回送介面上監聽。監聽連接埠留空會自動分配。
@@ -183,8 +201,10 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 ## 命令列
 
 - `gloamux` 產品與 App 共用執行檔。`WorkspaceCommand` 分派管理操作。
-- `WorkspaceCommandChannel` 讓工作區的寫入依序進行，並透過同一使用者的私有通道把請求轉給作用中的 App 視窗。
-- 檔案指令開啟自己的已驗證傳輸，提供的密碼和一次性主機指紋只留在記憶體。
+- `CLICatalog` 是所有公開指令與操作的唯一清單。`gloamux --help`、各指令的 `--help`、shell 補全，以及 `files` 的路徑數量都由它產生；不論 App 有沒有開，`WorkspaceCommand.run` 都會先拒絕清單上沒有的操作，什麼都不執行。新增指令或操作時先加在這裡；`CLICatalogTests` 會檢查每個列出的操作都能送到處理程式，也都寫在說明裡。
+- `WorkspaceCommandChannel` 讓工作區的寫入依序進行，並透過同一使用者的私有通道把請求轉給作用中的 App 視窗。App 為每個請求開一個 main actor 任務，等待 Touch ID 的請求不會擋住其他請求。App 取走 `ID.request` 即代表接手，並寫入 `ID.accepted`；客戶端會撤回超過 `pickupTimeout` 仍未被接手的請求（不會執行），已接手但超過 `answerTimeout` 仍未回覆的則回報為仍在執行。等待使用者確認的指令會在等待後重新讀取目標，不會蓋掉較新的修改。
+- `BoundedCommand` 讓外部工具在自己的程序群組執行，stdin 接 `/dev/null`，讀取時就套用輸出上限，並有期限；取消時會停止整個群組。
+- `gloamux files` 和 `gloamux ssh` 以 `CommandSignIn` 呼叫 `ConnectionService`，不建立分頁；操作結束或失敗時關閉自己開啟的連線，提供的密碼和一次性主機指紋只留在記憶體。
 - `gloamux xserver` 在 CLI 程序中透過 `XQuartz` 檢查並啟動 XQuartz，因為 XQuartz 屬於這台 Mac 而不是某個工作區。
 - 較新的 CLI 正在編輯某個工作區時，請對同一個工作區使用目前打包的 App。
 
@@ -212,7 +232,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 選單和設定看到的是 `App` 模組裡的 `AppUpdates`：**Gloamux › 檢查更新**（`CheckForUpdatesCommand`）和 **設定 › 一般** 的 **自動檢查更新**。
 - 只有 `GloamuxApp` 執行檔連結 [Sparkle](https://sparkle-project.org) 2。`SparkleUpdates` 在 `applicationDidFinishLaunching` 啟動 `SPUStandardUpdaterController`，這時命令列的路徑都已結束，而且只在 bundle 的 Info.plist 有 `SUFeedURL` 和 `SUPublicEDKey` 時才啟動。`swift run`、測試和 CLI 都不會檢查更新，選單項目和設定也會隱藏。
 - `package-app.sh` 把 `Sparkle.framework` 複製到 `Contents/Frameworks`，不含 XPC 服務（Gloamux 沒有沙盒），加入 `@executable_path/../Frameworks` rpath，先簽 Sparkle 的輔助程式再簽 App，並寫入更新清單網址（`releases/latest/download/appcast.xml`）和公鑰。
-- `appcast.sh` 用登入鑰匙圈裡的私鑰（帳號 `Gloamux`）簽署 DMG 並寫出更新清單。`release.sh publish` 會把它和 DMG 一起上傳。
+- `appcast.sh` 用登入鑰匙圈裡的私鑰（帳號 `Gloamux`）簽署 DMG，並把簽章寫入更新清單。`release.sh publish` 會把它和 DMG 一起上傳。目前以 EdDSA 驗證更新封裝，更新清單與版本說明透過 HTTPS 取得。Sparkle 的更新清單簽署選項維持未設定。見 [Sparkle 設定文件](https://sparkle-project.org/documentation/customization/)。
 
 在本機測試更新：
 
@@ -294,6 +314,7 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 | `TerminalViewBehaviorTests` | 在真實視窗中的輸入法組字、搜尋、滑鼠回報和游標。 |
 | `TerminalFeaturesTests` | 遮蔽、asciicast 檔、runbook 解析、高風險指令、環境、容器指令列、探索解析器、主機金鑰紀錄、指令面板搜尋、URL scheme、連線檢查和基準測試工作負載。 |
 | `RemoteKindsTests` | 已存的桌面設定檔會開啟專用分頁並保留其協定。 |
+| `LocalLocaleTests` | 本機 shell 語系選擇、保留既有語系，以及透過真實 PTY 顯示非 ASCII 檔名。 |
 | SSH、轉發和 SFTP 測試 | 回送測試環境和 macOS 的 `sftp-server`：目的地和跳板主機各自的主機金鑰核可、傳輸往返、傳輸中斷後重連，以及獨立的本機終端。 |
 | Rust 輔助程式（`cargo test`） | ZRLE 區塊與共用 zlib 串流、CopyRect、矩形邊界、版本與安全協商、VNC DES 回應，以及 Apple 登入區塊。 |
 
@@ -305,6 +326,8 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 - **遠端 SSH 主機。** 把 `GLOAMUX_REMOTE_HOSTS` 設為以逗號分隔的 `user@host[:port]` 清單，`GLOAMUX_REMOTE_KEYS` 設為放有測試私鑰和含已驗證伺服器金鑰之 `known_hosts` 檔的資料夾，再執行 `swift test --package-path Gloamux --filter RemoteHostTests`。第二個目標也會以第一個作為跳板來測試。`GLOAMUX_REMOTE_LOGIN_ONLY` 列出受限 shell 只能檢查是否成功登入的主機。
 
 沒有這些輸入時，相關測試會略過。
+
+2026 年 11 月 24 日依未提交的架構修改驗證，Swift 469 項中 461 通過、8 跳過、0 失敗，Rust 18 項通過，封裝 App 自檢 9/9，完整壓力測試 14/14，分批功能腳本 81/81。範圍與待辦見[驗證紀錄](VERIFICATION.md)。
 
 ## 第三方授權聲明
 
@@ -321,6 +344,6 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 - 要變更內附的 Visual Studio Code 主題，請編輯 [build-vscode-themes.py](../../Gloamux/scripts/build-vscode-themes.py) 中的選擇，並以本機的 Visual Studio Code App 和下載的 `.vsix` 套件執行。
 - Linux 發行版配色定義在 `ThemeGallery.swift`；[配色清單](THEME-INVENTORY.md)記錄了它們的來源。工作區版面和主題選擇器都是原生實作。
 - Xshell 匯入支援相容設定檔中的部分欄位。
-- MobaXterm 讀取器（`SessionImports.swift` 中的 `MobaXtermImport`）依照 MobaXterm 連線匯出的欄位位置讀取，Mobatek 並未公開這份格式。它讀取 SSH（類型 0）和 SFTP（類型 7）連線，也能容忍舊版較短的欄位清單。
+- MobaXterm 讀取器（`SessionImports.swift` 中的 `MobaXtermImport`）依照 MobaXterm 連線匯出的欄位位置讀取，Mobatek 並未公開這份格式。它讀取 SSH（類型 0）、SFTP（類型 7）和序列埠（類型 8）連線，也能容忍舊版較短的欄位清單。
 - 匯入檔有標記或內容有效時以 UTF-16 或 UTF-8 解碼，否則依序嘗試 Big5（CP950）、GB 18030 和 Windows-1252。
-- `SessionExport` 寫出 `.gloamuxsessions` JSON（`SessionsFile`）和 CSV。兩者都不含密碼，並把家目錄下的路徑改寫成 `~/…`。
+- `SessionExport` 寫出 `.gloamuxsessions` JSON（`SessionsFile`）、CSV 和 OpenSSH 設定。匯出不含密碼或私鑰內容，家目錄下的金鑰路徑會改寫成 `~/…`。OpenSSH 輸出限於該格式能表示的 SSH 設定。

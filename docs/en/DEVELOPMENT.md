@@ -2,6 +2,8 @@
 
 [English](DEVELOPMENT.md) · [繁體中文](../zh-TW/DEVELOPMENT.md) · [Back to README](../../README.md)
 
+Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+
 ## Contents
 
 1. [Source layout](#source-layout)
@@ -96,7 +98,7 @@ Naming:
 - The toolbar's layout menu and `gloamux layout` both set `layout.json`. The menu applies the layout at once, and so does a CLI change while the app is open; otherwise the next launch uses it.
 - `layout set` takes `default`, `classic`, and `workbench`, stored as `macos`, `terminal`, and `transfer`. Earlier names such as `xshell` and `mobaxterm` still work.
 - The Classic and Workbench chrome is in `ClassicLayouts.swift`. Its model support (address bar, compose bar, folder following, host monitoring) is in `ClassicWorkspace.swift`.
-- The Default layout's toolbar switches between File Transfer and Terminal. A new connection tab can start with SSH, RDP, or VNC; choosing a desktop protocol replaces the terminal form in that tab.
+- The Default layout's toolbar switches between File Transfer and Terminal. A new connection tab lists Local, SSH, RDP, VNC, and Other connection. Local starts the login shell in place. Choosing another protocol opens its form in that tab.
 
 ### Windows and MultiExec
 
@@ -104,6 +106,22 @@ Naming:
 - A new window starts with a local terminal. The first window owns the saved-tab snapshot. Closing a workspace cleans up its sessions and tool windows, and closing the last one quits the app.
 - MultiExec (`WorkspaceModel.multiExec`) belongs to one window. `typeTerminal` sends input to every ready terminal of that window, including tabs moved to their own windows, and skips read-only terminals and remote desktops. Risky-command checks still apply to each target.
 - The Tunnels window and `gloamux forwards live-list` share `WorkspaceModel.tunnelTabs`, which lists only connected SSH tabs, because a tab that is not connected shows the new connection form.
+
+### Ownership
+
+- **Shared by every window:** the session catalog, known hosts, the vault, quick commands, triggers, recents, and runbooks, created once and passed to each new `WorkspaceModel` (`sharing:`).
+- **One window:** its tabs, selection, splits, layout state, tool windows, MultiExec, and lock.
+- **One connection:** a `SessionTab` owns its SSH session, pending jump host, file channel, shell, forwards, keep-alive and reconnect tasks, and `epoch`. `disconnect` closes all of them and changes `epoch`, so work started for the old connection ends or is ignored. It also cancels `reconnectTask`; a reconnect attempt that was cancelled does not schedule another. Moving a tab to its own window (`moveTabToWindow`) and back keeps the same connection; closing that window disconnects it, and closing the workspace window closes those windows too.
+- `ConnectionService` (`model.connections`) opens SSH and FTP connections from the shared data only: owner confirmation, the Touch ID vault read, jump hosts, sign-in, credential saving, and the file channel (`openFiles`). Each attempt brings a `SignInHandler`. `TabSignIn` shows host keys and sign-in questions in its tab, saves what worked, and stops when the tab's `epoch` changes; `CommandSignIn` accepts only trusted or `--host-key` keys, answers with `--interactive`, and saves nothing. The caller owns what it returns.
+- `SessionTab.connectionState` is `disconnected`, `connected`, or `lost`, and `moveConnection(to:)` refuses an illegal move (a tab that never connected cannot be lost). `connected` and `transportLost` read from it.
+- A remote desktop reached through SSH owns a `DesktopGateway`: the SSH connection and the local forward only, with no hidden terminal tab. `GatewaySignIn` shows its host key and sign-in questions in the desktop pane. `WorkspaceModel.settleHostKey` is the one place that trusts or replaces a key, for tabs and gateways alike.
+
+### Main actor and redraws
+
+- Large work runs off the main actor. `TerminalRecordings.stop` removes the recorder at once and returns a task; a `RecordingSnapshot` masks and writes the file in a detached task, one save at a time, in stop order. A file name already taken gets " 2", " 3", and so on. A save that fails stays in `unsaved` until **Try again**. Quitting awaits `finishRecordingsBeforeQuit` and asks before dropping a recording that was not saved.
+- `LocalBrowserState.load` lists a folder off the main actor. A newer load wins over an older, slower one, and `loading` shows a spinner until the first listing arrives.
+- Terminal output bumps `TerminalOutput.revision`, which only the terminal view and the small views that follow output (cursor or byte count, the side file list) observe. `SessionTab.screenRevision` reads and writes it, so a burst of output no longer redraws the session pane, its header, or the tab bar. `ViewEvaluations` counts view evaluations in debug builds so tests can check this; it does nothing in release.
+- `CLICatalog.localPaths` names the arguments that are paths on this Mac, and the command line resolves them against its working folder before a request reaches the app.
 
 ## Credentials and the vault
 
@@ -175,7 +193,7 @@ Naming:
 - SSH defaults to SFTP and falls back to SCP after a subsystem refusal. Profiles can force either protocol. OpenSSH SFTP replacement uses the advertised `posix-rename@openssh.com` extension.
 - FTP uses passive data connections. Explicit and implicit FTPS encrypt both connections, reuse the control connection's TLS session on the data connection, and use system trust or a verified certificate pin.
 - File transfers go through `TransferQueue`, which `WorkspaceModel.transfers` shares between the file sidebar (`RemoteFileSidebar`, which shows `LocalTreeState` for a local terminal), the two-pane `FileTransferView`, and every layout. The Default layout shows `FileTransferView` in the main window when `workspaceMode` is `.files`, following the selected tab. Classic and Workbench show it in `FileTransferWindow` with a server menu.
-- The queue runs one item at a time on the tab's SFTP channel. Uploads write a temporary `.name.gloamux-….partial` file and rename it into place; downloads write a hidden partial file beside the destination. CLI uploads also stage content at a temporary remote name.
+- The queue runs one item at a time on the tab's SFTP channel. Uploads write a temporary `.name.gloamux-….partial` file and move it into place with `RemoteFileSystem.commitUpload`, which uses `replace` over an existing file and never deletes it first; downloads write a hidden partial file beside the destination. CLI uploads and **Edit on this Mac** stage content at a temporary remote name and commit it the same way.
 - `SFTPTransfer` keeps 16 reads or writes of 32 KiB in flight and stops at task cancellation.
 - Remote Quick Look copies one file of at most 100 MB into a private temporary folder and deletes it with the next preview and at quit.
 - Saved forwarding rules are stored with the connection in `sessions.json`. Local and dynamic forwards listen on this Mac's loopback interface; reverse forwards ask the server to listen on its loopback interface. A blank listening port is assigned automatically.
@@ -183,8 +201,10 @@ Naming:
 ## Command line
 
 - The `gloamux` product shares the app executable. `WorkspaceCommand` dispatches management operations.
-- `WorkspaceCommandChannel` serializes workspace writers and routes requests to the active app window over a private same-user channel.
-- File commands open their own authenticated transport and keep supplied passwords and one-time host fingerprints in memory only.
+- `CLICatalog` lists every public command and operation once. `gloamux --help`, each command's `--help`, shell completion, and the `files` path counts come from it, and `WorkspaceCommand.run` rejects an operation it does not list before anything runs, with or without the app. Add a new command or operation there first; `CLICatalogTests` checks that each listed operation reaches its handler and appears in its help.
+- `WorkspaceCommandChannel` serializes workspace writers and routes requests to the active app window over a private same-user channel. The app answers each request in its own main-actor task, so a request waiting for Touch ID does not block others. Taking `ID.request` picks it up and the app writes `ID.accepted`; a client withdraws a request not picked up within `pickupTimeout` (it never runs) and reports a picked-up request without an answer after `answerTimeout` as still running. A command that awaits the owner re-reads its target afterwards and refuses to save over a newer change.
+- `BoundedCommand` runs external tools in their own process group with stdin from `/dev/null`, output limits applied while reading, a deadline, and cancellation that stops the whole group.
+- `gloamux files` and `gloamux ssh` call `ConnectionService` with a `CommandSignIn` and no tab, close what they opened when the operation ends or fails, and keep supplied passwords and one-time host fingerprints in memory only.
 - `gloamux xserver` checks and starts XQuartz in the CLI process through `XQuartz`, since XQuartz belongs to the Mac rather than a workspace.
 - While a newer CLI is editing a workspace, use the current packaged app for that same workspace.
 
@@ -212,7 +232,7 @@ Naming:
 - `AppUpdates` (in the `App` module) is what the menu and Settings see: **Gloamux › Check for Updates** (`CheckForUpdatesCommand`) and **Check for updates automatically** in **Settings › General**.
 - Only the `GloamuxApp` executable links [Sparkle](https://sparkle-project.org) 2. `SparkleUpdates` starts `SPUStandardUpdaterController` in `applicationDidFinishLaunching`, after the command-line paths have exited, and only when the bundle's Info.plist has `SUFeedURL` and `SUPublicEDKey`. `swift run`, tests, and the CLI never check for updates, and the menu item and setting stay hidden there.
 - `package-app.sh` copies `Sparkle.framework` into `Contents/Frameworks` without its XPC services (Gloamux is not sandboxed), adds the `@executable_path/../Frameworks` rpath, signs Sparkle's helpers before the app, and writes the feed URL (`releases/latest/download/appcast.xml`) and the public key.
-- `appcast.sh` signs a DMG with the private key in the login Keychain (account `Gloamux`) and writes the feed. `release.sh publish` uploads it next to the DMG.
+- `appcast.sh` signs a DMG with the private key in the login Keychain (account `Gloamux`) and writes that signature into the feed. `release.sh publish` uploads it next to the DMG. The current configuration authenticates the update archive through EdDSA. The appcast and release-note content are fetched over HTTPS. Sparkle's signed-feed option is unset. See [Sparkle customization](https://sparkle-project.org/documentation/customization/).
 
 To test an update locally:
 
@@ -294,6 +314,7 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 | `TerminalViewBehaviorTests` | Input method composition, find, mouse reports, and the cursor in a real window. |
 | `TerminalFeaturesTests` | Redaction, asciicast files, runbook parsing, risky commands, environments, container command lines, discovery parsers, host key history, palette search, the URL scheme, reachability probes, and the benchmark workloads. |
 | `RemoteKindsTests` | Saved desktop profiles open dedicated tabs and keep their protocol. |
+| `LocalLocaleTests` | Local shell locale selection, preserving configured locales, and non-ASCII file names through a real PTY. |
 | SSH, forwarding, and SFTP tests | Loopback fixtures and macOS's `sftp-server`: separate host-key approvals for the destination and jump host, transfer round trips, reconnect after transport loss, and independent local terminals. |
 | Rust helper (`cargo test`) | ZRLE tiles and the shared zlib stream, CopyRect, rectangle bounds, version and security negotiation, the VNC DES response, and the Apple sign-in block. |
 
@@ -305,6 +326,8 @@ Optional inputs:
 - **Remote SSH hosts.** Set `GLOAMUX_REMOTE_HOSTS` to a comma-separated list of `user@host[:port]` targets, and `GLOAMUX_REMOTE_KEYS` to a folder with test private keys and a `known_hosts` file with the verified server keys. Run `swift test --package-path Gloamux --filter RemoteHostTests`. The second target is also tested through the first as a jump host. `GLOAMUX_REMOTE_LOGIN_ONLY` lists hosts whose restricted shells can only be checked for a successful login.
 
 Without these inputs the related tests are skipped.
+
+Verification on November 24, 2026 of the uncommitted architecture changes passed 461 of 469 Swift cases with 8 skips and 0 failures, all 18 Rust tests, 9/9 package self-checks, 14/14 full stress phases, and 81/81 packaged batch checks. See the [verification record](VERIFICATION.md) for coverage and remaining checks.
 
 ## Third-party notices
 
@@ -321,6 +344,6 @@ Themes and imports:
 - To change the bundled Visual Studio Code themes, edit the selection in [build-vscode-themes.py](../../Gloamux/scripts/build-vscode-themes.py) and run it with a local Visual Studio Code app and the downloaded `.vsix` packages.
 - Linux distribution palettes are defined in `ThemeGallery.swift`; the [theme inventory](THEME-INVENTORY.md) records their sources. The workspace layouts and theme picker are native implementations.
 - Xshell import supports selected fields from compatible profiles.
-- The MobaXterm reader (`MobaXtermImport` in `SessionImports.swift`) follows the field positions of MobaXterm's session export, which Mobatek does not document. It reads SSH (type 0) and SFTP (type 7) sessions and tolerates short field lists from older versions.
+- The MobaXterm reader (`MobaXtermImport` in `SessionImports.swift`) follows the field positions of MobaXterm's session export, which Mobatek does not document. It reads SSH (type 0), SFTP (type 7), and serial (type 8) sessions and tolerates short field lists from older versions.
 - Import files are decoded as UTF-16 or UTF-8 when marked or valid, then as Big5 (CP950), GB 18030, and Windows-1252.
-- `SessionExport` writes `.gloamuxsessions` JSON (`SessionsFile`) and CSV. Both leave out passwords and rewrite paths under the home folder as `~/…`.
+- `SessionExport` writes `.gloamuxsessions` JSON (`SessionsFile`), CSV, and OpenSSH configuration. Exports leave out passwords and private key contents, and rewrite key paths under the home folder as `~/…`. OpenSSH output represents SSH settings supported by that format.

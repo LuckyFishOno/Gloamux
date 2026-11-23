@@ -46,14 +46,37 @@ struct OutputTrigger: Codable, Equatable, Identifiable, Sendable {
 @MainActor final class OutputTriggerStore: ObservableObject {
     let url: URL
     @Published private(set) var triggers: [OutputTrigger] = []
+    /// Why `triggers.json` could not be used, or nil when it was read or does not exist yet. While this is set nothing
+    /// is written, so an unreadable or damaged file is never replaced.
+    @Published private(set) var loadError: String?
     /// At most this many rules, so matching stays cheap on fast output.
     static let limit = 32
+    private static let maximumFileBytes = 1024 * 1024
+    static let unreadable = "Couldn’t read triggers.json in the workspace folder. Check its permissions, then try again."
+    static let damaged = "triggers.json in the workspace folder is damaged. Repair or restore it, then try again."
 
     init(url: URL) {
         self.url = url
-        if let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode([OutputTrigger].self, from: data) {
-            triggers = Array(saved.prefix(Self.limit))
+        reload()
+    }
+
+    /// Reads `triggers.json` again, as after it was repaired or restored.
+    func reload() {
+        let data: Data
+        do {
+            let file = try FileHandle(forReadingFrom: url)
+            defer { try? file.close() }
+            data = try file.read(upToCount: Self.maximumFileBytes + 1) ?? Data()
+        } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
+            triggers = []; loadError = nil; return
+        } catch {
+            triggers = []; loadError = Self.unreadable; return
         }
+        guard data.count <= Self.maximumFileBytes, let saved = try? JSONDecoder().decode([OutputTrigger].self, from: data),
+              saved.count <= Self.limit, Set(saved.map(\.id)).count == saved.count else {
+            triggers = []; loadError = Self.damaged; return
+        }
+        triggers = saved; loadError = nil
     }
 
     func save(_ trigger: OutputTrigger) throws {
@@ -70,6 +93,7 @@ struct OutputTrigger: Codable, Equatable, Identifiable, Sendable {
     func remove(_ id: UUID) throws { try write(triggers.filter { $0.id != id }) }
 
     private func write(_ updated: [OutputTrigger]) throws {
+        if let loadError { throw WorkspaceError.invalid(loadError) }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try writePrivate(encoder.encode(updated), to: url)
         triggers = updated
@@ -152,7 +176,13 @@ struct OutputTriggerSettings: View {
     var body: some View {
         Form {
             Section {
-                if store.triggers.isEmpty {
+                if let problem = store.loadError {
+                    HStack {
+                        Text(T(problem)).foregroundStyle(.red)
+                        Spacer()
+                        Button(T("Try again")) { store.reload() }
+                    }
+                } else if store.triggers.isEmpty {
                     Text(T("No triggers yet")).foregroundStyle(.secondary)
                 }
                 ForEach(store.triggers) { trigger in
@@ -172,7 +202,7 @@ struct OutputTriggerSettings: View {
                     }
                 }
                 Button(T("Add trigger")) { draft = OutputTrigger(name: "", pattern: ""); editing = true }
-                    .disabled(store.triggers.count >= OutputTriggerStore.limit)
+                    .disabled(store.loadError != nil || store.triggers.count >= OutputTriggerStore.limit)
             } header: {
                 HStack(spacing: 6) {
                     Text(T("Output triggers"))
