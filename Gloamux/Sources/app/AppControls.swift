@@ -2,9 +2,11 @@ import SwiftUI
 
 /// Gloamux's buttons: a rounded rectangle rather than macOS 26's capsule, one height everywhere, and text that follows
 /// the app's text size. macOS draws its own bordered buttons and pop-up menus at a fixed font, so they stayed small
-/// when the app's text grew. Set for every window by `appTextSize()`; `.prominent` is the main action in the accent.
+/// when the app's text grew. Set for every window by `appTextSize()`; `.prominent` is the main action in the accent,
+/// and `.tinted`, an accent fill and outline under regular text, is a second action beside it, such as Save next to
+/// Connect: clearly not a Cancel, and still a step below the main action.
 struct AppButtonStyle: ButtonStyle {
-    enum Kind { case normal, prominent, menu }
+    enum Kind { case normal, prominent, tinted, menu }
     var kind: Kind = .normal
 
     func makeBody(configuration: Configuration) -> some View {
@@ -15,6 +17,7 @@ struct AppButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == AppButtonStyle {
     static var app: AppButtonStyle { AppButtonStyle() }
     static var appProminent: AppButtonStyle { AppButtonStyle(kind: .prominent) }
+    static var appTinted: AppButtonStyle { AppButtonStyle(kind: .tinted) }
 }
 
 private struct AppButtonBody: View {
@@ -28,16 +31,21 @@ private struct AppButtonBody: View {
     var body: some View {
         let small = controlSize == .small || controlSize == .mini
         let shape = RoundedRectangle(cornerRadius: (small ? 5 : 6) * min(scale, 1.5), style: .continuous)
-        let prominent = kind == .prominent
+        let prominent = kind == .prominent, tinted = kind == .tinted
         configuration.label
-            .appFont(.system(size: small ? 11 : 12, weight: prominent ? .medium : .regular))
+            .appFont(.system(size: small ? 11 : 12, weight: prominent || tinted ? .medium : .regular))
             .lineLimit(1)
             .foregroundStyle(prominent ? AnyShapeStyle(Color.white) :
                                 configuration.role == .destructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(.primary))
             .padding(.horizontal, ((small ? 8 : 11) * scale).rounded())
             .frame(minHeight: ((small ? 20 : 24) * scale).rounded())
             .background {
-                if prominent { shape.fill(.tint) } else { shape.fill(Color.primary.opacity(hovering && isEnabled ? 0.12 : 0.08)) }
+                if prominent { shape.fill(.tint) }
+                else if tinted {
+                    shape.fill(.tint.opacity(hovering && isEnabled ? 0.42 : 0.32))
+                        .overlay { shape.strokeBorder(.tint.opacity(0.85), lineWidth: 1) }
+                }
+                else { shape.fill(Color.primary.opacity(hovering && isEnabled ? 0.12 : 0.08)) }
             }
             .overlay { shape.fill(Color.black.opacity(configuration.isPressed ? 0.14 : prominent && hovering && isEnabled ? 0.05 : 0)) }
             .contentShape(shape)

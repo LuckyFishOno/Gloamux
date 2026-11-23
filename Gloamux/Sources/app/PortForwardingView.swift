@@ -222,8 +222,9 @@ struct PortForwardingView: View {
                 Spacer()
                 if starting { ProgressView().controlSize(.small) }
                 Button(T("Save rule")) { perform { let rule = try draft(); try model.changeForwardingRules(tab) { $0.append(rule) } } }
+                    .buttonStyle(.appTinted)
                 Button(T("Start forwarding")) { perform { start(try draft()) } }
-                    .keyboardShortcut(.defaultAction).disabled(!tab.connected || starting)
+                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction).disabled(!tab.connected || starting)
             }
         }
         .padding(24)
@@ -297,7 +298,7 @@ struct TunnelManagerView: View {
             }.listStyle(.inset)
             HStack {
                 Spacer()
-                Button(T("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(T("Done")) { dismiss() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)

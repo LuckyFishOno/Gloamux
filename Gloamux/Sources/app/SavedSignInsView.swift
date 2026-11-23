@@ -48,7 +48,7 @@ struct SavedSignInsView: View {
             }
             HStack {
                 Spacer()
-                Button(T("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(T("Done")) { dismiss() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)

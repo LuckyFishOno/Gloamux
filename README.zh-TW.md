@@ -4,7 +4,7 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.0 (build 1)**。
+目前版本：**Gloamux 1.1 (build 2)**。
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，視窗裡的每個動作也都能用 `gloamux` 命令列完成。
 
@@ -22,6 +22,10 @@ Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可
 
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest/download/Gloamux.dmg"><strong>下載 Gloamux</strong></a>
+  ·
+  <a href="https://gloamux.gloamkit.net">官方網站</a>
+  ·
+  <a href="docs/zh-TW/USER-GUIDE.md">使用手冊</a>
   ·
   <a href="#安裝">安裝</a>
   ·
@@ -46,7 +50,7 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 | **登入一次就好** | 密碼只留在這台 Mac，由 Secure Enclave 保護，也可以另用主密碼保護的密碼庫。 |
 | **正式環境的防護** | 為環境加上標籤，高風險指令在正式伺服器執行前先確認。 |
 | **可寫腳本** | `gloamux` 命令列和給 AI 代理用的本機 MCP 伺服器，能做的事和視窗一致。 |
-| **預設就重視隱私** | 不用帳號、沒有遙測，除了你開的連線之外不會連網。 |
+| **預設就重視隱私** | 不用帳號、沒有遙測，除了你開的連線和可關閉的更新檢查之外不會連網。 |
 
 ## 畫面
 
@@ -68,7 +72,7 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 - **自動化** · 快速指令、輸出觸發、Markdown 操作手冊、指令面板、Spotlight、捷徑和 `gloamux://` 連結。
 - **調成你要的樣子** · 預設、經典和工作台三種版面，可調整的應用程式字級，介面提供英文、繁體中文、簡體中文、日文和西班牙文。
 
-每項功能的細節請見[功能說明](FEATURES.zh-TW.md)。
+[使用手冊](docs/zh-TW/USER-GUIDE.md)逐步說明每項功能，並列出所有選單項目、快捷鍵、設定和指令。
 
 ## 系統需求
 
@@ -99,6 +103,10 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 7. 按 **打開**。
 
 確認過一次之後，Gloamux 就能正常開啟。若想略過這一步，可以[從原始碼建置](#從原始碼建置)。
+
+## 更新
+
+Gloamux 1.1 以後的版本會自己更新。選 **Gloamux › 檢查更新**，或讓 Gloamux 每天檢查一次：第二次開啟時它會詢問，之後可在 **設定 › 一般** 的 **自動檢查更新** 改變選擇。Gloamux 會顯示更新內容，用它的簽署金鑰驗證下載的檔案，安裝後重新開啟。Gloamux 1.0 沒有更新功能，請用安裝時的方式，以新版 DMG 替換一次。
 
 ## 開始使用
 
@@ -135,6 +143,8 @@ gloamux config export ~/Gloamux.gloamuxconfig
 `gloamux files` 支援 SFTP、SCP、FTP，以及明確和隱含 FTPS，並沿用已存連線的登入方式、代理、跳板和主機信任。一次性的密碼用 `--password-stdin`，只為這次指令解鎖密碼庫用 `--vault-password-stdin`，第一次連的伺服器可用 `--host-key` 帶入你核對過的指紋。這些臨時提供的憑證都不會被儲存。
 
 `gloamux tabs` 和 `gloamux commands send|run` 會操作正在執行的 App；`gloamux tabs list` 列出的分頁 ID 在每個視窗都能用。管理指令回傳 JSON，檔案指令可加 `--json`。結束代碼：0 成功、1 操作失敗、2 用法錯誤、130 表示被 Ctrl-C 中止。執行 `gloamux --help`，或用 `gloamux <指令> --help` 看各指令說明。
+
+使用手冊的[命令列一覽](docs/zh-TW/USER-GUIDE.md#20-命令列一覽)列出所有指令。
 
 Shell 補全：Zsh 先執行 `autoload -Uz compinit && compinit`，再執行 `source <(gloamux completion zsh)`；Bash 把 `gloamux completion bash` 存成檔案後 `source` 它。
 
@@ -184,16 +194,22 @@ Gloamux 的資料都放在你的 Mac 上：
 ~/Library/Application Support/Gloamux
 ```
 
-已存連線、主機金鑰、快速指令、操作手冊、錄影和記錄檔都在這裡。登入成功的密碼由 Secure Enclave 金鑰保護，或放進以主密碼加密的密碼庫。匯出檔和設定備份不含這台 Mac 記住的密碼。Gloamux 不用帳號，也不送出分析或遙測；它只連到你開啟的伺服器，以及可選的已存主機連線檢查，這項可以在 **設定 › 安全** 關閉。完整清單請見[資料保護](DATA-PROTECTION.zh-TW.md)。
+已存連線、主機金鑰、快速指令、操作手冊、錄影和記錄檔都在這裡。登入成功的密碼由 Secure Enclave 金鑰保護，或放進以主密碼加密的密碼庫。匯出檔和設定備份不含這台 Mac 記住的密碼。Gloamux 不用帳號，也不送出分析或遙測；它只連到你開啟的伺服器，以及可選的已存主機連線檢查，這項可以在 **設定 › 安全** 關閉，以及每天向 GitHub 檢查一次新版本，這項可以在 **設定 › 一般** 關閉。完整清單請見[資料保護](docs/zh-TW/DATA-PROTECTION.md)。
 
 Gloamux 曾名為 Termac，更早叫 MShell。第一次啟動會從最近一個舊名稱搬移資料和設定，舊的匯出檔也能照常匯入。
 
 ## 文件
 
-- [功能說明](FEATURES.zh-TW.md)
-- [開發指南](DEVELOPMENT.zh-TW.md)：原始碼結構、測試和第三方授權聲明
-- [資料保護](DATA-PROTECTION.zh-TW.md)
-- [路線圖](ROADMAP.zh-TW.md)和[功能待辦](FEATURE-BACKLOG.zh-TW.md)
+每份文件都有英文版和繁體中文版，分別放在 [`docs/en`](docs/en) 和 [`docs/zh-TW`](docs/zh-TW)。
+
+| 文件 | 內容 |
+|---|---|
+| [使用手冊](docs/zh-TW/USER-GUIDE.md) | 逐步說明每項功能，並附選單、快捷鍵、設定和指令一覽 |
+| [資料保護](docs/zh-TW/DATA-PROTECTION.md) | Gloamux 儲存哪些資料、如何保護，以及規劃中的項目 |
+| [開發指南](docs/zh-TW/DEVELOPMENT.md) | 原始碼結構、架構、測試和第三方授權聲明 |
+| [發布流程](docs/zh-TW/RELEASING.md) | 更新文件、建置 DMG 和發布新版 |
+| [路線圖](docs/zh-TW/ROADMAP.md)和[功能待辦](docs/zh-TW/FEATURE-BACKLOG.md) | 已完成和接下來的工作 |
+| [配色清單](docs/zh-TW/THEME-INVENTORY.md) | 內建配色主題的來源 |
 
 ## 參與貢獻
 

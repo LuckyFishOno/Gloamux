@@ -1,8 +1,8 @@
 # Gloamux 資料保護清單
 
-[English](DATA-PROTECTION.md) · [繁體中文](DATA-PROTECTION.zh-TW.md)
+[English](../en/DATA-PROTECTION.md) · [繁體中文](DATA-PROTECTION.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 21 日依 0.10.0 工作目錄審閱，2026 年 11 月 23 日依 0.13.0 原始碼重新核對。本清單列出 Gloamux 儲存或處理的資料，以及目前的保護方式，也涵蓋[路線圖](ROADMAP.zh-TW.md)和[功能待辦](FEATURE-BACKLOG.zh-TW.md)中規劃的功能。
+2026 年 11 月 21 日依 0.10.0 工作目錄審閱，2026 年 11 月 23 日依 1.1 (build 2) 原始碼（含 App 內更新）重新核對。本清單列出 Gloamux 儲存或處理的資料，以及目前的保護方式，也涵蓋[路線圖](ROADMAP.md)和[功能待辦](FEATURE-BACKLOG.md)中規劃的功能。
 
 ## 保護等級
 
@@ -40,6 +40,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。資料�
 | 設定備份 | 使用者選的 `.gloamuxconfig` 檔及其 `.sha256` | S1 與 S2 | 寫成 `0600`。原樣帶上以主密碼加密的 `password-vault.json`；主密碼、這台 Mac 記住的密碼和 Secure Enclave 金鑰都不包含在內。只有備份含密碼庫時，還原才會取代密碼庫，而且會先把目前的密碼庫複製到 `Backups/`。 | 備份的其他部分是明文。拿到檔案的人可以用密碼庫的 PBKDF2 成本離線猜測主密碼，所以密碼庫的強度取決於那組密碼。`.sha256` 檔只能偵測損壞，無法偵測蓄意修改。 |
 | 外觀與版面 | `appearance.json`、`layout.json` | L | `0600`。 | 無。 |
 | 語言 | `UserDefaults` | L | 系統預設值。 | 無。 |
+| 更新偏好與上次檢查時間 | `UserDefaults`（`SUEnableAutomaticChecks`、`SULastCheckTime`） | L | 系統預設值。Sparkle 透過 HTTPS 從 GitHub 下載更新清單和 DMG，只安裝 EdDSA 簽章符合 `SUPublicEDKey` 的 DMG。檢查時會送出 App 的名稱和版本。 | 版本是 ad hoc 簽署，沒有經過公證。簽署金鑰放在發布者的登入鑰匙圈；金鑰遺失時，使用者必須手動重新安裝。 |
 
 ### 其他發現
 
@@ -66,7 +67,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。資料�
 | iCloud 同步 | 設定檔、資料夾、指令、外觀 | S2 | 以 Apple 無法讀取的金鑰做端對端加密。除非使用者開啟端對端加密的密碼庫同步，否則絕不同步 S1 資料或主機信任決定。 |
 | 備份、還原和團隊匯出 | 工作區 | S2 | 以使用者選的密碼加密備份。團隊匯出不含憑證或主機信任。 |
 | 當機報告和診斷 | 記憶體、狀態 | S1 風險 | 移除終端緩衝、機密和檔案路徑。送出前先詢問。 |
-| 更新 | 應用程式程式碼 | I | 經公證的版本。使用 EdDSA 簽章的 Sparkle。 |
+| 更新 | 應用程式程式碼 | I | 自 Gloamux 1.1 起內建使用 EdDSA 簽章的 Sparkle。公證仍在規劃中。 |
 
 ## 建議設計
 

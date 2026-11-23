@@ -1,6 +1,6 @@
 # 配色清單
 
-[English](THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.zh-TW.md)
+[English](../en/THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.md) · [回到 README](../../README.zh-TW.md)
 
 2026 年 11 月 20 日調查。本清單列出來自 Linux 發行版終端和安裝數最多的 Visual Studio Code 主題的候選配色，記錄每組配色的來源和數值的可靠程度。
 

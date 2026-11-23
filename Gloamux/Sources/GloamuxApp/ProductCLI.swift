@@ -56,6 +56,7 @@ enum ProductCLI {
       commands     Manage saved quick commands and type them into tabs
       triggers     Manage output triggers
       runbooks     Manage and run Markdown runbooks
+      recordings   List, export, or remove terminal recordings
       appearance   Manage the workspace theme
       settings     Get or change settings
       layout       Get or set the workspace layout

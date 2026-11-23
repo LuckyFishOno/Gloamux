@@ -201,7 +201,7 @@ struct OutputTriggerSettings: View {
             HStack {
                 Button(T("Cancel")) { editing = false; error = nil }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button(T("Save")) { perform { try store.save(draft); editing = false } }.keyboardShortcut(.defaultAction)
+                Button(T("Save")) { perform { try store.save(draft); editing = false } }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .disabled(draft.pattern.isEmpty)
             }
         }

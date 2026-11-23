@@ -36,6 +36,7 @@ struct GloamuxApplication: SwiftUI.App {
             .commands {
                 // Always present, so the app menu has exactly one Settings item from launch on.
                 CommandGroup(replacing: .appSettings) { SettingsCommand(store: store) }
+                CommandGroup(after: .appInfo) { CheckForUpdatesCommand() }
                 CommandGroup(replacing: .newItem) { NewWorkspaceWindowCommand() }
                 if let workspace = store.workspace {
                     WorkspaceSplitCommands(model: workspace)
@@ -101,6 +102,11 @@ struct GloamuxApplication: SwiftUI.App {
     /// Window menus (Show Tab Bar, Merge All Windows) that do something different from the app's.
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
+    /// Starts Sparkle in a packaged app, after the command-line paths above have already exited.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        SparkleUpdates.start()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

@@ -132,9 +132,8 @@ struct RemoteFileSidebar: View {
                         .id(tab.id)
                 }
             } else {
-                ContentUnavailableView(T("No remote session"), systemImage: "network",
-                                       description: Text(T("Select a pane connected over SSH to browse its files.")))
-                    .frame(maxHeight: .infinity)
+                SidebarMessage(title: T("No remote session"), symbol: "network",
+                               detail: T("Select a pane connected over SSH to browse its files."))
             }
         }
         .padding(13)
@@ -229,7 +228,7 @@ private struct RemoteTreePanel: View {
                 if tab.busy {
                     SidebarLoading(title: T("Connecting…"))
                 } else {
-                    ContentUnavailableView(T("Connect to browse files"), systemImage: "network").frame(maxHeight: .infinity)
+                    SidebarMessage(title: T("Connect to browse files"), symbol: "network")
                 }
             } else if tree.root == nil, tree.error == nil {
                 // The first listing: centered rather than an empty list, which read as a blank panel.
@@ -278,7 +277,7 @@ private struct RemoteTreePanel: View {
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button(request.confirm) { finish(request) }.keyboardShortcut(.defaultAction)
+                    Button(request.confirm) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                         .disabled(!Self.validName(nameDraft))
                 }
             }.padding(22).frame(width: 340)
@@ -1000,6 +999,27 @@ private struct TreeParentRow: View {
 }
 
 /// A spinner and a word, centered in the files panel while a session connects or its first folder loads.
+/// A message in the middle of the file sidebar, both ways. `ContentUnavailableView` kept its own width inside the
+/// sidebar's leading stack, so it sat left of center, and its insets pushed it below the middle.
+private struct SidebarMessage: View {
+    let title: String
+    let symbol: String
+    var detail: String?
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol).appFont(.system(size: 28)).foregroundStyle(.secondary)
+            Text(title).appFont(.headline).multilineTextAlignment(.center)
+            if let detail {
+                Text(detail).appFont(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct SidebarLoading: View {
     let title: String
     var body: some View {

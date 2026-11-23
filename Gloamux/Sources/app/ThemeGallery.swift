@@ -59,7 +59,7 @@ extension WorkspaceTheme {
                                 "555753", "EF2929", "8AE234", "FCE94F", "729FCF", "AD7FA8", "34E2E2", "EEEEEC"]
 
     /// Default terminal palettes of Linux distributions and desktops. Terminal colors are taken from the
-    /// sources in THEME-INVENTORY.md; window chrome colors are derived to match each palette.
+    /// sources in docs/en/THEME-INVENTORY.md; window chrome colors are derived to match each palette.
     static let linuxPresets: [WorkspaceTheme] = [
         // GNOME Terminal Ubuntu profile: Tango on aubergine (Ubuntu 25.04 and earlier).
         preset("ubuntu", "Ubuntu", appearance: "dark", chrome: ["2C001E", "3B0F2F", "411534", "35092A", "E95420", "5E2750"],

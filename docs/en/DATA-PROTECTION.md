@@ -1,8 +1,8 @@
 # Gloamux data protection inventory
 
-[English](DATA-PROTECTION.md) · [繁體中文](DATA-PROTECTION.zh-TW.md)
+[English](DATA-PROTECTION.md) · [繁體中文](../zh-TW/DATA-PROTECTION.md) · [Back to README](../../README.md)
 
-Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 0.13.0 source on November 23, 2026. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
+Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 1.1 (build 2) source, including in-app updates, on November 23, 2026. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
 
 ## Protection classes
 
@@ -40,6 +40,7 @@ Gloamux stores working files in `~/Library/Application Support/Gloamux`. The dir
 | Settings backup | User-chosen `.gloamuxconfig` file and its `.sha256` | S1 and S2 | Written `0600`. Carries `password-vault.json` exactly as stored, sealed under the master password; the master password, passwords remembered on this Mac, and the Secure Enclave keys are not included. Restore replaces the vault only when the backup has one, after copying the current vault to `Backups/`. | The rest of the backup is plaintext. Whoever has the file can guess the master password offline at the vault's PBKDF2 cost, so the vault is only as strong as that password. The `.sha256` file detects damage, not deliberate changes. |
 | Appearance and layout | `appearance.json`, `layout.json` | L | `0600`. | None. |
 | Language | `UserDefaults` | L | System defaults. | None. |
+| Update preferences and last check time | `UserDefaults` (`SUEnableAutomaticChecks`, `SULastCheckTime`) | L | System defaults. Sparkle downloads the feed and the DMG from GitHub over HTTPS and installs only a DMG whose EdDSA signature matches `SUPublicEDKey`. A check sends the app's name and version. | Builds are ad hoc signed, not notarized. The signing key lives in the release maintainer's login Keychain; losing it means users must reinstall by hand. |
 
 ### Other findings
 
@@ -66,7 +67,7 @@ Each planned feature must meet its class requirements before release.
 | iCloud sync | Profiles, folders, commands, appearance | S2 | End-to-end encryption with a key that Apple cannot read. Never sync S1 data or host trust decisions unless the user enables an end-to-end encrypted vault sync. |
 | Backup, restore, and team export | Workspace | S2 | Encrypt backups with a user-chosen password. Team exports contain no credentials or host trust. |
 | Crash reports and diagnostics | Memory, state | S1 risk | Strip terminal buffers, secrets, and file paths. Ask before sending. |
-| Updates | Application code | I | Notarized builds. Sparkle with EdDSA signatures. |
+| Updates | Application code | I | Sparkle with EdDSA signatures is built in starting with Gloamux 1.1. Notarization is still planned. |
 
 ## Recommended design
 

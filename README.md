@@ -4,7 +4,7 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.0 (build 1)**.
+Current release: **Gloamux 1.1 (build 2)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and every action in the window is also available from the `gloamux` command line.
 
@@ -22,6 +22,10 @@ Gloamux keeps your servers in one window: saved connections in folders, terminal
 
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest/download/Gloamux.dmg"><strong>Download Gloamux</strong></a>
+  ·
+  <a href="https://gloamux.gloamkit.net">Website</a>
+  ·
+  <a href="docs/en/USER-GUIDE.md">User guide</a>
   ·
   <a href="#install">Install</a>
   ·
@@ -46,7 +50,7 @@ Gloamux is for people who look after servers from a Mac and would rather not jug
 | **Sign in once** | Passwords stay on this Mac behind the Secure Enclave, with an optional master-password vault. |
 | **Guard rails for production** | Tag environments, and confirm risky commands before they run on a production server. |
 | **Scriptable** | The `gloamux` command line and a local MCP server for AI agents mirror what the window does. |
-| **Private by default** | No account, no telemetry, and no network traffic except the connections you open. |
+| **Private by default** | No account, no telemetry, and no network traffic except the connections you open and an update check you can turn off. |
 
 ## See it
 
@@ -68,7 +72,7 @@ New connection lists Local, SSH, RDP, VNC, and Other connection. A remote deskto
 - **Automation** · Quick commands, output triggers, Markdown runbooks, the command palette, Spotlight, Shortcuts, and `gloamux://` links.
 - **Make it yours** · Default, Classic, and Workbench layouts, an adjustable app text size, and an interface in English, Traditional Chinese, Simplified Chinese, Japanese, and Spanish.
 
-The [feature guide](FEATURES.md) covers every feature in detail.
+The [user guide](docs/en/USER-GUIDE.md) explains every feature step by step and lists every menu item, keyboard shortcut, setting, and command.
 
 ## Requirements
 
@@ -99,6 +103,10 @@ If macOS shows **“Gloamux” Not Opened**:
 7. Click **Open**.
 
 After this one-time approval, Gloamux opens normally. To skip this step, [build it from source](#build-from-source).
+
+## Updates
+
+Gloamux 1.1 and later update themselves. Choose **Gloamux › Check for Updates**, or let Gloamux check once a day: it asks the second time it opens, and **Check for updates automatically** in **Settings › General** changes the answer. Gloamux shows what changed, checks the download against its signing key, installs it, and reopens. Gloamux 1.0 has no updater, so replace it once with the newer DMG the same way you installed it.
 
 ## First use
 
@@ -135,6 +143,8 @@ gloamux config export ~/Gloamux.gloamuxconfig
 `gloamux files` speaks SFTP, SCP, FTP, and explicit and implicit FTPS with the saved session's sign-in, proxy, jump hosts, and host trust. Pass `--password-stdin` for a one-time password, `--vault-password-stdin` to unlock the vault for one command, and `--host-key` with a fingerprint you verified for a server seen for the first time. Supplied credentials are never saved.
 
 `gloamux tabs` and `gloamux commands send|run` act on the running app; tab IDs from `gloamux tabs list` work in every window. Management commands return JSON, and file commands accept `--json`. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux --help`, or `gloamux <command> --help` for each command.
+
+The [command-line reference](docs/en/USER-GUIDE.md#20-command-line-reference) in the user guide lists every command.
 
 For shell completion, run `source <(gloamux completion zsh)` in Zsh (after `autoload -Uz compinit && compinit`), or save `gloamux completion bash` to a file and `source` it in Bash.
 
@@ -184,16 +194,22 @@ Gloamux keeps its data on your Mac:
 ~/Library/Application Support/Gloamux
 ```
 
-Saved connections, host keys, quick commands, runbooks, recordings, and logs are stored there. Passwords that sign in are kept with a Secure Enclave key, or in the optional vault sealed under your master password. Exports and configuration backups leave out passwords remembered on this Mac. Gloamux has no account and sends no analytics or telemetry; it connects only to the servers you open, plus the optional reachability check of saved hosts, which you can turn off in **Settings › Safety**. See [Data protection](DATA-PROTECTION.md) for the full inventory.
+Saved connections, host keys, quick commands, runbooks, recordings, and logs are stored there. Passwords that sign in are kept with a Secure Enclave key, or in the optional vault sealed under your master password. Exports and configuration backups leave out passwords remembered on this Mac. Gloamux has no account and sends no analytics or telemetry; it connects only to the servers you open, plus the optional reachability check of saved hosts, which you can turn off in **Settings › Safety**, and the daily check for a new version on GitHub, which you can turn off in **Settings › General**. See [Data protection](docs/en/DATA-PROTECTION.md) for the full inventory.
 
 Gloamux was called Termac, and MShell before that. The first launch moves data and settings from the newest earlier name, and older exports still import.
 
 ## Documentation
 
-- [Feature guide](FEATURES.md)
-- [Development guide](DEVELOPMENT.md): source layout, tests, and third-party notices
-- [Data protection](DATA-PROTECTION.md)
-- [Roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md)
+Every document has an English and a Traditional Chinese version, in [`docs/en`](docs/en) and [`docs/zh-TW`](docs/zh-TW).
+
+| Document | What it covers |
+|---|---|
+| [User guide](docs/en/USER-GUIDE.md) | Every feature step by step, with references for menus, shortcuts, settings, and commands |
+| [Data protection](docs/en/DATA-PROTECTION.md) | What Gloamux stores, how it is protected, and what is planned |
+| [Development guide](docs/en/DEVELOPMENT.md) | Source layout, architecture, tests, and third-party notices |
+| [Releasing](docs/en/RELEASING.md) | Updating the docs, building the DMG, and publishing a release |
+| [Roadmap](docs/en/ROADMAP.md) and [feature backlog](docs/en/FEATURE-BACKLOG.md) | What is done and what comes next |
+| [Theme inventory](docs/en/THEME-INVENTORY.md) | The sources of the bundled color themes |
 
 ## Contributing
 

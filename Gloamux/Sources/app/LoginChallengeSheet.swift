@@ -53,8 +53,7 @@ struct LoginChallengeSheet: View {
                 Button(T("Cancel")) { answer(nil) }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(T("Connect")) { answer(answers) }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.appProminent)
+                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("answerLoginButton")
             }
         }

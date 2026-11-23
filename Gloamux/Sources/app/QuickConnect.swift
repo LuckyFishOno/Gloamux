@@ -129,7 +129,7 @@ struct QuickConnect: View {
                 Spacer()
                 Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(T("Connect")) { connect() }
-                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .disabled(matches.isEmpty && SavedConnection.quickTarget(search) == nil)
             }
         }

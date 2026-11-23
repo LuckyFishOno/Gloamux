@@ -1,6 +1,6 @@
 # Xshell and MobaXterm feature backlog
 
-[English](FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.zh-TW.md)
+[English](FEATURE-BACKLOG.md) · [繁體中文](../zh-TW/FEATURE-BACKLOG.md) · [Back to README](../../README.md)
 
 Baseline reviewed on November 20, 2026. The backlog covers documented product features, settings, and integration workflows in Xshell 8 and MobaXterm 26.6, including the Professional Customizer and the November 11 Xshell update. Windows-specific workflows have macOS counterparts below. Each checkbox is a Gloamux development item. An open item can include capabilities already present in the app. Optional items that Gloamux does not plan to build were removed on November 22, 2026.
 
@@ -137,4 +137,5 @@ These items come from a November 20, 2026 brainstorm. They cover macOS-native, m
 
 - [ ] Add GitHub Actions CI on a macOS runner for build and Swift tests. Run AppKit interaction tests in a separate job that has an active window session.
 - [ ] Add automated terminal compatibility tests based on vttest, and fuzz the escape-sequence parser.
-- [ ] Sign and notarize releases, add Sparkle updates, and publish a Homebrew cask.
+- [x] Add Sparkle updates: **Gloamux › Check for Updates** and a daily check, from an EdDSA-signed feed uploaded with each GitHub release.
+- [ ] Sign and notarize releases, and publish a Homebrew cask.

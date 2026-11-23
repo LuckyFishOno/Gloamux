@@ -1,6 +1,6 @@
 # Theme inventory
 
-[English](THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.zh-TW.md)
+[English](THEME-INVENTORY.md) · [繁體中文](../zh-TW/THEME-INVENTORY.md) · [Back to README](../../README.md)
 
 Researched on November 20, 2026. This inventory lists candidate color themes from Linux distribution terminals and the most installed Visual Studio Code themes. It records where each palette comes from and how reliable the values are.
 

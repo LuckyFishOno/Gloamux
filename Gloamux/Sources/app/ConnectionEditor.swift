@@ -130,7 +130,7 @@ struct ConnectionEditor: View {
             HStack {
                 Spacer()
                 Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Save"), action: save).keyboardShortcut(.defaultAction)
+                Button(T("Save"), action: save).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
@@ -215,7 +215,7 @@ struct ConnectionEditor: View {
             HStack {
                 Spacer()
                 Button(T("Cancel")) { enteringMasterPassword = false }.keyboardShortcut(.cancelAction)
-                Button(T("Save"), action: checkMasterPassword).keyboardShortcut(.defaultAction)
+                Button(T("Save"), action: checkMasterPassword).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .disabled(masterPassword.isEmpty || verifying)
             }
         }
@@ -573,7 +573,7 @@ struct KeyGeneratorSheet: View {
                     Button(T(copied ? "Copied" : "Copy")) {
                         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(publicKey, forType: .string); copied = true
                     }
-                    Button(T("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
+                    Button(T("Done")) { dismiss() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 }
             } else {
                 Form {
@@ -592,7 +592,7 @@ struct KeyGeneratorSheet: View {
                     Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                     Spacer()
                     if working { ProgressView().controlSize(.small) }
-                    Button(T("Generate"), action: generate).keyboardShortcut(.defaultAction)
+                    Button(T("Generate"), action: generate).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                         .disabled(working || name.isEmpty || passphrase != confirmation)
                 }
             }

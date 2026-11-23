@@ -401,12 +401,18 @@ struct SessionNameSheet: View {
                 Text(title).appFont(.headline)
                 if showsConnectionInfo { InfoButton(T("Host, account and proxy settings only. Passwords are excluded.")) }
             }
-            TextField(T("Name"), text: $name).textFieldStyle(.roundedBorder)
-                .onSubmit { if canSave { onSave() } }
+            // A label that stays once the field is filled in: a Save suggests the host as the name, and without it the
+            // field read as the host rather than the name the item gets in the session tree.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(T("Name")).appFont(.callout.weight(.medium)).foregroundStyle(.secondary)
+                TextField(T("Name"), text: $name).textFieldStyle(.roundedBorder)
+                    .onSubmit { if canSave { onSave() } }
+                    .accessibilityLabel(T("Name"))
+            }
             HStack {
                 Button(T("Cancel"), action: onCancel).keyboardShortcut(.cancelAction)
                 Spacer()
-                Button(T("Save"), action: onSave).disabled(!canSave)
+                Button(T("Save"), action: onSave).buttonStyle(.appProminent).disabled(!canSave)
             }
         }
         .padding(24)

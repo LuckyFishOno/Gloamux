@@ -1,8 +1,8 @@
 # Gloamux 路線圖
 
-[English](ROADMAP.md) · [繁體中文](ROADMAP.zh-TW.md)
+[English](../en/ROADMAP.md) · [繁體中文](ROADMAP.md) · [回到 README](../../README.zh-TW.md)
 
-[功能待辦](FEATURE-BACKLOG.zh-TW.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
+[功能待辦](FEATURE-BACKLOG.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
 
 ## 第一階段里程碑
 

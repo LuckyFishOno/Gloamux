@@ -235,7 +235,7 @@ struct HostDiscoveryView: View {
                 InfoButton(T("Gloamux asks Bonjour on this network, the Tailscale app, or the AWS command-line tool with your own profile. Nothing is added until you choose hosts and add them."))
                 Spacer()
                 if discovery.busy { ProgressView().controlSize(.small) }
-                Button(T("Search")) { discovery.scan() }.keyboardShortcut(.defaultAction)
+                Button(T("Search")) { discovery.scan() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
             }
             if discovery.source == .aws {
                 HStack {
@@ -642,7 +642,7 @@ struct ContainerSessionEditor: View {
 
     private var inlineActions: some View {
         HStack {
-            Button(T("Save")) { save() }.disabled(draft == nil || Optional(name).nonEmpty == nil)
+            Button(T("Save")) { save() }.buttonStyle(.appTinted).disabled(draft == nil || Optional(name).nonEmpty == nil)
             Button(T("Connect")) { open() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 .disabled(draft == nil)
         }

@@ -63,7 +63,7 @@ struct ProfileImportView: View {
             HStack {
                 Spacer()
                 Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Import")) { commit() }.keyboardShortcut(.defaultAction)
+                Button(T("Import")) { commit() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .disabled(draft?.entries.isEmpty != false || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

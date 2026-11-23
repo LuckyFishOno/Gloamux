@@ -3,10 +3,14 @@ set -eu
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 build_path=${1:-/tmp/gloamux-build}
 output_dir=${2:-"$project_dir/../build"}
-# Local builds keep the development version. A published release sets its own, for example
-# GLOAMUX_VERSION=1.0 GLOAMUX_BUILD=1.
-version=${GLOAMUX_VERSION:-0.13.0}
-build_number=${GLOAMUX_BUILD:-19}
+# The latest release's version and build. Local builds use the same numbers, and the release commit raises them
+# (docs/en/RELEASING.md). GLOAMUX_VERSION and GLOAMUX_BUILD override them for one build.
+version=${GLOAMUX_VERSION:-1.1}
+build_number=${GLOAMUX_BUILD:-2}
+# Sparkle reads the update feed from here and installs only downloads signed with the matching private key, which
+# stays in the release maintainer's login Keychain (docs/en/RELEASING.md). GLOAMUX_FEED_URL points a test build elsewhere.
+feed_url=${GLOAMUX_FEED_URL:-https://github.com/LuckyFishOno/Gloamux/releases/latest/download/appcast.xml}
+update_key=1whLIaQdHkzc/v739zzFAcy7JC8947b9k/ZXEddqwfc=
 cd "$project_dir"
 command -v cargo >/dev/null 2>&1 || { printf 'Rust and Cargo are required to build the remote desktop engine.\n' >&2; exit 1; }
 rdp_target="$build_path/gloamux-desktop-engine"
@@ -19,6 +23,21 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/bin"
 mkdir -p "$app/Contents/Helpers"
 mkdir -p "$app/Contents/Resources/RemoteDesktopLicenses"
 cp "$bin_dir/GloamuxApp" "$app/Contents/MacOS/Gloamux"
+# Sparkle (in-app updates). Gloamux is not sandboxed, so Sparkle's XPC services are not needed. The framework is
+# copied with its symbolic links, and its helpers are signed inside out before the framework and the app.
+sparkle="$app/Contents/Frameworks/Sparkle.framework"
+rm -rf "$app/Contents/Frameworks"
+mkdir -p "$app/Contents/Frameworks"
+ditto "$bin_dir/Sparkle.framework" "$sparkle"
+rm -rf "$sparkle/XPCServices" "$sparkle/Versions/B/XPCServices"
+otool -l "$app/Contents/MacOS/Gloamux" | grep -q '@executable_path/../Frameworks' \
+    || install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/MacOS/Gloamux"
+codesign --force --sign - "$sparkle/Versions/B/Autoupdate"
+codesign --force --sign - "$sparkle/Versions/B/Updater.app"
+codesign --force --sign - "$sparkle"
+sparkle_license=$(ls "$build_path/checkouts/Sparkle/LICENSE" "$build_path/artifacts/sparkle/Sparkle/LICENSE" 2>/dev/null | head -n 1)
+[ -n "$sparkle_license" ] || { printf "Sparkle's license notice was not found.\n" >&2; exit 1; }
+cp "$sparkle_license" "$app/Contents/Resources/Sparkle-LICENSE.txt"
 cp "$rdp_target/release/gloamux-rdp" "$app/Contents/Helpers/gloamux-rdp"
 cp RDP/licenses/*.txt "$app/Contents/Resources/RemoteDesktopLicenses/"
 cp assets/Gloamux.icns "$app/Contents/Resources/Gloamux.icns"
@@ -66,6 +85,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <key>CFBundleShortVersionString</key><string>$version</string>
 <key>CFBundleVersion</key><string>$build_number</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>SUFeedURL</key><string>$feed_url</string>
+<key>SUPublicEDKey</key><string>$update_key</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>CFBundleURLTypes</key><array><dict>

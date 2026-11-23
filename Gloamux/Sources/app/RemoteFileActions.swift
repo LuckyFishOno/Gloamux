@@ -119,7 +119,7 @@ struct PermissionsSheet: View {
             HStack {
                 Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button(T("Apply")) { apply(bits); dismiss() }.keyboardShortcut(.defaultAction)
+                Button(T("Apply")) { apply(bits); dismiss() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
             }
         }
         .padding(22).frame(width: 340)

@@ -1136,3 +1136,6 @@
 "Fastest (slow network)" = "Más rápida (red lenta)";
 "Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "Máxima calidad muestra el fondo de escritorio, el suavizado de fuentes y los efectos visuales. Equilibrada oculta el fondo. Más rápida también desactiva temas, animaciones y suavizado de fuentes, para redes lentas.";
 "Clipboard" = "Portapapeles";
+"Check for Updates" = "Buscar actualizaciones";
+"Check for updates automatically" = "Buscar actualizaciones automáticamente";
+"Once a day, Gloamux asks GitHub whether a newer version is out, sending only the app's name and version. Check at any time from Gloamux › Check for Updates." = "Una vez al día, Gloamux pregunta a GitHub si hay una versión nueva y solo envía el nombre y la versión de la app. Puedes buscar en cualquier momento desde Gloamux › Buscar actualizaciones.";

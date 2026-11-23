@@ -34,6 +34,29 @@ struct LocalLaunch: Equatable {
         return LocalLaunch(executable: shell, arguments: [shell, "-l", "-c", "exec " + command], directory: validDirectory(directory))
     }
 
+    /// `LANG` for a local shell, as Terminal sets it. An app opened from Finder has no locale variables, so the shell
+    /// ran in the C locale: `ls` printed non-ASCII names as `?`, and zsh garbled them in prompts and typed input. Only
+    /// themes that set a UTF-8 locale themselves, such as Powerlevel10k, hid it. Empty when `environment` already
+    /// names a locale. The language and region come from `locale`, falling back to `en_US.UTF-8` when this Mac has
+    /// no such locale.
+    static func localeEnvironment(_ environment: [String: String] = ProcessInfo.processInfo.environment,
+                                  locale: Locale = .current) -> [String: String] {
+        if ["LC_ALL", "LC_CTYPE", "LANG"].contains(where: { !(environment[$0] ?? "").isEmpty }) { return [:] }
+        var candidates: [String] = []
+        if let language = locale.language.languageCode?.identifier {
+            if let region = locale.region?.identifier { candidates.append("\(language)_\(region).UTF-8") }
+            if let region = locale.language.region?.identifier { candidates.append("\(language)_\(region).UTF-8") }
+        }
+        let name = candidates.first(where: isAvailable) ?? "en_US.UTF-8"
+        return ["LANG": name]
+    }
+
+    private static func isAvailable(_ name: String) -> Bool {
+        guard let handle = newlocale(LC_CTYPE_MASK | LC_MESSAGES_MASK, name, nil) else { return false }
+        freelocale(handle)
+        return true
+    }
+
     private static func validDirectory(_ directory: String?) -> String {
         var isFolder: ObjCBool = false
         if let directory, FileManager.default.fileExists(atPath: directory, isDirectory: &isFolder), isFolder.boolValue { return directory }
@@ -101,7 +124,8 @@ final class LocalShell {
         var descriptor: Int32 = -1
         // C strings for the child: kept alive until the fork has copied them.
         let arguments = launch.arguments.map { strdup($0) } + [nil]
-        let environment = launch.environment.sorted { $0.key < $1.key }.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        let variables = launch.environment.merging(LocalLaunch.localeEnvironment()) { own, _ in own }
+        let environment = variables.sorted { $0.key < $1.key }.map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { arguments.forEach { free($0) }; environment.forEach { free($0) } }
         pid = arguments.withUnsafeBufferPointer { argv in
             environment.withUnsafeBufferPointer { env in

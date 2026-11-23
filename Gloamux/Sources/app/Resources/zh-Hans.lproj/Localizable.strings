@@ -1136,3 +1136,6 @@
 "Fastest (slow network)" = "最快（慢速网络）";
 "Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "最佳画质会显示桌面背景、平滑字体和视觉效果。平衡会隐藏桌面背景。最快还会关闭主题、动画和字体平滑，适合慢速网络。";
 "Clipboard" = "剪贴板";
+"Check for Updates" = "检查更新";
+"Check for updates automatically" = "自动检查更新";
+"Once a day, Gloamux asks GitHub whether a newer version is out, sending only the app's name and version. Check at any time from Gloamux › Check for Updates." = "Gloamux 每天会向 GitHub 查询一次是否有新版本，只会发送 App 的名称和版本。随时可以从 Gloamux › 检查更新 立即检查。";

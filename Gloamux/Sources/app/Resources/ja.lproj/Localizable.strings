@@ -1136,3 +1136,6 @@
 "Fastest (slow network)" = "最速（低速ネットワーク）";
 "Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "最高画質では壁紙、フォントのスムージング、視覚効果を表示します。バランスでは壁紙を表示しません。最速ではさらにテーマ、アニメーション、フォントのスムージングをオフにし、低速なネットワークに向きます。";
 "Clipboard" = "クリップボード";
+"Check for Updates" = "アップデートを確認";
+"Check for updates automatically" = "アップデートを自動的に確認";
+"Once a day, Gloamux asks GitHub whether a newer version is out, sending only the app's name and version. Check at any time from Gloamux › Check for Updates." = "Gloamux は 1 日に 1 回、新しいバージョンがあるか GitHub に問い合わせます。送信するのは App の名前とバージョンだけです。Gloamux › アップデートを確認 からいつでも確認できます。";

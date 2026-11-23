@@ -485,7 +485,7 @@ private struct LocalFilePane: View {
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.keyboardShortcut(.defaultAction)
+                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 }
             }.padding(22).frame(width: 340)
         }
@@ -643,7 +643,7 @@ private struct RemoteFilePane: View {
                 HStack {
                     Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.keyboardShortcut(.defaultAction)
+                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 }
             }.padding(22).frame(width: 340)
         }

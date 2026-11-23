@@ -23,7 +23,9 @@ let package = Package(
         // Test-only: lets the loopback test host an in-process SSH server. Citadel pulls this same
         // fork transitively; using the same module identity avoids duplicate NIOSSH products.
         // Vendored with agent forwarding added; see Vendor/swift-nio-ssh/VENDORED.md.
-        .package(path: "Vendor/swift-nio-ssh")
+        .package(path: "Vendor/swift-nio-ssh"),
+        // In-app updates (Gloamux › Check for Updates), signed with EdDSA. Only the app executable links it.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
         .target(name: "LocalPTY", path: "Sources/LocalPTY", linkerSettings: [.linkedLibrary("util")]),
@@ -38,7 +40,7 @@ let package = Package(
         .target(name: "Ssh", dependencies: [.product(name: "Citadel", package: "Citadel"), "GloamuxShared", "MasterPassword", "GloamuxNetwork", "Profiles", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOSOCKS", package: "swift-nio-extras"), .product(name: "Crypto", package: "swift-crypto"), .product(name: "_CryptoExtras", package: "swift-crypto")], path: "Sources/ssh"),
         .target(name: "FileTransfer", dependencies: ["GloamuxShared", "Ssh", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSSL", package: "swift-nio-ssl"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "Crypto", package: "swift-crypto")], path: "Sources/file-transfer"),
         .target(name: "App", dependencies: ["LocalPTY", "GloamuxShared", "FileTransfer", "Highlight", "MasterPassword", "Ssh", "Terminal", "Profiles", "Formats", "GloamuxNetwork", "ShellIntents"], path: "Sources/app", resources: [.process("Resources")]),
-        .executableTarget(name: "GloamuxApp", dependencies: ["GloamuxShared", "Formats", "GloamuxNetwork", "Highlight", "Profiles", "Terminal", "MasterPassword", "Ssh", "FileTransfer", "App", "ShellIntents"], path: "Sources/GloamuxApp"),
+        .executableTarget(name: "GloamuxApp", dependencies: ["GloamuxShared", "Formats", "GloamuxNetwork", "Highlight", "Profiles", "Terminal", "MasterPassword", "Ssh", "FileTransfer", "App", "ShellIntents", .product(name: "Sparkle", package: "Sparkle")], path: "Sources/GloamuxApp"),
         .testTarget(name: "FormatsTests", dependencies: ["GloamuxShared", "Formats"], path: "Tests/formats"),
         .testTarget(name: "NetworkTests", dependencies: ["GloamuxShared", "GloamuxNetwork", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio")], path: "Tests/network"),
         .testTarget(name: "HighlightTests", dependencies: ["GloamuxShared", "Highlight"], path: "Tests/highlight"),

@@ -167,7 +167,7 @@ public actor CredentialVault {
         if let deviceSecrets, DeviceSecrets.isAvailable { device = try DeviceSecrets(url: deviceSecrets) }
     }
 
-    /// Touch ID unlock lasts for this app launch only; a restart needs the master password (DATA-PROTECTION.md).
+    /// Touch ID unlock lasts for this app launch only; a restart needs the master password (docs/en/DATA-PROTECTION.md).
     private func forgetTouchID() { keyReader = nil }
     public var state: String { vault == nil ? "Not configured" : vault!.isLocked ? "Locked" : "Unlocked" }
     public func create(password: String, iterations: Int = MasterVault.defaultIterations) throws {

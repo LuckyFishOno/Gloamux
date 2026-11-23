@@ -139,6 +139,7 @@ private struct GeneralSettings: View {
     @ObservedObject var model: WorkspaceModel
     @AppStorage(WorkspaceModel.restoreTabsKey) private var reopenTabs = false
     @AppStorage(WorkspaceModel.lockIdleKey) private var lockAfter = 0
+    @ObservedObject private var updates = AppUpdates.shared
 
 
     var body: some View {
@@ -175,6 +176,15 @@ private struct GeneralSettings: View {
                     Text(T("Lock the workspace"))
                     InfoButton(T("Covers every terminal after this long without using Gloamux. Sessions stay connected. Unlock with Touch ID or the Mac password. Lock at any time with ⌃⌘L."))
                 }
+            }
+            if updates.isAvailable {
+                Toggle(isOn: Binding(get: { updates.checksAutomatically }, set: { updates.checksAutomatically = $0 })) {
+                    HStack(spacing: 6) {
+                        Text(T("Check for updates automatically"))
+                        InfoButton(T("Once a day, Gloamux asks GitHub whether a newer version is out, sending only the app's name and version. Check at any time from Gloamux › Check for Updates."))
+                    }
+                }
+                .accessibilityIdentifier("automaticUpdatesToggle")
             }
             LabeledContent {
                 HStack(spacing: 8) {

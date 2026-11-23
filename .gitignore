@@ -29,3 +29,4 @@ quick-commands.json
 layout.json
 *.pem
 *.key
+/web/

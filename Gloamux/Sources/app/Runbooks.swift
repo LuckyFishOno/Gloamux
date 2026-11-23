@@ -433,7 +433,7 @@ private struct RunbookDocumentView: View {
                 Spacer()
                 Button(T("Cancel")) { confirming = nil }.keyboardShortcut(.cancelAction)
                 Button(T("Run")) { confirming = nil; run(blocks, in: tab) }
-                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .tint(risky ? .red : nil)
             }
         }

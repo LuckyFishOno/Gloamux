@@ -1,6 +1,6 @@
 # Gloamux roadmap
 
-[English](ROADMAP.md) · [繁體中文](ROADMAP.zh-TW.md)
+[English](ROADMAP.md) · [繁體中文](../zh-TW/ROADMAP.md) · [Back to README](../../README.md)
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 

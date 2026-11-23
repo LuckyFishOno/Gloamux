@@ -150,7 +150,10 @@ public struct DesktopView: View {
                     masterPasswordUnlock
                 } else { Button(T("Lock vault")) { Task { await model.lockVault() } } }
                 if !model.savesWithoutUnlock { savedPasswordsButton }
-            }.padding(.top, 8)
+            }
+            // Fills the row so the buttons sit at its left edge, under the section title, rather than centered.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
         } label: {
             HStack(spacing: 8) {
                 // The name keeps its width; a narrow sidebar shortens the state beside it instead.
@@ -1452,6 +1455,7 @@ struct SessionPane: View {
                         }
                         .disabled(tab.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                                   tab.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .buttonStyle(.appTinted).tint(model.theme.accent.color)
                         .accessibilityIdentifier("saveConnectionButton")
                     }
                     Button(T(tab.transportLost ? "Reconnect" : "Connect")) { Task { await model.connect(tab) } }

@@ -1,6 +1,6 @@
 # Xshell 與 MobaXterm 功能待辦
 
-[English](FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.zh-TW.md)
+[English](../en/FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.md) · [回到 README](../../README.zh-TW.md)
 
 基準於 2026 年 11 月 20 日審閱。本待辦涵蓋 Xshell 8 和 MobaXterm 26.6 有文件記載的產品功能、設定和整合工作流程，包含 Professional Customizer 和 11 月 11 日的 Xshell 更新。Windows 專屬的工作流程在下方列出 macOS 的對應做法。每個核取方塊都是一項 Gloamux 開發項目，未完成的項目可能已包含 App 現有的部分功能。Gloamux 不打算做的選用項目已於 2026 年 11 月 22 日移除。
 
@@ -137,4 +137,5 @@
 
 - [ ] 在 macOS 執行器上加入 GitHub Actions CI，進行建置和 Swift 測試。在有作用中視窗工作階段的獨立工作中執行 AppKit 互動測試。
 - [ ] 加入以 vttest 為基礎的自動化終端相容性測試，並對跳脫序列解析器做模糊測試。
-- [ ] 為發布版本簽署與公證、加入 Sparkle 更新，並發布 Homebrew cask。
+- [x] 加入 Sparkle 更新：**Gloamux › 檢查更新** 和每日檢查，更新清單以 EdDSA 簽署並隨每個 GitHub release 上傳。
+- [ ] 為發布版本簽署與公證，並發布 Homebrew cask。
