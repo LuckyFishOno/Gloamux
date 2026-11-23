@@ -1130,7 +1130,7 @@ struct SessionPane: View {
                 Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
                 Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier("hostFingerprint")
-                HStack { Button(T("Cancel")) { model.answerHostKey(tab, approve: false) }; Spacer(); Button(T("Trust and connect")) { model.answerHostKey(tab, approve: true) }.buttonStyle(.borderedProminent).accessibilityIdentifier("trustHostButton") }
+                HStack { Button(T("Cancel")) { model.answerHostKey(tab, approve: false) }; Spacer(); Button(T("Trust and connect")) { model.answerHostKey(tab, approve: true) }.buttonStyle(.appProminent).accessibilityIdentifier("trustHostButton") }
             }.padding(24).frame(width: 530)
         }
         .sheet(item: $reviewedHostKey) { change in
@@ -1455,14 +1455,15 @@ struct SessionPane: View {
                         .accessibilityIdentifier("saveConnectionButton")
                     }
                     Button(T(tab.transportLost ? "Reconnect" : "Connect")) { Task { await model.connect(tab) } }
-                        .buttonStyle(.borderedProminent).tint(model.theme.accent.color)
+                        .buttonStyle(.appProminent).tint(model.theme.accent.color)
                         .keyboardShortcut(.defaultAction)
                         .accessibilityIdentifier("connectButton")
                 }
             }
         }
         .controlSize(.large)
-        .frame(maxWidth: isNewConnection ? .infinity : 870, alignment: .leading)
+        // Fills the pane to its right edge, as the New connection form does, after a failed connection too.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sshFormWidth = $0 }
         .disabled(tab.busy)
     }
@@ -1574,7 +1575,8 @@ struct WorkspaceToolbarHost<Content: ToolbarContent>: View, Equatable {
     @ToolbarContentBuilder let content: () -> Content
 
     var body: some View {
-        Color.clear.frame(width: 0, height: 0).toolbar(content: content)
+        // The toolbar keeps macOS's own toolbar buttons rather than the app's button style around it.
+        Color.clear.frame(width: 0, height: 0).toolbar(content: content).buttonStyle(.automatic)
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.state == rhs.state }

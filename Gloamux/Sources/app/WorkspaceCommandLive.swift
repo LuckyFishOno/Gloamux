@@ -162,6 +162,41 @@ extension WorkspaceCommand {
             let (owner, tab) = try tab(args[0], windows)
             if try toggle(args[1]) != owner.multiExec { owner.toggleMultiExec() }
             return ["id": tab.id.uuidString, "multiExec": owner.multiExec]
+        case "record":
+            try count(args, 2...2)
+            let (owner, tab) = try tab(args[0], windows)
+            guard tab.desktop == nil else { throw Usage("Remote desktop tabs have no terminal to record.") }
+            let wanted = try toggle(args[1])
+            if wanted, !tab.terminalReady { throw WorkspaceError.invalid("Wait for the terminal to open before recording.") }
+            var info: [String: Any] = ["id": tab.id.uuidString]
+            if wanted, !owner.recordings.isRecording(tab) {
+                owner.recordings.start(tab)
+            } else if !wanted, let saved = owner.recordings.stop(tab) {
+                // The same notice as Stop recording in the menu.
+                owner.recordingSaved = saved
+                info["file"] = saved.lastPathComponent
+            }
+            info["recording"] = owner.recordings.isRecording(tab)
+            return info
+        case "integration":
+            try count(args, 1...1)
+            let (owner, tab) = try tab(args[0], windows)
+            guard tab.terminalReady, tab.desktop == nil else { throw WorkspaceError.invalid("Wait for the terminal to open first.") }
+            owner.installShellIntegration(tab)
+            return ["id": tab.id.uuidString, "integration": true]
+        case "view":
+            try count(args, 2...2)
+            let (owner, tab) = try tab(args[0], windows)
+            switch args[1] {
+            case "files":
+                guard !tab.isLocal, tab.desktop == nil, tab.container == nil else { throw Usage("Choose an SSH or FTP tab for file transfer.") }
+                owner.openFileTransfer(for: tab)
+            case "terminal":
+                if owner.tabs.contains(where: { $0.id == tab.id }) { owner.selectTab(tab.id) }
+                owner.showTerminal()
+            default: throw Usage("Choose terminal or files.")
+            }
+            return ["id": tab.id.uuidString, "view": args[1]]
         case "readonly":
             try count(args, 2...2)
             let tab = try tab(args[0], windows).tab

@@ -59,7 +59,7 @@ struct AgentReview: ViewModifier {
                         .keyboardShortcut(.cancelAction)
                     Spacer()
                     Button(T("Run")) { model.answerAgentProposal(tab, run: true) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.appProminent)
                         .disabled(stale || tab.readOnly)
                         .accessibilityIdentifier("agentRunButton")
                 }

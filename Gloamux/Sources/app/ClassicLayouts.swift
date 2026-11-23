@@ -623,7 +623,7 @@ private struct SideRailFiles: View {
                     Button { model.openFileTransfer(for: tab) } label: {
                         Label(T("Two-pane"), systemImage: "arrow.left.arrow.right").labelStyle(.titleAndIcon).appFont(.system(size: 11))
                     }
-                    .buttonStyle(.bordered).controlSize(.small)
+                    .buttonStyle(.app).controlSize(.small)
                     .help(T("Open these files in the two-pane File Transfer view"))
                 }
             }

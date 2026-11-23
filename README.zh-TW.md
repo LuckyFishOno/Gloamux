@@ -1,25 +1,162 @@
 # Gloamux
 
-[English](README.md)
+[English](README.md) · [繁體中文](README.zh-TW.md)
 
-Gloamux 是 macOS 原生的 SSH、檔案傳輸和遠端桌面工具。用資料夾整理連線，終端可以並排，伺服器的檔案就在 shell 旁邊。
+**macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-## 重點功能
+目前版本：**Gloamux 1.0 (build 1)**。
 
-- **終端** · 分頁、拖曳分割窗格、本機 shell、Shell 整合、搜尋、錄影和 72 組配色。
-- **SSH** · 密碼、金鑰、`ssh-agent`、Secure Enclave 金鑰、跳板、代理、連接埠轉發和 X11。
-- **檔案** · 像 Finder 的檔案側欄、雙欄傳輸畫面，支援 SFTP、SCP、FTP 和 FTPS。
-- **遠端桌面** · 在 Gloamux 分頁裡使用 RDP 和 VNC。
-- **登入一次就好** · 密碼由 Secure Enclave 保護、只存在這台 Mac，也可另用密碼庫。
-- **安全** · 為正式環境加上標籤，高風險指令執行前先確認。
-- **帶著連線過來** · 可從 Xshell、MobaXterm、PuTTY、OpenSSH 或 CSV 匯入，匯出時不含密碼。
-- **三種版面** · 預設、經典或工作台，介面提供英文、繁體中文、簡體中文、日文和西班牙文。
+Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，視窗裡的每個動作也都能用 `gloamux` 命令列完成。
+
+<p align="center">
+  <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/LuckyFishOno/Gloamux?display_name=tag"></a>
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple&logoColor=white">
+  <img alt="Apple 晶片" src="https://img.shields.io/badge/Apple%20silicon-M1%2B-black?logo=apple&logoColor=white">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI%20%2B%20AppKit-F05138?logo=swift&logoColor=white">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-RDP%20engine-000000?logo=rust&logoColor=white">
+</p>
+
+<p align="center">
+  <img src="docs/assets/gloamux-workspace.png" width="1320" alt="Gloamux 的連線樹有 Production、Staging 和 Lab 資料夾，兩個終端左右並排，右側是配色面板" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest/download/Gloamux.dmg"><strong>下載 Gloamux</strong></a>
+  ·
+  <a href="#安裝">安裝</a>
+  ·
+  <a href="#第一次開啟">第一次開啟</a>
+  ·
+  <a href="#命令列">命令列</a>
+  ·
+  <a href="#從原始碼建置">從原始碼建置</a>
+  ·
+  <a href="https://github.com/LuckyFishOno/Gloamux/issues">回報問題</a>
+</p>
+
+## 為什麼用它？
+
+Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠端桌面 App 和一份主機清單的人。它參考 Xshell、MobaXterm 這類工具的工作方式，重新做成 Mac 原生 App。
+
+| 你得到什麼 | 為什麼重要 |
+| --- | --- |
+| **所有連線放在同一個工作區** | SSH、SFTP、FTP/FTPS、RDP、VNC、序列埠、Telnet、Mosh、容器和 Pod 都在同一棵資料夾樹裡。 |
+| **配合工作方式的終端** | 分頁、拖曳分割窗格、同時輸入到所有窗格，以及 73 組配色。 |
+| **檔案就在 shell 旁邊** | 像 Finder 的檔案側欄會跟著目前的窗格，另有雙欄傳輸畫面。 |
+| **登入一次就好** | 密碼只留在這台 Mac，由 Secure Enclave 保護，也可以另用主密碼保護的密碼庫。 |
+| **正式環境的防護** | 為環境加上標籤，高風險指令在正式伺服器執行前先確認。 |
+| **可寫腳本** | `gloamux` 命令列和給 AI 代理用的本機 MCP 伺服器，能做的事和視窗一致。 |
+| **預設就重視隱私** | 不用帳號、沒有遙測，除了你開的連線之外不會連網。 |
+
+## 畫面
+
+<p align="center">
+  <img src="docs/assets/gloamux-new-connection.png" width="1320" alt="新連線分頁展開 RDP 區段，顯示解析度、Retina、連線品質和剪貼簿選項" />
+</p>
+
+新連線列出本機、SSH、RDP、VNC 和其他連線。遠端桌面可以走 SSH 通道，並選擇解析度、Retina 繪製和連線品質。
+
+## 功能
+
+- **終端** · 分頁、拖曳分割窗格、本機 shell、Shell 整合（提示字元標記、指令狀態、通知）、搜尋、記錄檔、會遮住密碼的錄影，以及 73 組配色。
+- **SSH** · 密碼，Ed25519、ECDSA、RSA 金鑰，`ssh-agent`、Secure Enclave 金鑰、鍵盤互動式登入、最多八層跳板、SOCKS 和 HTTP 代理、連接埠轉發、代理轉發，以及透過 XQuartz 的 X11。
+- **檔案** · 跟著目前窗格的檔案側欄、可續傳佇列的雙欄傳輸畫面、快速查看，以及用 Mac App 編輯遠端檔案，支援 SFTP、SCP、FTP 和 FTPS。
+- **遠端桌面** · 在 Gloamux 分頁裡使用 RDP（含網路層級驗證）和 VNC（含 macOS 螢幕共享），可走 SSH 通道並共用剪貼簿。
+- **其他連線** · 序列埠、Telnet、Mosh、Docker 容器、Kubernetes Pod 和 AWS Systems Manager 工作階段。
+- **安全** · Production、Staging、Test、Development 標籤，高風險指令確認，主機金鑰檢視與紀錄，以及鎖定工作區。
+- **帶著連線過來** · 可從 Xshell、MobaXterm、PuTTY 或 KiTTY、OpenSSH 和 CSV 匯入，匯出時不含密碼。也能用 Bonjour、Tailscale 和 AWS 找主機。
+- **自動化** · 快速指令、輸出觸發、Markdown 操作手冊、指令面板、Spotlight、捷徑和 `gloamux://` 連結。
+- **調成你要的樣子** · 預設、經典和工作台三種版面，可調整的應用程式字級，介面提供英文、繁體中文、簡體中文、日文和西班牙文。
 
 每項功能的細節請見[功能說明](FEATURES.zh-TW.md)。
 
-## 建置
+## 系統需求
 
-需要 macOS 14 以上、Xcode，以及 Rust 1.94 以上。
+- macOS 14 以上
+- Apple 晶片的 Mac（M1 或更新）
+
+目前不支援 Intel Mac。
+
+## 安裝
+
+1. 下載最新的 [`Gloamux.dmg`](https://github.com/LuckyFishOno/Gloamux/releases/latest/download/Gloamux.dmg)。
+2. 打開磁碟映像檔。
+3. 把 **Gloamux.app** 拖到 **Applications**。
+4. 從「應用程式」打開 **Gloamux**。
+
+## 第一次開啟
+
+可下載的版本是 ad hoc 簽署，沒有經過 Apple 公證，所以第一次開啟時 macOS 會要你確認。這是 Mac App Store 以外發布的 App 常見的情況。
+
+如果 macOS 顯示 **無法打開「Gloamux」**：
+
+1. 按 **完成**。
+2. 打開 **系統設定**。
+3. 進入 **隱私權與安全性**。
+4. 捲到 **安全性**。
+5. 在 Gloamux 那一列按 **強制打開**。
+6. 如果 macOS 要求，就驗證身分。
+7. 按 **打開**。
+
+確認過一次之後，Gloamux 就能正常開啟。若想略過這一步，可以[從原始碼建置](#從原始碼建置)。
+
+## 開始使用
+
+- 選 **檔案 › 新連線**（⇧⌘N），再選本機、SSH、RDP、VNC 或其他連線。⌘T 開啟本機終端。
+- 密碼登入成功後按 **儲存**，連線就會留在連線管理裡，之後雙擊即可開新分頁。
+- 把分頁拖到窗格邊緣就能分割。⌘D 和 ⇧⌘D 分割目前的窗格。
+- 工具列的 **檔案** 按鈕開啟伺服器的檔案，**檔案傳輸** 開啟雙欄畫面。
+- 從工具列的 **新連線** 選單 › **匯入連線** 匯入既有的連線。
+
+## 命令列
+
+App 內附 `gloamux` 指令，`gloam` 是它的簡寫：
+
+```sh
+export PATH="/Applications/Gloamux.app/Contents/Resources/bin:$PATH"
+```
+
+```sh
+gloamux sessions list
+gloamux sessions add "Work server" ssh server.example.com deploy
+gloamux sessions options "Work server" jump=Bastion x11=on
+gloamux ssh "Work server"
+gloamux files get --session "Work server" /var/log/app.log ./app.log
+gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite
+gloamux tabs list
+gloamux tabs run TAB_ID "uptime"
+gloamux tabs read TAB_ID 50
+gloamux forwards start TAB_ID local 8080 localhost 80
+gloamux hosts discover bonjour
+gloamux settings set terminal.font-size 14
+gloamux config export ~/Gloamux.gloamuxconfig
+```
+
+`gloamux files` 支援 SFTP、SCP、FTP，以及明確和隱含 FTPS，並沿用已存連線的登入方式、代理、跳板和主機信任。一次性的密碼用 `--password-stdin`，只為這次指令解鎖密碼庫用 `--vault-password-stdin`，第一次連的伺服器可用 `--host-key` 帶入你核對過的指紋。這些臨時提供的憑證都不會被儲存。
+
+`gloamux tabs` 和 `gloamux commands send|run` 會操作正在執行的 App；`gloamux tabs list` 列出的分頁 ID 在每個視窗都能用。管理指令回傳 JSON，檔案指令可加 `--json`。結束代碼：0 成功、1 操作失敗、2 用法錯誤、130 表示被 Ctrl-C 中止。執行 `gloamux --help`，或用 `gloamux <指令> --help` 看各指令說明。
+
+Shell 補全：Zsh 先執行 `autoload -Uz compinit && compinit`，再執行 `source <(gloamux completion zsh)`；Bash 把 `gloamux completion bash` 存成檔案後 `source` 它。
+
+### AI 代理（MCP）
+
+`gloamux mcp` 讓 AI 代理透過 [Model Context Protocol](https://modelcontextprotocol.io) 使用 Gloamux。在 **設定 › AI 代理** 開啟它，選擇代理可以使用的連線，再把那裡顯示的指令加到代理，例如：
+
+```sh
+claude mcp add gloamux -- /Applications/Gloamux.app/Contents/Resources/bin/gloamux mcp
+```
+
+代理可以列出和開啟允許的連線、讀取你分享的輸出，並提議指令。提議的指令要你在 Gloamux 裡看過才會執行，代理也拿不到密碼或金鑰。`gloamux agents status|history|clear-history|revoke|off` 可查看及撤銷權限。
+
+## 從原始碼建置
+
+### 需要
+
+- 執行 macOS 14 以上的 Apple 晶片 Mac
+- 含 macOS SDK 的 Xcode
+- Rust 1.94 以上（RDP 和 VNC 引擎使用）
+
+### 建置
 
 ```sh
 git clone https://github.com/LuckyFishOno/Gloamux.git
@@ -28,50 +165,40 @@ cd Gloamux
 open build/Gloamux.app
 ```
 
-執行測試：`swift test --package-path Gloamux`。
+只建置命令列：`swift build --package-path Gloamux --product gloamux`。
 
-Gloamux 曾名為 Termac，更早叫 MShell。第一次啟動會把最近一個舊名稱的資料夾和設定搬過來，`.termacconfig`、`.termacsessions`、`.mshellconfig` 和 `.mshellsessions` 匯出檔也能照常匯入。指令改成 `gloamux`，連結改用 `gloamux://`。
-
-## 命令列
-
-在專案根目錄執行 `export PATH="$PWD/build/Gloamux.app/Contents/Resources/bin:$PATH"`，就能使用打包好的 `gloamux`。若要單獨建置命令列工具，可執行 `swift build --package-path Gloamux --product gloamux`。App 也附有 `gloam`，是同一個指令的簡寫。
+### 執行測試
 
 ```sh
-gloamux sessions list
-gloamux files ls --session "Work server" --json
-gloamux files get --session "Work server" /remote/report.csv ./report.csv
-gloamux files put --session "Work server" ./report.csv /remote/report.csv --overwrite
-gloamux files get --session "Work server" /remote/logs ./logs --recursive
-gloamux sessions add-other "Core switch" serial /dev/cu.usbserial-1 baud=115200 flow=rts-cts
-gloamux ssh "Work server"
-gloamux tabs list
-gloamux tabs run TAB_ID "uptime"
-gloamux tabs read TAB_ID 50
-gloamux tabs multiexec TAB_ID on
-gloamux forwards live-list
-gloamux xserver start
-gloamux settings set terminal.font-size 14
-gloamux config export ~/Gloamux.gloamuxconfig
-gloamux commands --help
+swift test --package-path Gloamux
+cd Gloamux/RDP && cargo test --release
 ```
 
-檔案傳輸支援 SFTP、SCP、FTP 和兩種 FTPS，並沿用已儲存的連線設定。用 `--password-stdin` 輸入臨時密碼或私鑰密語，或用 `--vault-password-stdin` 解鎖這次指令使用的密碼庫。需要回答 SSH 額外登入問題時使用 `--interactive`。使用明文 FTP 須加上 `--allow-plain-ftp`。
+Swift 測試約有 400 項，包含本機回送的 SSH、SFTP、FTP 和轉發伺服器。少數需要指定遠端主機或 Xshell 範例檔的測試，在沒有這些條件時會略過。
 
-SSH 會檢查已信任的主機金鑰。首次連線時，可用 `--host-key` 傳入已核對的 SHA-256 指紋，供這次連線使用。執行 `gloamux hosts --help` 可查看如何管理已儲存的主機金鑰。
+## 本機資料與隱私
 
-`gloamux ssh` 使用相同的登入選項，在目前的終端機開啟連線的 shell。`gloamux tabs` 和 `gloamux commands send|run` 操作執行中的 App，`gloamux tabs list` 取得的分頁 ID 在任何視窗都能使用。`gloamux xserver` 檢查和啟動 XQuartz，不需要開著 App。
+Gloamux 的資料都放在你的 Mac 上：
 
-`gloamux mcp` 讓 AI 代理透過 [Model Context Protocol](https://modelcontextprotocol.io) 使用 Gloamux。在「設定 › AI 代理」開啟存取、允許代理可用的連線，再把那裡顯示的指令加到代理，例如 `claude mcp add gloamux -- /Applications/Gloamux.app/Contents/Resources/bin/gloamux mcp`。代理可以列出及開啟允許的連線、讀取你分享的輸出，並提出指令；指令要等你在 Gloamux 檢查後才會執行。`gloamux agents status|history|revoke|off` 可查看及撤銷存取。
+```text
+~/Library/Application Support/Gloamux
+```
 
-用 `gloamux --help` 查看指令，或用 `gloamux <command> --help` 查看個別用法。管理指令輸出 JSON，檔案操作加上 `--json` 即可取得 JSON。結束碼 0 表示成功，1 表示操作失敗，2 表示用法錯誤，按 Ctrl-C 停止則為 130。`gloamux ssh` 會回傳遠端 shell 的結束碼。
+已存連線、主機金鑰、快速指令、操作手冊、錄影和記錄檔都在這裡。登入成功的密碼由 Secure Enclave 金鑰保護，或放進以主密碼加密的密碼庫。匯出檔和設定備份不含這台 Mac 記住的密碼。Gloamux 不用帳號，也不送出分析或遙測；它只連到你開啟的伺服器，以及可選的已存主機連線檢查，這項可以在 **設定 › 安全** 關閉。完整清單請見[資料保護](DATA-PROTECTION.zh-TW.md)。
 
-Zsh 若尚未啟用補全，可先執行 `autoload -Uz compinit && compinit`，再執行 `source <(gloamux completion zsh)`。Bash 可用 `gloamux completion bash > ~/.gloamux-completion.bash` 儲存腳本，再用 `source ~/.gloamux-completion.bash` 載入。這個方式也適用於 macOS 內建的 Bash。
+Gloamux 曾名為 Termac，更早叫 MShell。第一次啟動會從最近一個舊名稱搬移資料和設定，舊的匯出檔也能照常匯入。
 
-## 更多文件
+## 文件
 
 - [功能說明](FEATURES.zh-TW.md)
-- [開發指南](DEVELOPMENT.md)（英文）：程式目錄、測試和第三方授權
-- [資料保護](DATA-PROTECTION.md)（英文）
-- [路線圖](ROADMAP.md)和[功能清單](FEATURE-BACKLOG.md)（英文）
+- [開發指南](DEVELOPMENT.zh-TW.md)：原始碼結構、測試和第三方授權聲明
+- [資料保護](DATA-PROTECTION.zh-TW.md)
+- [路線圖](ROADMAP.zh-TW.md)和[功能待辦](FEATURE-BACKLOG.zh-TW.md)
 
-Gloamux 目前仍是初版。
+## 參與貢獻
+
+歡迎回報問題和聚焦的 Pull Request。回報時附上 macOS 版本、Mac 機型、連線種類（SSH、SFTP、RDP、VNC 等）、知道的話也附上伺服器軟體，介面問題請附截圖或短片。請拿掉不想公開的主機名稱、使用者名稱和金鑰。
+
+如果 Gloamux 對你有幫助，幫專案按個星星，能讓更多 Mac 使用者找到它。
+
+Gloamux 是獨立專案，與 Apple、Microsoft、NetSarang 或 Mobatek 沒有關聯，也未獲其背書。macOS 是 Apple Inc. 的商標。Xshell、MobaXterm、Windows 和 Remote Desktop 是各自擁有者的商標。

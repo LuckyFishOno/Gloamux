@@ -1,14 +1,16 @@
 # Theme inventory
 
+[English](THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.zh-TW.md)
+
 Researched on November 20, 2026. This inventory lists candidate color themes from Linux distribution terminals and the most installed Visual Studio Code themes. It records where each palette comes from and how reliable the values are.
 
 **Bundled so far:** seven Linux presets in `ThemeGallery.swift` (`linuxPresets`): Ubuntu, Kali Dark, GNOME Dark, GNOME Light, Breeze, Tango, and Linux Console. Kali-Dark was cross-checked against a second independent copy of the colorscheme file, and Linux Console matches the default palette in the kernel's `drivers/tty/vt/vt.c`. Window chrome colors are derived. Text on every chrome and selection color has at least 4.5:1 contrast.
 
-**Visual Studio Code themes:** 48 more themes are bundled in `vscode-themes.json`, for 58 in total. Nine come from the built-in theme extensions of Visual Studio Code 1.144.1 (Abyss, Kimbie Dark, Monokai, Monokai Dimmed, Quiet Light, Red, Solarized Dark, Solarized Light, Tomorrow Night Blue). Thirty-nine come from the 19 MIT-licensed Marketplace extensions in the ranking below. Bearded Theme is excluded because it is GPL licensed, and Monokai Pro is excluded because it is commercial. Variants that differ only in italics or borders are skipped. `scripts/build-vscode-themes.py` regenerates the blueprint, its checksum, and `vscode-community-themes-licenses.txt` from a local Visual Studio Code app and downloaded `.vsix` packages. Only workbench colors are used; token colors are not bundled. The theme list in the app is a single list with a search field. The former Gloamux theme was removed. Gloam, a preset drawn from the app icon (deep indigo with a violet accent), is the default; Midnight stays available.
+**Visual Studio Code themes:** 48 more themes are bundled in `vscode-themes.json`, for 58 Visual Studio Code themes in total. With the eight Gloamux presets and the seven Linux presets, the app offers 73 themes. Nine come from the built-in theme extensions of Visual Studio Code 1.144.1 (Abyss, Kimbie Dark, Monokai, Monokai Dimmed, Quiet Light, Red, Solarized Dark, Solarized Light, Tomorrow Night Blue). Thirty-nine come from the 19 MIT-licensed Marketplace extensions in the ranking below. Bearded Theme is excluded because it is GPL licensed, and Monokai Pro is excluded because it is commercial. Variants that differ only in italics or borders are skipped. `scripts/build-vscode-themes.py` regenerates the blueprint, its checksum, and `vscode-community-themes-licenses.txt` from a local Visual Studio Code app and downloaded `.vsix` packages. Only workbench colors are used; token colors are not bundled. The theme list in the app is a single list with a search field. The former Gloamux theme was removed. Gloam, a preset drawn from the app icon (deep indigo with a violet accent), is the default; Midnight stays available.
 
 ## Current state
 
-The app bundles `vscode-themes.json`, which contains the 10 built-in themes from Visual Studio Code's `theme-defaults` extension: Light 2026, Dark 2026, Dark+, Dark Modern, Light+, Light Modern, Dark (Visual Studio), Light (Visual Studio), Dark High Contrast, and Light High Contrast. The loader checks a SHA-256 checksum, accepts at most 64 `color-palette` assets, and reads Visual Studio Code color keys. Terminal colors come from `terminal.ansi*` keys, with a fallback palette when a theme omits them.
+`vscode-themes.json` started with the 10 built-in themes from Visual Studio Code's `theme-defaults` extension, and now also holds the 48 themes listed above: Light 2026, Dark 2026, Dark+, Dark Modern, Light+, Light Modern, Dark (Visual Studio), Light (Visual Studio), Dark High Contrast, and Light High Contrast. The loader checks a SHA-256 checksum, accepts at most 64 `color-palette` assets, and reads Visual Studio Code color keys. Terminal colors come from `terminal.ansi*` keys, with a fallback palette when a theme omits them.
 
 Distribution palettes define only the terminal: foreground, background, cursor, and 16 ANSI colors. To use one as a full workspace preset, Gloamux must derive the toolbar, sidebar, tab, and accent colors.
 
@@ -92,7 +94,7 @@ Notes:
 | Visual Studio Code built-ins | Solarized Dark, Solarized Light, Monokai, Abyss, Quiet Light, Tomorrow Night Blue |
 | Popular community themes | GitHub Dark and Light, One Dark Pro, Dracula, Tokyo Night, Night Owl, Catppuccin, Nord, Gruvbox, Ayu |
 
-The current loader accepts at most 64 assets. The bundled 10 plus this set are about 34 presets, because several extensions provide more than one variant.
+The loader accepts at most 64 assets. This set, written when only the 10 defaults were bundled, is now included in the 58 Visual Studio Code themes above.
 
 ## Before bundling
 

@@ -332,7 +332,8 @@ private struct RunbookDocumentView: View {
             HStack(spacing: 10) {
                 Text(runbook.title).appFont(.title3.bold()).lineLimit(1)
                 Spacer()
-                Picker(T("Run in"), selection: Binding(get: { target?.id }, set: { destination = $0 })) {
+                AppPicker(T("Run in"), selection: Binding(get: { target?.id }, set: { destination = $0 }),
+                          current: target.map { UIStrings.text($0.title, language: model.language) + ($0.environment.map { " · " + T($0.title) } ?? "") } ?? T("No open terminal")) {
                     if sessions.isEmpty { Text(T("No open terminal")).tag(UUID?.none) }
                     ForEach(sessions) { tab in
                         Text(UIStrings.text(tab.title, language: model.language) + (tab.environment.map { " · " + T($0.title) } ?? "")).tag(Optional(tab.id))

@@ -72,6 +72,15 @@ struct ConnectionEditor: View {
 
     private static func defaultPort(_ security: FTPSecurity?) -> Int { security?.defaultPort ?? 22 }
 
+    private var protocolTitle: String {
+        switch ftpSecurity {
+        case nil: return "SSH"
+        case .explicitTLS?: return T("FTPS (explicit, AUTH TLS)")
+        case .implicitTLS?: return T("FTPS (implicit TLS)")
+        case .some(.none): return T("FTP (not encrypted)")
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Label(T(item == nil ? "New saved session" : "Session properties"), systemImage: "server.rack")
@@ -79,7 +88,7 @@ struct ConnectionEditor: View {
             Form {
                 TextField(T("Name"), text: $name)
                 HStack(spacing: 6) {
-                    Picker(T("Protocol"), selection: $ftpSecurity) {
+                    AppPicker(T("Protocol"), selection: $ftpSecurity, current: protocolTitle) {
                         Text("SSH").tag(FTPSecurity?.none)
                         Text(T("FTPS (explicit, AUTH TLS)")).tag(Optional(FTPSecurity.explicitTLS))
                         Text(T("FTPS (implicit TLS)")).tag(Optional(FTPSecurity.implicitTLS))
@@ -184,7 +193,8 @@ struct ConnectionEditor: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    Picker(T("File transfer"), selection: $fileProtocol) {
+                    AppPicker(T("File transfer"), selection: $fileProtocol,
+                              current: T(fileProtocol == .sftp ? "SFTP only" : fileProtocol == .scp ? "SCP only" : "SFTP, or SCP when SFTP is off")) {
                         Text(T("SFTP, or SCP when SFTP is off")).tag(FileProtocolChoice?.none)
                         Text(T("SFTP only")).tag(Optional(FileProtocolChoice.sftp))
                         Text(T("SCP only")).tag(Optional(FileProtocolChoice.scp))
@@ -487,7 +497,10 @@ struct JumpHostPicker: View {
 
     var body: some View {
         let candidates = store.jumpCandidates(excluding: excluding)
-        Picker(T("SSH jump host"), selection: $selection) {
+        let current = selection.map { id in
+            candidates.first { $0.id == id }.map { $0.name + " · " + ($0.connection?.host ?? "") } ?? T("Unavailable jump host")
+        } ?? T("None")
+        AppPicker(T("SSH jump host"), selection: $selection, current: current) {
             Text(T("None")).tag(UUID?.none)
             if let selection, !candidates.contains(where: { $0.id == selection }) {
                 Text(T("Unavailable jump host")).tag(Optional(selection))
@@ -506,7 +519,7 @@ struct ProxyKindPicker: View {
     var labeled = false
 
     var body: some View {
-        Picker(T("Proxy type"), selection: $kind) {
+        AppPicker(T("Proxy type"), selection: $kind, current: kind.title) {
             ForEach([ProxyKind.socks5, .socks4, .http], id: \.self) { Text(verbatim: $0.title).tag($0) }
         }
         .labelsHidden(!labeled)

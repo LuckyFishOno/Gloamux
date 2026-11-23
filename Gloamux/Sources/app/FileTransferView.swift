@@ -21,7 +21,8 @@ struct WorkspaceModeSwitch: View {
     let choose: (WorkspaceMode) -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
+        // Both halves take the wider title's width, so the switch is symmetric in every language.
+        EqualWidthRow(spacing: 2) {
             ForEach(WorkspaceMode.allCases, id: \.self) { segment($0) }
         }
         .padding(2)
@@ -32,12 +33,17 @@ struct WorkspaceModeSwitch: View {
     private func segment(_ value: WorkspaceMode) -> some View {
         let selected = mode == value
         return Button { if !selected { choose(value) } } label: {
-            Text(value.title)
-                .appFont(.system(size: 12, weight: selected ? .semibold : .regular))
-                .foregroundStyle(theme.foreground.color.opacity(selected ? 1 : 0.6))
+            // The bold title is laid out hidden underneath, so choosing a side doesn't change its width.
+            ZStack {
+                Text(value.title).appFont(.system(size: 12, weight: .semibold)).hidden()
+                Text(value.title)
+                    .appFont(.system(size: 12, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(theme.foreground.color.opacity(selected ? 1 : 0.6))
+            }
                 .lineLimit(1)
                 .frame(minWidth: 32)
                 .padding(.horizontal, 12).padding(.vertical, 4)
+                .frame(maxWidth: .infinity)
                 .background {
                     if selected {
                         RoundedRectangle(cornerRadius: 5).fill(theme.background.color)
@@ -48,6 +54,32 @@ struct WorkspaceModeSwitch: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A row whose items all take the widest item's ideal width, centered in each slot.
+struct EqualWidthRow: Layout {
+    var spacing: CGFloat = 0
+
+    private func cell(_ subviews: Subviews) -> CGSize {
+        subviews.reduce(.zero) { size, view in
+            let ideal = view.sizeThatFits(.unspecified)
+            return CGSize(width: max(size.width, ideal.width), height: max(size.height, ideal.height))
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let cell = cell(subviews)
+        let count = CGFloat(subviews.count)
+        return CGSize(width: cell.width * count + spacing * max(count - 1, 0), height: cell.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let cell = cell(subviews)
+        for (index, view) in subviews.enumerated() {
+            let x = bounds.minX + CGFloat(index) * (cell.width + spacing)
+            view.place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(cell))
+        }
     }
 }
 
@@ -231,7 +263,8 @@ struct FileTransferView: View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.arrow.right").foregroundStyle(model.theme.accent.color)
             Text(T("File Transfer")).appFont(.system(size: 13, weight: .semibold))
-            Picker(T("Server"), selection: Binding(get: { target.tabID }, set: { target.tabID = $0 })) {
+            AppPicker(T("Server"), selection: Binding(get: { target.tabID }, set: { target.tabID = $0 }),
+                      current: currentTab.map { "\($0.username)@\($0.host)" } ?? T("No connected server")) {
                 if currentTab == nil { Text(T("No connected server")).tag(UUID?.none) }
                 ForEach(model.remoteTabs, id: \.id) { tab in
                     Text("\(tab.username)@\(tab.host)" + (tab.title != tab.host && tab.title != "New connection" ? "  ·  \(tab.title)" : ""))

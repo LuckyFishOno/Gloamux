@@ -172,7 +172,7 @@ struct PortForwardingView: View {
                 InfoButton(T(kind.help) + (tab.savedSessionID == nil ? "\n\n" + T("Save this connection to keep its forwarding rules.") : ""))
             }
             Form {
-                Picker(T("Forwarding type"), selection: $kind) {
+                AppPicker(T("Forwarding type"), selection: $kind, current: T(kind.title)) {
                     ForEach(ForwardingKind.allCases, id: \.self) { Text(T($0.title)).tag($0) }
                 }
                 TextField(T(kind == .remote ? "Remote listening port" : "Local port"), text: $listenPort,

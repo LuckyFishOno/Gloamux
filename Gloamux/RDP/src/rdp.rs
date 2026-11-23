@@ -45,6 +45,7 @@ pub fn run(
         .context("Cannot configure the RDP connection.")?;
     let host = login.host.clone();
     let pin = login.fingerprint.clone();
+    let scale = (login.scale > 100).then_some(login.scale);
     // Display Control lets the desktop follow the size of the view after sign-in.
     let channels = DrdynvcClient::new().with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())));
     // CLIPRDR shares clipboard text with the Mac.
@@ -155,7 +156,7 @@ pub fn run(
             let current = (u32::from(image.width()), u32::from(image.height()));
             if current == (width, height) {
                 wanted = None;
-            } else if let Some(request) = stage.encode_resize(width, height, None, None) {
+            } else if let Some(request) = stage.encode_resize(width, height, scale, None) {
                 let packet = request.context("Cannot ask the RDP server for a new size.")?;
                 transport
                     .write_all(&packet)
@@ -271,6 +272,29 @@ fn answer_clipboard(
 
 /// The size to ask for: RDP wants an even width from 200 to 8192 and a height from 200 to 8192, and this
 /// engine draws at most `MAX_PIXELS`, so a larger view gets a smaller desktop with the same shape.
+/// The connection type and the desktop effects to ask for: everything on a LAN, no wallpaper on broadband, and no
+/// wallpaper, themes, animations, shadows, or font smoothing on a slow network.
+pub(crate) fn quality(name: Option<&str>) -> (ConnectionType, PerformanceFlags) {
+    match name {
+        Some("broadband") => (
+            ConnectionType::BroadbandHigh,
+            PerformanceFlags::default() | PerformanceFlags::DISABLE_WALLPAPER,
+        ),
+        Some("low") => (
+            ConnectionType::BroadbandLow,
+            PerformanceFlags::DISABLE_WALLPAPER
+                | PerformanceFlags::DISABLE_FULLWINDOWDRAG
+                | PerformanceFlags::DISABLE_MENUANIMATIONS
+                | PerformanceFlags::DISABLE_THEMING
+                | PerformanceFlags::DISABLE_CURSOR_SHADOW,
+        ),
+        _ => (
+            ConnectionType::Lan,
+            PerformanceFlags::default() | PerformanceFlags::ENABLE_DESKTOP_COMPOSITION,
+        ),
+    }
+}
+
 pub(crate) fn desktop_size(width: u16, height: u16) -> (u32, u32) {
     let (mut width, mut height) = (f64::from(width.max(200)), f64::from(height.max(200)));
     let limit = crate::MAX_PIXELS as f64;
@@ -464,6 +488,8 @@ fn settings(login: Login) -> connector::Config {
     } else {
         desktop_size(login.width, login.height)
     };
+    let scale = if login.scale > 100 { login.scale.min(500) } else { 0 };
+    let (connection_type, performance_flags) = quality(login.quality.as_deref());
     let (username, domain) = match login.username.split_once('\\') {
         Some((domain, username)) => (username.to_owned(), Some(domain.to_owned())),
         None => (login.username, None),
@@ -481,7 +507,7 @@ fn settings(login: Login) -> connector::Config {
         keyboard_subtype: 0,
         keyboard_layout: 0x0409,
         keyboard_functional_keys_count: 12,
-        connection_type: ConnectionType::Lan,
+        connection_type,
         ime_file_name: String::new(),
         dig_product_id: String::new(),
         desktop_size: DesktopSize {
@@ -503,11 +529,11 @@ fn settings(login: Login) -> connector::Config {
         pointer_software_rendering: false,
         multitransport_flags: None,
         support_dyn_vc_gfx_protocol: false,
-        performance_flags: PerformanceFlags::default(),
-        desktop_scale_factor: 0,
+        performance_flags,
+        desktop_scale_factor: scale,
         desktop_physical_size: None,
         desktop_orientation: None,
-        device_scale_factor: None,
+        device_scale_factor: (scale > 0).then_some(100),
         monitor_extended_layout: None,
         relative_mouse_input: false,
         hardware_id: None,
@@ -522,7 +548,23 @@ fn settings(login: Login) -> connector::Config {
 
 #[cfg(test)]
 mod tests {
-    use super::desktop_size;
+    use super::{desktop_size, quality};
+    use ironrdp_pdu::gcc::ConnectionType;
+    use ironrdp_pdu::rdp::client_info::PerformanceFlags;
+
+    #[test]
+    fn quality_trades_effects_for_speed() {
+        let (lan, best) = quality(None);
+        assert_eq!(lan, ConnectionType::Lan);
+        assert!(!best.contains(PerformanceFlags::DISABLE_WALLPAPER));
+        assert!(best.contains(PerformanceFlags::ENABLE_FONT_SMOOTHING));
+        let (_, balanced) = quality(Some("broadband"));
+        assert!(balanced.contains(PerformanceFlags::DISABLE_WALLPAPER));
+        let (slow, fastest) = quality(Some("low"));
+        assert_eq!(slow, ConnectionType::BroadbandLow);
+        assert!(fastest.contains(PerformanceFlags::DISABLE_THEMING));
+        assert!(!fastest.contains(PerformanceFlags::ENABLE_FONT_SMOOTHING));
+    }
 
     #[test]
     fn sizes_are_even_within_limits_and_keep_their_shape() {

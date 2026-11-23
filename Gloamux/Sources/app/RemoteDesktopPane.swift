@@ -10,7 +10,6 @@ struct RemoteDesktopPane: View {
     @State private var trustError: String?
     @State private var remember = false
     @State private var hasSavedPassword = false
-    @AppStorage(RemoteDesktopSession.clipboardKey) private var sharesClipboard = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,10 +42,6 @@ struct RemoteDesktopPane: View {
                         }
                     }
                     HStack(spacing: 6) {
-                        Toggle(T("Share clipboard"), isOn: $sharesClipboard)
-                        InfoButton(T("Text you copy on this Mac goes to the remote desktop when you click into it, and text copied there comes back to this Mac."))
-                    }
-                    HStack(spacing: 6) {
                         Toggle(T("Remember password"), isOn: $remember)
                         if !model.savesWithoutUnlock {
                             InfoButton(T("The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault."))
@@ -65,7 +60,7 @@ struct RemoteDesktopPane: View {
                     } else if connection.phase == .connecting {
                         ProgressView(T("Connecting…"))
                     } else {
-                        Button(T("Connect"), action: connect).buttonStyle(.borderedProminent)
+                        Button(T("Connect"), action: connect).buttonStyle(.appProminent)
                             .disabled(connection.profile.tool == .rdp && username.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
@@ -198,7 +193,7 @@ private struct GatewayHostKey: View {
                 HStack {
                     Button(T("Cancel")) { model.answerHostKey(gateway, approve: false) }
                     Spacer()
-                    Button(T("Trust and connect")) { model.answerHostKey(gateway, approve: true) }.buttonStyle(.borderedProminent)
+                    Button(T("Trust and connect")) { model.answerHostKey(gateway, approve: true) }.buttonStyle(.appProminent)
                 }
             }.padding(24).frame(width: 530)
         }

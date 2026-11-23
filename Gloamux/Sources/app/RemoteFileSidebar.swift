@@ -200,7 +200,7 @@ private struct SidebarUploadButton: View {
         Button(action: action) {
             Label(T("Upload"), systemImage: "arrow.up.doc").labelStyle(.titleAndIcon).appFont(.system(size: 11)).lineLimit(1)
         }
-        .buttonStyle(.bordered).controlSize(.small)
+        .buttonStyle(.app).controlSize(.small)
         .disabled(!tab.connected || tree.root == nil)
         .help(T("Upload files to the selected folder"))
         .accessibilityIdentifier("sidebarUploadButton")

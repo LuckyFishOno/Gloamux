@@ -967,7 +967,7 @@
 "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password." = "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password.";
 "Upload to %@" = "Upload to %@";
 "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault." = "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault.";
-"This Mac's shell at 127.0.0.1" = "This Mac's shell at 127.0.0.1";
+"localhost" = "localhost";
 "Terminal and files on a server" = "Terminal and files on a server";
 "Windows desktop" = "Windows desktop";
 "Mac or Linux desktop" = "Mac or Linux desktop";
@@ -1124,3 +1124,15 @@
 "Workspace could not be opened" = "Workspace could not be opened";
 "New tabs open a local terminal" = "New tabs open a local terminal";
 "The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form." = "The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form.";
+"Resolution" = "Resolution";
+"Fit to window" = "Fit to window";
+"Fit to window follows the window as you resize it. A fixed size stays the same and is scaled to fit the window." = "Fit to window follows the window as you resize it. A fixed size stays the same and is scaled to fit the window.";
+"Display" = "Display";
+"Optimize for Retina displays" = "Optimize for Retina displays";
+"Asks the desktop for twice the pixels at 200% scaling, so text is sharp on a Retina display. Uses more bandwidth. Works with Fit to window." = "Asks the desktop for twice the pixels at 200% scaling, so text is sharp on a Retina display. Uses more bandwidth. Works with Fit to window.";
+"Connection quality" = "Connection quality";
+"Best quality (LAN)" = "Best quality (LAN)";
+"Balanced (broadband)" = "Balanced (broadband)";
+"Fastest (slow network)" = "Fastest (slow network)";
+"Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network.";
+"Clipboard" = "Clipboard";

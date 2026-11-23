@@ -54,7 +54,7 @@ struct LoginChallengeSheet: View {
                 Spacer()
                 Button(T("Connect")) { answer(answers) }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appProminent)
                     .accessibilityIdentifier("answerLoginButton")
             }
         }

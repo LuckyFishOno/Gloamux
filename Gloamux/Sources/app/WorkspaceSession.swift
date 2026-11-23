@@ -137,7 +137,7 @@ struct WorkspaceLockCover: View {
                     Image(systemName: "lock.fill").appFont(.system(size: 34)).foregroundStyle(.secondary)
                     Text(T("Gloamux is locked")).appFont(.title3.weight(.semibold))
                     Button(T("Unlock")) { Task { await model.unlockWorkspace() } }
-                        .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                        .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 }
             }
             .contentShape(Rectangle())

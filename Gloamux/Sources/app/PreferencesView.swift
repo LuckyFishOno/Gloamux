@@ -143,7 +143,8 @@ private struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Picker(selection: $model.language) {
+            AppPicker(title: T("Language"), selection: $model.language,
+                      current: model.language == .system ? String(format: T("System default (%@)"), AppLanguage.title(for: model.language.resolved())) : model.language.title) {
                 ForEach(AppLanguage.allCases) { language in
                     Text(language == .system ? String(format: T("System default (%@)"), AppLanguage.title(for: language.resolved())) : language.title)
                         .tag(language)
@@ -162,7 +163,8 @@ private struct GeneralSettings: View {
                     InfoButton(T("Opens the saved sessions and local terminals that were open when Gloamux quit. Each session connects on its own, so one that fails leaves the others open."))
                 }
             }
-            Picker(selection: $lockAfter) {
+            AppPicker(title: T("Lock the workspace"), selection: $lockAfter,
+                      current: lockAfter == 0 ? T("Never") : String(format: T("After %d minutes"), lockAfter)) {
                 Text(T("Never")).tag(0)
                 Text(String(format: T("After %d minutes"), 5)).tag(5)
                 Text(String(format: T("After %d minutes"), 15)).tag(15)
@@ -228,7 +230,7 @@ private struct TerminalSettings: View {
                 Toggle(isOn: $remote) {
                     label(T("SSH shell integration"), T("Types a one-line hook into bash or zsh after the terminal opens. It changes only that shell session. You can also turn it on for one terminal from the Terminal menu."))
                 }
-                Picker(selection: $notifyAfter) {
+                AppPicker(title: T("Notify after long commands"), selection: $notifyAfter, current: Self.duration(Int(notifyAfter))) {
                     Text(T("Off")).tag(0.0)
                     Text("5 s").tag(5.0)
                     Text("10 s").tag(10.0)
@@ -243,7 +245,7 @@ private struct TerminalSettings: View {
                 }
             }
             Section {
-                Picker(selection: $keepAlive) {
+                AppPicker(title: T("Check idle SSH connections"), selection: $keepAlive, current: Self.duration(keepAlive)) {
                     Text(T("Off")).tag(0)
                     Text("15 s").tag(15)
                     Text("30 s").tag(30)
@@ -252,7 +254,7 @@ private struct TerminalSettings: View {
                 } label: {
                     label(T("Check idle SSH connections"), T("After this long without output, Gloamux asks the server for a reply. Routers then keep the connection open, and a dead connection is noticed instead of freezing. The check runs no command on the server."))
                 }
-                Picker(selection: $terminalType) {
+                AppPicker(title: T("Terminal type"), selection: $terminalType, current: terminalType) {
                     ForEach(TerminalPreferences.terminalTypes, id: \.self) { Text($0).tag($0) }
                 } label: {
                     label(T("Terminal type"), T("The TERM value SSH sessions report. Programs on the server use it to pick colors and keys. Change it only when a server lacks xterm-256color. Applies to new terminals."))
@@ -262,14 +264,15 @@ private struct TerminalSettings: View {
                 }
             }
             Section {
-                Picker(selection: $scrollback) {
+                AppPicker(title: T("Scrollback"), selection: $scrollback, current: String(format: T("%@ lines"), scrollback.formatted())) {
                     ForEach(TerminalPreferences.scrollbackChoices, id: \.self) { lines in
                         Text(String(format: T("%@ lines"), lines.formatted())).tag(lines)
                     }
                 } label: {
                     label(T("Scrollback"), T("Lines kept above the screen in each terminal. More lines use more memory."))
                 }
-                Picker(selection: $bell) {
+                AppPicker(title: T("Bell"), selection: $bell,
+                          current: T(bell == BellStyle.sound.rawValue ? "Sound" : bell == BellStyle.off.rawValue ? "Off" : "Flash")) {
                     Text(T("Flash")).tag(BellStyle.flash.rawValue)
                     Text(T("Sound")).tag(BellStyle.sound.rawValue)
                     Text(T("Off")).tag(BellStyle.off.rawValue)
@@ -299,7 +302,8 @@ private struct TerminalSettings: View {
                 Toggle(isOn: $logEverySession) {
                     label(T("Log every session"), T("Saves what each terminal shows to a file, from when it opens until it closes. Likely secrets are masked. You can also start a log for one terminal from the Terminal menu."))
                 }
-                Picker(selection: $logFormat) {
+                AppPicker(title: T("Log format"), selection: $logFormat,
+                          current: T(logFormat == TerminalLogFormat.raw.rawValue ? "With escape sequences" : "Plain text")) {
                     Text(T("Plain text")).tag(TerminalLogFormat.text.rawValue)
                     Text(T("With escape sequences")).tag(TerminalLogFormat.raw.rawValue)
                 } label: {
@@ -314,6 +318,11 @@ private struct TerminalSettings: View {
         .scrollContentBackground(.hidden)
         .scrollDisabled(true)
         .padding(-8)
+    }
+
+    /// "Off", "5 s", or "1 min", as the pickers list them.
+    static func duration(_ seconds: Int) -> String {
+        seconds == 0 ? T("Off") : seconds < 60 ? "\(seconds) s" : "\(seconds / 60) min"
     }
 
     private func label(_ title: String, _ info: String) -> some View {
@@ -349,7 +358,7 @@ private struct TextSettings: View {
                 }
             }
             Section(T("Session")) {
-                Picker(T("Font"), selection: $font) {
+                AppPicker(T("Font"), selection: $font, current: font.isEmpty ? T("System monospaced") : font) {
                     Text(T("System monospaced")).tag("")
                     if !families.isEmpty { Divider() }
                     ForEach(families, id: \.self) { Text($0).tag($0) }

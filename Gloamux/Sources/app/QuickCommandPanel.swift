@@ -95,7 +95,7 @@ struct QuickCommandPanel: View {
                     .accessibilityIdentifier("quickCommandRun")
             }
             .controlSize(.small)
-            .buttonStyle(.bordered)
+            .buttonStyle(.app)
             .disabled(!tab.canReceiveQuickCommands(in: model.layout))
         }
         .padding(9)
@@ -123,7 +123,7 @@ struct QuickCommandPanel: View {
                     approvedRun = request
                     confirmation = nil
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appProminent)
                 .accessibilityIdentifier("quickCommandConfirmRun")
             }
         }
@@ -179,7 +179,7 @@ private struct QuickCommandEditor: View {
                 Button(T("Save")) {
                     commit { try store.save(QuickCommand(id: id, name: name, text: text)) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appProminent)
                 .accessibilityIdentifier("quickCommandSave")
             }
         }

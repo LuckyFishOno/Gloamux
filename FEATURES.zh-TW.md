@@ -10,7 +10,7 @@
 - **SSH** · 支援密碼、Ed25519、ECDSA、RSA 金鑰檔及 `ssh-agent` 登入。首次連線時可核對主機指紋。伺服器自己提出的登入問題（鍵盤互動），例如密碼或金鑰之後的驗證碼，會在視窗中顯示；連線的密碼會自動回答第一個密碼問題，答案一律不儲存。最多串接八台跳板，也可透過 SOCKS4、SOCKS4a、SOCKS5 或 HTTP CONNECT 代理連線。
 - **連接埠轉發** · 在 SSH 分頁啟動本機轉發、反向轉發或動態 SOCKS 代理。將規則存入連線設定後，每次連線成功就會自動啟動。監聽範圍限於本機或 SSH 伺服器的回送介面。在工作台版面按「通道」，會列出這個視窗所有已連線的 SSH 工作階段、正在執行的轉發和各自的連線數。可以在那裡停止轉發，或按「管理」編輯該連線的規則。
 - **X11** · 用工作台版面的「X 伺服器」按鈕或 `gloamux xserver start` 啟動 XQuartz，再到信任的 SSH 連線設定開啟「轉發 X11」。SSH 終端開著時，遠端的 X11 程式可以在這台 Mac 顯示。
-- **檔案傳輸協定** · 在連線設定選擇 FTP、明確式 FTPS 或隱含式 FTPS。SSH 連線可指定 SFTP、SCP，或在伺服器未提供 SFTP 時自動改用 SCP。檔案瀏覽和傳輸佇列會使用所選協定。FTPS 的指令與資料都會加密，每條資料連線都會沿用控制連線的 TLS 工作階段，要求重用的伺服器也能連線。FTP 和 SCP 目前可從圖形介面使用。
+- **檔案傳輸協定** · 在連線設定選擇 FTP、明確式 FTPS 或隱含式 FTPS。SSH 連線可指定 SFTP、SCP，或在伺服器未提供 SFTP 時自動改用 SCP。檔案瀏覽和傳輸佇列會使用所選協定。FTPS 的指令與資料都會加密，每條資料連線都會沿用控制連線的 TLS 工作階段，要求重用的伺服器也能連線。命令列的 `gloamux files` 也支援相同的協定。
 - **密碼庫** · 可選用主密碼保護的密碼庫。尚未建立密碼庫時，Gloamux 會用 Secure Enclave 金鑰保護登入成功的密碼，下次連線時自動帶入。建立密碼庫後，已記住的密碼仍留在這台 Mac。
 
   密碼庫解鎖期間，連線無須用 Touch ID 或 Mac 密碼驗證。鎖定後，勾選「每次連線用 Touch ID 確認」的連線會再次要求驗證，其他連線使用這台 Mac 記住的密碼。如果密碼只存在密碼庫，當次連線可用 Touch ID 讀取，密碼庫仍維持鎖定。這個功能在每次開啟 Gloamux 後，首次用主密碼解鎖時啟用。
@@ -34,18 +34,18 @@
 - **快速查看** · 在檔案側欄或檔案傳輸中對檔案按右鍵選「快速查看」，在檔案傳輸中也可按空白鍵。100 MB 以內的遠端檔案會先複製到私人暫存資料夾預覽，之後刪除。勾選檔案側欄下方的「跟隨終端資料夾」，目錄樹會跟著 shell 所在的資料夾移動，預設關閉。
 - **環境標籤** · 在連線或資料夾的右鍵選單可標為正式、預備、測試或開發，連線會沿用資料夾的標籤。分頁會上色，窗格加上外框，工具列和連線視窗標題也會顯示。在「設定 › 安全」勾選的環境中（預設為正式和預備），符合高風險規則的指令，例如 `rm -rf`、`DROP TABLE`、`kubectl delete`、`terraform destroy`，要你確認後才會執行。規則可以自行編輯。
 - **其他連線** · 在新連線分頁的「其他連線」區塊，可開啟或儲存序列埠、Telnet、Mosh、容器、Kubernetes Pod 或 AWS Systems Manager 連線。序列埠可從已連接的裝置清單選取，並設定速度（300 到 921600）、資料位元、同位檢查、停止位元、流量控制（RTS/CTS、DTR/DSR 或 XON/XOFF）與文字編碼。Mosh 使用登入 shell 中安裝的工具。Telnet 和序列埠直接在 Gloamux 開啟。容器和 Pod 可從執行中的項目選取。新連線會開在上次使用的區塊與連線類型。
-- **遠端桌面** · 從「新連線」選擇「Windows 遠端桌面（RDP）」或「遠端桌面（VNC）」，也可以在新連線分頁展開 RDP 或 VNC 區塊，分頁由上到下列出 SSH、RDP、VNC 和其他連線。勾選「記住密碼」後，第一次登入成功就會記住密碼。到「連線管理」儲存或編輯設定。在 Gloamux 分頁內登入後，就能用鍵盤和滑鼠操作。RDP 會驗證伺服器憑證，並支援網路層級驗證（NLA）。VNC 可以用傳統 VNC 密碼，或用 Mac 的帳號密碼登入 macOS 螢幕共享。VNC 只有登入資料會加密，所以可以在「透過 SSH」選一個已儲存的 SSH 連線，讓整條連線走 SSH；RDP 也適用。RDP 桌面會跟著窗格大小調整，標題列有全螢幕按鈕，在設定開啟「自動重新連線」後，斷線會自動重連。開啟「共用剪貼簿」後，RDP 和 VNC 兩邊複製的文字都能在另一邊貼上。
+- **遠端桌面** · 從「新連線」選擇「Windows 遠端桌面（RDP）」或「遠端桌面（VNC）」，也可以在新連線分頁展開 RDP 或 VNC 區塊，分頁由上到下列出 SSH、RDP、VNC 和其他連線。勾選「記住密碼」後，第一次登入成功就會記住密碼。到「連線管理」儲存或編輯設定。在 Gloamux 分頁內登入後，就能用鍵盤和滑鼠操作。RDP 會驗證伺服器憑證，並支援網路層級驗證（NLA）。VNC 可以用傳統 VNC 密碼，或用 Mac 的帳號密碼登入 macOS 螢幕共享。VNC 只有登入資料會加密，所以可以在「透過 SSH」選一個已儲存的 SSH 連線，讓整條連線走 SSH；RDP 也適用。RDP 桌面預設跟著窗格大小調整；也可以在連線設定選固定的「解析度」（縮放填滿窗格）、「針對 Retina 顯示器最佳化」讓文字更清楚，以及從「最佳畫質（區網）」到「最快（慢速網路）」的「連線品質」。標題列有全螢幕按鈕，在設定開啟「自動重新連線」後，斷線會自動重連。在連線設定開啟「共用剪貼簿」後，RDP 和 VNC 兩邊複製的文字都能在另一邊貼上。不支援重新導向印表機、智慧卡、聲音、麥克風、相機和共用資料夾。
 - **多視窗** · 按 **⌘N**，或從「檔案」選單及 Dock 圖示的右鍵選單選擇「新增視窗」。各視窗有自己的分頁，共用已儲存的連線。關閉最後一個工作區視窗就會退出 Gloamux。
 - **主機探索** · 「探索主機」可透過 Bonjour 找這個網路上的 SSH 服務，也能列出 Tailscale 裝置，或用你的 AWS 設定檔列出 EC2 執行個體。檢查清單、填好使用者名稱後，把需要的主機加到新資料夾。EC2 執行個體可以加成 SSM 連線。
 - **連線狀態與主機金鑰** · 連線樹中每台主機後面的圓點，表示 SSH 連接埠有沒有回應（每 90 秒檢查一次，不會登入；可在「設定 › 安全」關閉）。設定裡的「主機金鑰紀錄」會列出你信任、更換或拒絕的金鑰，以及因金鑰變更而擋下的連線。
 - **Runbook** · 用 Markdown 撰寫 Runbook，內含 `sh`、`bash`、`zsh` 或 `console` 區塊。選好連線後，確認指令和目的地，就能執行單一區塊或全部執行；標了環境的連線會額外提醒。啟用 Shell 整合時，Gloamux 會等每個區塊完成，遇到失敗就停下，並保存每個區塊的結束代碼和輸出。
 - **終端錄影** · 按 ⌥⌘R 錄下終端畫面，不會錄你按的鍵。存檔時，存取金鑰、權杖、私鑰和密碼會換成 `[REDACTED]`。可在「錄影」以最高 4 倍速重播，或輸出成 asciinema 的 `.cast` 檔。
 - **搜尋與連線紀錄** · 按 ⌘F 可以搜尋終端畫面和回捲內容，支援一般文字和正規表示式，所有符合的地方都會標出來；按 ⌘G、⇧⌘G 逐一跳轉。按 ⌥⌘L 把終端畫面存成連線紀錄，可選純文字或保留控制序列，疑似機密的內容會遮蔽。也可以在「設定 › 終端」讓每個連線自動記錄。
-- **文字與游標** · 在「設定 › 文字」設定字型、大小、游標樣式（方塊、底線、直線，可閃爍）和背景不透明度，調低後桌面會模糊地透出來。在任何終端按 ⌘+、⌘−、⌘0 都能調整字級。
+- **文字與游標** · 在「設定 › 文字」設定字型、大小、游標樣式（方塊、底線、直線，可閃爍）和背景不透明度，調低後桌面會模糊地透出來。在任何終端按 ⌘+、⌘−、⌘0 都能調整字級。「應用程式字級」（8–28 pt）調整其餘介面，包括按鈕、彈出選單和右鍵選單；最後一次點按不在終端上，或多按 ⌥ 時，同樣的按鍵會改這個字級。
 - **終端程式** · vim、tmux、htop 這類程式能收到滑鼠點擊、拖曳和滾輪，按住 Option 就改成選取文字。輸入法的組字會直接顯示在游標位置。「終端 › 文字編碼」可以把連線切換成 Big5、GB18030、Shift JIS、EUC-JP、EUC-KR 或 ISO Latin 1，已儲存的連線會記住設定。一次貼上多行時，會先顯示內容讓你檢查或修改。響鈴時終端會閃一下或發出聲音，沒在看的分頁也會出現鈴鐺。程式要透過 OSC 52 寫入剪貼簿，必須先在「設定 › 終端」允許，而且永遠無法讀取剪貼簿。
 - **匯入連線** · 可先預覽 Xshell 連線檔或資料夾、OpenSSH 設定、MobaXterm 匯出檔（`.mxtsessions` 或 `MobaXterm.ini`）、由登錄檔匯出的 PuTTY 或 KiTTY 連線（`.reg`）、CSV 檔及 Gloamux 連線檔。匯入會保留資料夾結構，並讀取帳號、連接埠、金鑰、代理與跳板設定。MobaXterm 的 SSH 閘道和 PuTTY 的 SSH 代理會匯入為跳板連線，PuTTY 的連接埠轉發規則也會保留。密碼不會匯入。預覽會列出略過的項目，以及 Windows 金鑰檔等需要檢查的設定。
 - **匯出連線** · 可一次匯出所有連線，也可從資料夾的右鍵選單匯出單一資料夾。Gloamux 連線檔和 CSV 都不含密碼，可以分享給團隊。家目錄內的金鑰路徑會寫成 `~/…`，匯入時會對應到使用者自己的家目錄。CSV 必須包含 `host` 欄位。`folder`（例如 `Team/Prod`）、`name`、`port`、`username`、`protocol`（`ssh` 或 `sftp`）、`identity file`、`proxy type`、`proxy host`、`proxy port`、`jump`（另一列的 `folder/name`，或 `user@host:port`）都可省略。
-- **工作區外觀** · 可在右側面板依名稱搜尋 72 組配色，包括 Ubuntu、Kali、GNOME、KDE Breeze、Tango、Linux 主控台配色，以及 GitHub、One Dark Pro、Dracula、Tokyo Night、Catppuccin、Nord、Gruvbox 等熱門 VS Code 主題。所有終端會使用目前的工作區配色，也可在「設定」視窗（⌘,）選擇主題。設定視窗的變更會立即套用，用視窗左上角的關閉按鈕關閉即可。
+- **工作區外觀** · 可在右側面板依名稱搜尋 73 組配色，包括 Ubuntu、Kali、GNOME、KDE Breeze、Tango、Linux 主控台配色，以及 GitHub、One Dark Pro、Dracula、Tokyo Night、Catppuccin、Nord、Gruvbox 等熱門 VS Code 主題。所有終端會使用目前的工作區配色，也可在「設定」視窗（⌘,）選擇主題。設定視窗的變更會立即套用，用視窗左上角的關閉按鈕關閉即可。
 - **AI 代理（MCP）** · 預設關閉，要在「設定 › AI 代理」開啟。Claude Code、Codex 等代理執行 `gloamux mcp` 來連接，這個指令會顯示在設定裡，可一鍵複製。代理只看得到你在設定或連線右鍵選單允許的連線（名稱和目的地），永遠拿不到密碼或金鑰。代理可以在 Gloamux 開啟允許的連線、讀取你用「終端 › 分享給 AI 代理」分享的內容（選取的文字、上一個指令的輸出或目前畫面），並提出指令。Gloamux 會把分頁帶到前面，顯示代理、連線、目的地、原因和完整指令，你按「執行」才會送出，而且只會送到原本那條連線。設定裡保留每一次請求的紀錄（包括被拒絕的），「撤銷所有存取」會立即停止一切，等待檢查的指令也無法再執行。
 - **全部設定存成一個檔案** · 在「設定 › 一般」按「輸出」，會把連線（含帳號）、快速指令、觸發條件、操作手冊、主機金鑰、主題、版面配置與設定存成一個 `.gloamuxconfig` 檔，旁邊另附 `.sha256` 檔，不含任何密碼。「匯入」會先用 `.sha256` 檢查檔案，再取代以上全部內容並重新啟動 Gloamux；原本的內容會先保留在 Gloamux 資料夾的 `Backups` 資料夾。這台 Mac 記住的密碼和密碼庫不受影響。命令列可用 `gloamux config export PATH`，關閉 Gloamux 後可用 `gloamux config import PATH`。
 - **語言** · 介面提供英文、繁體中文、簡體中文、日文和西班牙文，預設跟隨這台 Mac 的語言。你可以在 Gloamux 的「設定 › 一般」或 macOS 的「系統設定 › 一般 › 語言與地區 › App」調整同一項設定。Gloamux 介面會立即切換，macOS 提供的「關於」、「結束」等選單會在下次開啟 App 時切換。
@@ -62,7 +62,7 @@
 
 `gloamux ssh "Work server"` 會在目前的終端機開啟已儲存 SSH 連線的 shell，登入方式相同，結束時回傳遠端 shell 的結束碼。
 
-也能從命令列管理連線（包括用 `gloamux sessions add-other` 建立序列埠、Telnet、Mosh、容器、Pod 與 SSM 連線）、資料夾、環境標籤、主機金鑰與其歷程、轉發規則、常用指令、輸出觸發、Runbook、主題、設定和版面。Gloamux 開著時，`gloamux tabs list` 會列出所有視窗的分頁，每個分頁的 ID 在關閉前都不會變。用這個 ID 可以切換、改名、複製、分割、中斷、重新連線或關閉分頁，套用 Xshell 配色或醒目提示，讀取終端畫面，輸入文字或已儲存的常用指令，或在分頁中執行 Runbook。`gloamux tabs multiexec TAB_ID on` 會把輸入送到該分頁所在視窗的每個終端，`gloamux forwards live-list` 會列出所有已連線的 SSH 分頁、正在執行的轉發和連線數。`gloamux tabs connect user@host` 可直接連線，不必先儲存。在需要確認的環境中，有風險的指令會在 Gloamux 等你確認，和直接在 App 輸入一樣。`gloamux vault lock` 和 `gloamux workspace lock` 可鎖定 Gloamux。`gloamux signins list` 通過 Touch ID 或 Mac 密碼驗證後列出已存的密碼，但不會顯示密碼內容。`gloamux xserver status` 和 `gloamux xserver start` 可在 Gloamux 沒開時檢查和啟動 XQuartz。檔案傳輸中按 Ctrl-C 會停止並刪除未完成的檔案。認證方式、結束碼與 Zsh、Bash 補全請見 [README 的命令列說明](README.zh-TW.md#命令列)。
+也能從命令列管理連線（包括用 `gloamux sessions add-other` 建立序列埠、Telnet、Mosh、容器、Pod 與 SSM 連線）、連線表單的其餘設定（用 `gloamux sessions options` 設定跳板、Proxy、啟動指令、Agent 與 X11 轉送、檔案協定、編碼，以及是否每次連線都詢問；用 `edit-other` 設定 RDP、VNC 的 SSH 通道、解析度、Retina、品質與剪貼簿）、資料夾、環境標籤、主機金鑰與其歷程（移除、匯出成 `known_hosts`、清除歷程）、透過 Bonjour、Tailscale 與 AWS 探索主機（`gloamux hosts discover`）、錄影（`gloamux tabs record` 與 `gloamux recordings list|export|remove`）、轉發規則、常用指令、輸出觸發、Runbook、主題、設定和版面。Gloamux 開著時，`gloamux tabs list` 會列出所有視窗的分頁，每個分頁的 ID 在關閉前都不會變。用這個 ID 可以切換、改名、複製、分割、中斷、重新連線或關閉分頁，套用 Xshell 配色或醒目提示，讀取終端畫面，輸入文字或已儲存的常用指令，或在分頁中執行 Runbook、錄影、啟用 Shell 整合，或用 `gloamux tabs view` 在終端與檔案傳輸之間切換視窗。`gloamux tabs multiexec TAB_ID on` 會把輸入送到該分頁所在視窗的每個終端，`gloamux forwards live-list` 會列出所有已連線的 SSH 分頁、正在執行的轉發和連線數。`gloamux tabs connect user@host` 可直接連線，不必先儲存。在需要確認的環境中，有風險的指令會在 Gloamux 等你確認，和直接在 App 輸入一樣。`gloamux vault lock` 和 `gloamux workspace lock` 可鎖定 Gloamux。`gloamux signins list` 通過 Touch ID 或 Mac 密碼驗證後列出已存的密碼，但不會顯示密碼內容。`gloamux xserver status` 和 `gloamux xserver start` 可在 Gloamux 沒開時檢查和啟動 XQuartz。檔案傳輸中按 Ctrl-C 會停止並刪除未完成的檔案。認證方式、結束碼與 Zsh、Bash 補全請見 [README 的命令列說明](README.zh-TW.md#命令列)。
 
 設定版面：
 

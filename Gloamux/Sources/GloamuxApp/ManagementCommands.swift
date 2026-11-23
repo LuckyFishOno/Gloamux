@@ -3,10 +3,12 @@ import Foundation
 
 enum ManagementCommands {
     static let operations: [String: [String]] = [
-        "sessions": ["list", "show", "mkdir", "add", "add-other", "edit", "edit-other", "serial-ports", "rename", "move", "remove", "env", "auth", "cert", "import", "export"],
-        "hosts": ["list", "history", "trust", "replace"],
+        "sessions": ["list", "show", "mkdir", "add", "add-other", "edit", "options", "edit-other", "serial-ports", "rename", "move", "remove", "env", "auth", "cert", "import", "export"],
+        "hosts": ["list", "history", "trust", "replace", "remove", "export", "clear-history", "discover"],
+        "recordings": ["list", "export", "remove"],
         "tabs": ["list", "show", "open", "open-window", "connect", "local", "select", "rename", "duplicate", "close", "disconnect", "reconnect",
-                 "split", "unsplit", "broadcast", "multiexec", "window", "attach", "read", "send", "run", "readonly", "log", "encoding", "colors", "highlights"],
+                 "split", "unsplit", "broadcast", "multiexec", "window", "attach", "read", "send", "run", "readonly", "log", "encoding", "colors", "highlights",
+                 "record", "integration", "view"],
         "forwards": ["list", "add", "remove", "live-list", "start", "stop"],
         "commands": ["list", "add", "edit", "remove", "send", "run"],
         "triggers": ["list", "add", "edit", "enable", "disable", "remove"],
@@ -15,7 +17,7 @@ enum ManagementCommands {
         "settings": ["list", "get", "set", "reset"],
         "layout": ["get", "set"],
         "config": ["export", "import"],
-        "agents": ["status", "history", "revoke", "off"],
+        "agents": ["status", "history", "clear-history", "revoke", "off"],
         "mcp": [],
         "vault": ["status", "lock"],
         "signins": ["list", "remove"],
@@ -32,6 +34,7 @@ enum ManagementCommands {
             mkdir NAME [FOLDER]
             add NAME PROTOCOL HOST USER [PORT [FOLDER]]
             edit ITEM HOST USER PORT
+            options ITEM SETTING=VALUE ...
             add-other NAME KIND TARGET [SETTING=VALUE ...] | edit-other ITEM SETTING=VALUE ...
             serial-ports
             rename ITEM NAME | move ITEM FOLDER | remove ITEM
@@ -54,13 +57,26 @@ enum ManagementCommands {
               docker  CONTAINER context=CONTEXT shell=/bin/sh user=USER
               kubectl POD       context=CONTEXT namespace=NAMESPACE container=CONTAINER shell=/bin/sh
               ssm     INSTANCE  profile=AWS_PROFILE region=REGION
+            SSH connections take these with options (- resets a setting):
+              jump=ITEM proxy=socks5|socks4|http proxy-host=HOST proxy-port=1080
+              startup='COMMAND\nCOMMAND' forward-agent=on|off x11=on|off open-files=on|off
+              files=auto|sftp|scp encoding=utf8 confirm=on|off
+            FTP connections take confirm=on|off. Changing confirm asks for Touch ID or the Mac password in Gloamux.
+            Remote desktops saved with add take these with edit-other:
+              rdp       gateway=SSH_ITEM resolution=fit|1920x1080 retina=on|off quality=lan|broadband|low clipboard=on|off
+              vnc       gateway=SSH_ITEM clipboard=on|off
             serial-ports lists the serial devices connected to this Mac. edit-other also takes target=TARGET.
             Open a saved session with gloamux tabs open ITEM.
             """,
         "hosts": """
-            list | history
+            list | history | clear-history
             trust '[HOST]:PORT' 'TYPE PUBLIC_KEY' VERIFIED_SHA256
             replace '[HOST]:PORT' 'TYPE PUBLIC_KEY' VERIFIED_SHA256 PREVIOUS_SHA256
+            remove '[HOST]:PORT' | export ABSOLUTE_KNOWN_HOSTS_PATH
+            discover bonjour|tailscale|aws [profile=AWS_PROFILE region=REGION] [add=all|ID,ID user=NAME [ssm=on]]
+            remove forgets a trusted key, so the next connection asks again. clear-history keeps the trusted keys.
+            discover lists SSH hosts on this network, Tailscale peers, or running EC2 instances; add= saves the chosen ones
+            in a new folder. AWS instances become SSM sessions with ssm=on.
             """,
         "tabs": """
             list | show TAB_ID
@@ -71,10 +87,14 @@ enum ManagementCommands {
             multiexec TAB_ID on|off
             window TAB_ID | attach TAB_ID
             read TAB_ID [LINES] | send TAB_ID TEXT | run TAB_ID COMMAND_LINE
-            readonly TAB_ID on|off | log TAB_ID on|off | encoding TAB_ID ENCODING
+            readonly TAB_ID on|off | log TAB_ID on|off | record TAB_ID on|off | encoding TAB_ID ENCODING
+            integration TAB_ID | view TAB_ID terminal|files
             colors TAB_ID XCS_PATH | highlights TAB_ID HIGHLIGHT_PATH
 
             Tab IDs come from gloamux tabs list and stay the same while the tab is open, in any window.
+            record saves what the terminal shows, with secrets masked; list them with gloamux recordings.
+            integration types the shell integration hook into the terminal. view switches the window to the terminal or to
+            two-pane file transfer for the tab.
             broadcast types into the panes of a split. multiexec types into every terminal of the tab's window.
             read prints the visible screen, or the last LINES lines with scrollback. run presses Return after the text.
             A risky command in a confirming environment waits for your answer in Gloamux.
@@ -117,7 +137,7 @@ enum ManagementCommands {
             """,
         "layout": "get | set default|classic|workbench",
         "agents": """
-            status | history [COUNT] | revoke [SESSION] | off
+            status | history [COUNT] | clear-history | revoke [SESSION] | off
 
             Agents reach Gloamux through gloamux mcp. Turn agent access on and allow sessions in Gloamux, in Settings › Agents.
             revoke removes one session, or with no SESSION turns access off and removes every session. Proposals waiting
@@ -132,6 +152,11 @@ enum ManagementCommands {
             import replaces all of these; the vault only when the backup has one. Quit Gloamux first. The current ones are
             kept in the Backups folder of the workspace.
             When PATH.sha256 is there, the backup must match it.
+            """,
+        "recordings": """
+            list | export FILE ABSOLUTE_CAST_PATH | remove FILE
+            Recordings are asciinema .cast files with secrets masked. Start and stop one with gloamux tabs record.
+            remove moves the file to the Trash.
             """,
         "vault": "status | lock\nUnlock the vault in Gloamux, or pass --vault-password-stdin to gloamux files or gloamux ssh.",
         "signins": "list | remove ID\nGloamux asks for Touch ID or the Mac password first. Saved passwords are never printed.",

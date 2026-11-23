@@ -49,7 +49,7 @@ enum NewConnectionType: String, CaseIterable {
     /// What each one is for, beside its name in the new-connection list.
     var subtitle: String {
         switch self {
-        case .local: return "This Mac's shell at 127.0.0.1"
+        case .local: return "localhost"
         case .ssh: return "Terminal and files on a server"
         case .rdp: return "Windows desktop"
         case .vnc: return "Mac or Linux desktop"
@@ -208,6 +208,14 @@ public struct ContainerSession: Codable, Equatable, Sendable {
     /// A saved SSH session that carries an RDP or VNC connection through an SSH tunnel: VNC traffic is then encrypted,
     /// and hosts only that server can reach are reachable.
     var gatewaySessionID: UUID?
+    /// An RDP desktop's fixed size; nil follows the size of the view.
+    var desktopResolution: DesktopResolution?
+    /// An RDP desktop at twice the pixels and 200% scaling, sharp on a Retina display. Only with no fixed size.
+    var desktopRetina: Bool?
+    /// What an RDP desktop gives up for a slower network; nil is the best quality.
+    var desktopQuality: DesktopQuality?
+    /// Whether clipboard text goes between this Mac and the desktop; nil follows the app's setting.
+    var sharesClipboard: Bool?
 
     public init(tool: Tool, target: String, context: String? = nil, namespace: String? = nil, container: String? = nil,
                 shell: String? = nil, user: String? = nil, port: Int? = nil, baud: Int? = nil, format: String? = nil, flow: String? = nil) {
@@ -325,5 +333,39 @@ struct RiskyCommandPrompt: Identifiable, Equatable {
         updated.insert(id, at: 0)
         ids = Array(updated.prefix(20))
         if let data = try? JSONEncoder().encode(ids) { try? writePrivate(data, to: url) }
+    }
+}
+
+/// A fixed RDP desktop size, in pixels.
+struct DesktopResolution: Codable, Hashable, Sendable {
+    var width: Int
+    var height: Int
+
+    static let presets = [(1280, 720), (1280, 800), (1366, 768), (1440, 900), (1600, 900), (1680, 1050),
+                          (1920, 1080), (1920, 1200), (2560, 1440), (2560, 1600)].map { DesktopResolution(width: $0.0, height: $0.1) }
+
+    var title: String { "\(width) × \(height)" }
+
+    /// `1920x1080`, as the CLI writes it.
+    init?(_ text: String) {
+        let parts = text.lowercased().split(separator: "x")
+        guard parts.count == 2, let width = Int(parts[0]), let height = Int(parts[1]),
+              Self.presets.contains(DesktopResolution(width: width, height: height)) else { return nil }
+        self.init(width: width, height: height)
+    }
+
+    init(width: Int, height: Int) { self.width = width; self.height = height }
+}
+
+/// How much an RDP desktop draws: everything on a LAN, no wallpaper on broadband, and no visual effects on a slow link.
+enum DesktopQuality: String, Codable, CaseIterable, Sendable {
+    case lan, broadband, low
+
+    var title: String {
+        switch self {
+        case .lan: return "Best quality (LAN)"
+        case .broadband: return "Balanced (broadband)"
+        case .low: return "Fastest (slow network)"
+        }
     }
 }

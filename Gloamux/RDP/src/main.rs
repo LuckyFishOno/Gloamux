@@ -35,6 +35,12 @@ struct Login {
     /// certificates and sign-in.
     #[serde(default)]
     via_port: Option<u16>,
+    /// RDP display scaling in percent: 200 asks a Retina-sized desktop to draw at double size. 0 or 100 is normal.
+    #[serde(default)]
+    scale: u32,
+    /// `lan`, `broadband`, or `low`: how much of the desktop's look an RDP server sends.
+    #[serde(default)]
+    quality: Option<String>,
 }
 
 /// The connection broke rather than ending: the app may connect again.

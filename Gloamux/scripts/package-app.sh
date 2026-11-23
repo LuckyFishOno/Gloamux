@@ -3,6 +3,10 @@ set -eu
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 build_path=${1:-/tmp/gloamux-build}
 output_dir=${2:-"$project_dir/../build"}
+# Local builds keep the development version. A published release sets its own, for example
+# GLOAMUX_VERSION=1.0 GLOAMUX_BUILD=1.
+version=${GLOAMUX_VERSION:-0.13.0}
+build_number=${GLOAMUX_BUILD:-19}
 cd "$project_dir"
 command -v cargo >/dev/null 2>&1 || { printf 'Rust and Cargo are required to build the remote desktop engine.\n' >&2; exit 1; }
 rdp_target="$build_path/gloamux-desktop-engine"
@@ -47,7 +51,7 @@ fi
 # Empty language folders tell macOS which languages the app has, so its own menus (About, Hide, Quit) and
 # System Settings' per-app language list match the interface text in the resource bundle.
 for language in en zh-Hant zh-Hans ja es; do mkdir -p "$app/Contents/Resources/$language.lproj"; done
-cat > "$app/Contents/Info.plist" <<'PLIST'
+cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -59,8 +63,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>zh-Hans</string><string>ja</string><string>es</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.13.0</string>
-<key>CFBundleVersion</key><string>19</string>
+<key>CFBundleShortVersionString</key><string>$version</string>
+<key>CFBundleVersion</key><string>$build_number</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>

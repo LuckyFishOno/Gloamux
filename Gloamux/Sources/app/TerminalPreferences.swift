@@ -26,7 +26,7 @@ enum TerminalPreferences {
     static let newTabLocalKey = "Gloamux.terminal.newTabOpensLocal"
 
     static let defaultFontSize = 13.0
-    static let fontSizes = 8.0...36.0
+    static let fontSizes = 6.0...72.0
     static let defaultScrollback = 5000
     static let scrollbackChoices = [1000, 5000, 10_000, 50_000]
 

@@ -29,9 +29,13 @@ private struct DesktopLogin: Encodable {
     let height: UInt16
     /// A port on 127.0.0.1 that tunnels to the desktop; the host is still used for certificate and sign-in names.
     let viaPort: Int?
+    /// RDP display scaling in percent: 200 for a Retina desktop, otherwise 100.
+    let scale: Int
+    /// `lan`, `broadband`, or `low`.
+    let quality: String
 
     enum CodingKeys: String, CodingKey {
-        case host, port, username, password, fingerprint, width, height
+        case host, port, username, password, fingerprint, width, height, scale, quality
         case viaPort = "via_port"
         case protocolName = "protocol"
     }
@@ -155,8 +159,12 @@ private final class DesktopWorker: @unchecked Sendable {
     /// Clipboard text passed either way is cut at this many bytes.
     nonisolated static let clipboardLimit = 256 * 1024
     /// Settings key: share text on the clipboard with VNC desktops. On by default.
-    static let clipboardKey = "Gloamux.desktop.sharesClipboard"
-    static var sharesClipboard: Bool { UserDefaults.standard.object(forKey: clipboardKey) as? Bool ?? true }
+    nonisolated static let clipboardKey = "Gloamux.desktop.sharesClipboard"
+    nonisolated static var sharesClipboard: Bool { UserDefaults.standard.object(forKey: clipboardKey) as? Bool ?? true }
+    /// This desktop's clipboard choice, or the app's setting.
+    var clipboardShared: Bool { profile.sharesClipboard ?? Self.sharesClipboard }
+    /// The desktop asks for twice the view's pixels: Retina is on and the size follows the view.
+    var retina: Bool { profile.tool == .rdp && profile.desktopRetina == true && profile.desktopResolution == nil }
     static let reconnectDelays = [2, 5, 10, 30, 60]
 
     enum Phase { case idle, connecting, connected }
@@ -204,10 +212,16 @@ private final class DesktopWorker: @unchecked Sendable {
             try worker.process.run()
             self.worker = worker
             let runID = id
-            let size = Self.pixels(viewSize)
+            let size: (width: UInt16, height: UInt16)
+            if profile.tool == .rdp, let fixed = profile.desktopResolution {
+                size = (UInt16(fixed.width), UInt16(fixed.height))
+            } else {
+                size = Self.pixels(viewSize, scale: retina ? 2 : 1)
+            }
             worker.send(DesktopLogin(host: address.host, port: profile.effectivePort, username: username,
                                      password: password, fingerprint: profile.rdpFingerprint, protocolName: profile.tool.rawValue,
-                                     width: size.width, height: size.height, viaPort: viaPort))
+                                     width: size.width, height: size.height, viaPort: viaPort, scale: retina ? 200 : 100,
+                                     quality: (profile.desktopQuality ?? .lan).rawValue))
             Task.detached { [weak self, worker] in
                 defer { try? worker.output.close() }
                 while !Task.isCancelled {
@@ -229,26 +243,27 @@ private final class DesktopWorker: @unchecked Sendable {
     func viewResized(_ size: CGSize) {
         guard size.width > 0, size.height > 0, size != viewSize else { return }
         viewSize = size
-        guard profile.tool == .rdp, phase == .connected else { return }
+        // A fixed size stays as it is and is scaled to fit the view.
+        guard profile.tool == .rdp, profile.desktopResolution == nil, phase == .connected else { return }
         resizeTask?.cancel()
         resizeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled, let self, self.phase == .connected else { return }
-            let pixels = Self.pixels(self.viewSize)
+            let pixels = Self.pixels(self.viewSize, scale: self.retina ? 2 : 1)
             self.send(DesktopInput(kind: "resize", width: pixels.width, height: pixels.height))
         }
     }
 
     /// A size in points as whole pixels for the engine, which keeps it within what RDP allows.
-    nonisolated static func pixels(_ size: CGSize) -> (width: UInt16, height: UInt16) {
+    nonisolated static func pixels(_ size: CGSize, scale: CGFloat = 1) -> (width: UInt16, height: UInt16) {
         guard size.width >= 1, size.height >= 1 else { return (0, 0) }
-        return (UInt16(min(size.width.rounded(.down), 8192)), UInt16(min(size.height.rounded(.down), 8192)))
+        return (UInt16(min((size.width * scale).rounded(.down), 8192)), UInt16(min((size.height * scale).rounded(.down), 8192)))
     }
 
     /// The desktop view took focus: the Mac clipboard's text goes to the remote desktop when it changed since it was
     /// last shared, so text copied on the Mac can be pasted there.
     func shareClipboard() {
-        guard phase == .connected, Self.sharesClipboard else { return }
+        guard phase == .connected, clipboardShared else { return }
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != clipboardChange else { return }
         clipboardChange = pasteboard.changeCount
@@ -265,7 +280,7 @@ private final class DesktopWorker: @unchecked Sendable {
     }
 
     private func receiveClipboard(_ text: String) {
-        guard Self.sharesClipboard, !text.isEmpty else { return }
+        guard clipboardShared, !text.isEmpty else { return }
         let pasteboard = NSPasteboard.general
         if pasteboard.string(forType: .string) == text { clipboardChange = pasteboard.changeCount; return }
         pasteboard.clearContents()

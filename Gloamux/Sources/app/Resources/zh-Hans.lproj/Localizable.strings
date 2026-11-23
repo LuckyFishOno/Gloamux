@@ -967,7 +967,7 @@
 "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password." = "登录 Mac 的屏幕共享时，请输入 Mac 账户名和密码。留空则使用 VNC 密码。";
 "Upload to %@" = "上传到 %@";
 "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault." = "密码将存入密码库。密码库锁定时，Gloamux 会在运行期间暂存密码，等你解锁后再保存。";
-"This Mac's shell at 127.0.0.1" = "此 Mac 在 127.0.0.1 上运行的 Shell";
+"localhost" = "localhost";
 "Terminal and files on a server" = "服务器的终端和文件";
 "Windows desktop" = "Windows 桌面";
 "Mac or Linux desktop" = "Mac 或 Linux 桌面";
@@ -1124,3 +1124,15 @@
 "Workspace could not be opened" = "无法打开工作区";
 "New tabs open a local terminal" = "新标签页直接打开本地终端";
 "The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form." = "点按“+”会直接打开这台 Mac 的终端，不再先显示新建连接表单。需要连接时，“新建连接”（⇧⌘N）仍会打开表单。";
+"Resolution" = "分辨率";
+"Fit to window" = "跟随窗口";
+"Fit to window follows the window as you resize it. A fixed size stays the same and is scaled to fit the window." = "跟随窗口时，远程桌面会随你调整窗口大小而改变。固定尺寸则保持不变，并缩放到适合窗口。";
+"Display" = "显示";
+"Optimize for Retina displays" = "针对 Retina 显示器优化";
+"Asks the desktop for twice the pixels at 200% scaling, so text is sharp on a Retina display. Uses more bandwidth. Works with Fit to window." = "向远程桌面请求两倍像素并以 200% 缩放，在 Retina 屏幕上文字会很清晰。会占用更多带宽，仅在“跟随窗口”时有效。";
+"Connection quality" = "连接质量";
+"Best quality (LAN)" = "最佳画质（局域网）";
+"Balanced (broadband)" = "平衡（宽带）";
+"Fastest (slow network)" = "最快（慢速网络）";
+"Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "最佳画质会显示桌面背景、平滑字体和视觉效果。平衡会隐藏桌面背景。最快还会关闭主题、动画和字体平滑，适合慢速网络。";
+"Clipboard" = "剪贴板";

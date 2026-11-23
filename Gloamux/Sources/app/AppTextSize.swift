@@ -8,7 +8,7 @@ import AppKit
 enum AppTextSize {
     static let key = "Gloamux.app.fontSize"
     static let defaultSize = 13.0
-    static let sizes = 10.0...20.0
+    static let sizes = 8.0...28.0
 
     static var size: Double {
         let value = UserDefaults.standard.object(forKey: key) as? Double ?? defaultSize
@@ -134,6 +134,11 @@ private struct AppTextSizeModifier: ViewModifier {
             .environment(\.font, .system(size: (13 * scale).rounded()))
             // Bordered buttons, menus, and segmented controls draw their own text at the control size.
             .controlSize(scale >= 1.25 ? .large : scale <= 0.85 ? .small : .regular)
+            // Buttons are Gloamux's own rounded rectangles, sized with the text; a button can still pick another style.
+            .buttonStyle(AppButtonStyle())
+            // Every input is the rounded field the connection form uses; in a sidebar or list macOS would otherwise draw
+            // a square one. It grows with the font, and a field can still pick `.plain`.
+            .textFieldStyle(.roundedBorder)
             .onAppear { AppTextSize.Activity.watch() }
     }
 }

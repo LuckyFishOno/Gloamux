@@ -4,6 +4,27 @@ import AppKit
 
 /// Native menus take the theme's menu color and light or dark look; their items stay the system's.
 @MainActor final class MenuTintTests: XCTestCase {
+    func testMenusFollowTheAppTextSizeAndDrawLatinSymbols() throws {
+        let menu = NSMenu()
+        let font = NSMenu()
+        let symbol = try XCTUnwrap(NSImage(systemSymbolName: "textformat", accessibilityDescription: nil))
+        font.addItem(withTitle: "Show Fonts", action: #selector(NSFontManager.orderFrontFontPanel(_:)), keyEquivalent: "").image = symbol
+        let parent = menu.addItem(withTitle: "Font", action: nil, keyEquivalent: "")
+        parent.image = symbol
+        parent.submenu = font
+        menu.addItem(withTitle: "Copy", action: nil, keyEquivalent: "")
+
+        let large = MenuTint.font(scale: 20.0 / AppTextSize.defaultSize)
+        XCTAssertGreaterThan(large.pointSize, NSFont.menuFont(ofSize: 0).pointSize)
+        XCTAssertEqual(MenuTint.font(scale: 1).pointSize, NSFont.menuFont(ofSize: 0).pointSize)
+        MenuTint.prepare(menu, font: large)
+        XCTAssertEqual(menu.font, large)
+        XCTAssertEqual(font.font, large, "Submenus take the size too")
+        XCTAssertEqual(parent.image?.locale?.identifier, "en", "The Font item shows Aa, not 格式")
+        XCTAssertEqual(font.items.first?.image?.locale?.identifier, "en")
+        XCTAssertNil(menu.items.last?.image, "Items without a symbol stay without one")
+    }
+
     func testAnOpenMenuTakesTheThemeAndKeepsItsItems() throws {
         let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

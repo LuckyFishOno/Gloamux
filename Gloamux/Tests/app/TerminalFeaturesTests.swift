@@ -345,9 +345,13 @@ import Darwin
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: TerminalPreferences.fontSizeKey)
         defer { if let saved { defaults.set(saved, forKey: TerminalPreferences.fontSizeKey) } else { defaults.removeObject(forKey: TerminalPreferences.fontSizeKey) } }
-        defaults.set(35.0, forKey: TerminalPreferences.fontSizeKey)
+        let top = TerminalPreferences.fontSizes.upperBound
+        defaults.set(top - 1, forKey: TerminalPreferences.fontSizeKey)
         TerminalPreferences.zoom(1); TerminalPreferences.zoom(1)
-        XCTAssertEqual(TerminalPreferences.fontSize, 36)
+        XCTAssertEqual(TerminalPreferences.fontSize, top)
+        defaults.set(TerminalPreferences.fontSizes.lowerBound + 1, forKey: TerminalPreferences.fontSizeKey)
+        TerminalPreferences.zoom(-1); TerminalPreferences.zoom(-1)
+        XCTAssertEqual(TerminalPreferences.fontSize, TerminalPreferences.fontSizes.lowerBound)
         TerminalPreferences.zoom(0)
         XCTAssertEqual(TerminalPreferences.fontSize, 13)
         let fonts = TerminalFonts.make(name: "", size: 20)

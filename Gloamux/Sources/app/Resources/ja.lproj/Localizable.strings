@@ -967,7 +967,7 @@
 "To sign in to a Mac's Screen Sharing, enter the Mac account name and password. Leave it empty to use the VNC password." = "Mac の画面共有にログインするには、Mac のアカウント名とパスワードを入力してください。VNC パスワードを使う場合は、アカウント名を空欄にしてください。";
 "Upload to %@" = "%@ にアップロード";
 "The password goes into the password vault. While the vault is locked, Gloamux keeps it until it quits and saves it when you unlock the vault." = "パスワードはパスワード保管庫に保存されます。保管庫がロック中の場合、Gloamux の実行中は一時的に保持し、ロック解除時に保存します。";
-"This Mac's shell at 127.0.0.1" = "この Mac のシェル（127.0.0.1）";
+"localhost" = "localhost";
 "Terminal and files on a server" = "サーバ上のターミナルとファイル";
 "Windows desktop" = "Windows デスクトップ";
 "Mac or Linux desktop" = "Mac または Linux のデスクトップ";
@@ -1124,3 +1124,15 @@
 "Workspace could not be opened" = "ワークスペースを開けませんでした";
 "New tabs open a local terminal" = "新規タブでローカルターミナルを開く";
 "The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form." = "「+」ボタンで、新規接続フォームを表示せずにこの Mac のターミナルをすぐに開きます。「新規接続」（⇧⌘N）では引き続きフォームが開きます。";
+"Resolution" = "解像度";
+"Fit to window" = "ウインドウに合わせる";
+"Fit to window follows the window as you resize it. A fixed size stays the same and is scaled to fit the window." = "「ウインドウに合わせる」では、ウインドウのサイズを変えるとリモートデスクトップも合わせて変わります。固定サイズは変わらず、ウインドウに合わせて拡大縮小されます。";
+"Display" = "表示";
+"Optimize for Retina displays" = "Retina ディスプレイに最適化";
+"Asks the desktop for twice the pixels at 200% scaling, so text is sharp on a Retina display. Uses more bandwidth. Works with Fit to window." = "リモートデスクトップに 2 倍のピクセルと 200% の拡大率を要求し、Retina ディスプレイで文字をくっきり表示します。帯域幅を多く使います。「ウインドウに合わせる」のときに使えます。";
+"Connection quality" = "接続品質";
+"Best quality (LAN)" = "最高画質（LAN）";
+"Balanced (broadband)" = "バランス（ブロードバンド）";
+"Fastest (slow network)" = "最速（低速ネットワーク）";
+"Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network." = "最高画質では壁紙、フォントのスムージング、視覚効果を表示します。バランスでは壁紙を表示しません。最速ではさらにテーマ、アニメーション、フォントのスムージングをオフにし、低速なネットワークに向きます。";
+"Clipboard" = "クリップボード";

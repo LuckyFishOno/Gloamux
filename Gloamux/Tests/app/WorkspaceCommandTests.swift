@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 @testable import App
+import GloamuxNetwork
 
 /// The operations behind `gloamux`, run the way the running app runs them for a CLI request.
 @MainActor final class WorkspaceCommandTests: XCTestCase {
@@ -230,5 +231,109 @@ import AppKit
         }
         let ports = try await run(["sessions", "serial-ports"], model)
         XCTAssertNotNil(ports as? [String])
+    }
+
+    func testConnectionOptionsMatchTheEditForm() async throws {
+        let model = try workspace()
+        try await run(["sessions", "add", "Bastion", "ssh", "bastion.example.com", "ops"], model)
+        try await run(["sessions", "add", "Web", "ssh", "web.example.com", "ops", "2222"], model)
+        try await run(["sessions", "options", "Web", "jump=Bastion", "startup=cd /srv\\nls", "x11=on", "forward-agent=on",
+                       "open-files=on", "files=sftp", "encoding=big5"], model)
+        var web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
+        XCTAssertEqual(web.jumpSessionID, model.sessionTree.nodes.first { $0.name == "Bastion" }?.id)
+        XCTAssertEqual(web.startupCommands, "cd /srv\nls")
+        XCTAssertEqual(web.forwardsX11, true)
+        XCTAssertEqual(web.forwardsAgent, true)
+        XCTAssertEqual(web.opensFiles, true)
+        XCTAssertEqual(web.fileProtocol, .sftp)
+        XCTAssertEqual(web.encoding, .big5)
+        let shown = try await run(["sessions", "show", "Web"], model) as? [String: Any]
+        XCTAssertEqual(shown?["jump"] as? String, "Bastion")
+        XCTAssertEqual(shown?["x11"] as? Bool, true)
+
+        // A loop through jump hosts, and a proxy beside a jump host, are refused as the form refuses them.
+        do { try await run(["sessions", "options", "Bastion", "jump=Web"], model); XCTFail("A jump loop was accepted") } catch {}
+        do { try await run(["sessions", "options", "Web", "proxy=http", "proxy-host=proxy.example.com"], model); XCTFail("Proxy and jump host were both set") } catch {}
+        try await run(["sessions", "options", "Web", "jump=-", "proxy=http", "proxy-host=proxy.example.com", "startup=-", "x11=off", "encoding=utf8"], model)
+        web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
+        XCTAssertEqual(web.proxy, ProxyConfiguration(kind: .http, host: "proxy.example.com", port: 1080))
+        XCTAssertNil(web.jumpSessionID)
+        XCTAssertNil(web.startupCommands)
+        XCTAssertNil(web.forwardsX11)
+        XCTAssertNil(web.encoding)
+        try await run(["sessions", "options", "Web", "proxy=-"], model)
+        XCTAssertNil(model.sessionTree.nodes.first { $0.name == "Web" }?.connection?.proxyHost)
+
+        // Whether a session asks on every connection needs the owner, in the running app.
+        do { try await run(["sessions", "options", "Web", "confirm=on"], model, live: false); XCTFail("confirm changed without the app") } catch {}
+        do { try await run(["sessions", "options", "Web", "bogus=1"], model); XCTFail("An unknown option was accepted") } catch {}
+        try await run(["sessions", "add", "Files", "ftp", "ftp.example.com", "-"], model)
+        do { try await run(["sessions", "options", "Files", "x11=on"], model); XCTFail("FTP took an SSH option") } catch {}
+    }
+
+    func testRemoteDesktopOptionsAndGatewayMatchTheForm() async throws {
+        let model = try workspace()
+        try await run(["sessions", "add", "Bastion", "ssh", "bastion.example.com", "ops"], model)
+        try await run(["sessions", "add", "Desk", "rdp", "10.0.0.5", "admin"], model)
+        try await run(["sessions", "edit-other", "Desk", "gateway=Bastion", "resolution=1920x1080", "retina=on", "quality=low", "clipboard=off"], model)
+        var desk = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Desk" }?.container)
+        XCTAssertEqual(desk.gatewaySessionID, model.sessionTree.nodes.first { $0.name == "Bastion" }?.id)
+        XCTAssertEqual(desk.desktopResolution, DesktopResolution(width: 1920, height: 1080))
+        XCTAssertEqual(desk.desktopQuality, .low)
+        XCTAssertEqual(desk.sharesClipboard, false)
+        let shown = try await run(["sessions", "show", "Desk"], model) as? [String: Any]
+        XCTAssertEqual(shown?["gateway"] as? String, "Bastion")
+        XCTAssertEqual(shown?["resolution"] as? String, "1920x1080")
+        // Retina applies only when the desktop follows the window.
+        XCTAssertEqual(shown?["retina"] as? Bool, false)
+        try await run(["sessions", "edit-other", "Desk", "gateway=-", "resolution=fit", "quality=lan", "clipboard=-"], model)
+        desk = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Desk" }?.container)
+        XCTAssertNil(desk.gatewaySessionID)
+        XCTAssertNil(desk.desktopResolution)
+        XCTAssertNil(desk.desktopQuality)
+        XCTAssertNil(desk.sharesClipboard)
+        for bad in ["resolution=1000x1000", "quality=best", "retina=maybe", "gateway=Desk"] {
+            do { try await run(["sessions", "edit-other", "Desk", bad], model); XCTFail("\(bad) was accepted") } catch {}
+        }
+        try await run(["sessions", "add", "Mac", "vnc", "mac.local", "-"], model)
+        do { try await run(["sessions", "edit-other", "Mac", "quality=low"], model); XCTFail("VNC took an RDP setting") } catch {}
+        XCTAssertEqual(DesktopResolution("2560x1440"), DesktopResolution(width: 2560, height: 1440))
+        XCTAssertNil(DesktopResolution("1234x567"))
+    }
+
+    func testHostKeysRecordingsAndAgentHistoryMatchTheirWindows() async throws {
+        let model = try workspace()
+        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+        try model.knownHosts.trust(endpoint: "[web.example.com]:22", key: key)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-known-\(UUID())")
+        addTeardownBlock { try? FileManager.default.removeItem(at: file) }
+        try await run(["hosts", "export", file.path], model)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "web.example.com " + key + "\n")
+        try await run(["hosts", "remove", "[web.example.com]:22"], model)
+        XCTAssertTrue(model.knownHosts.trusted.isEmpty)
+        XCTAssertFalse(model.knownHosts.history.isEmpty)
+        try await run(["hosts", "clear-history"], model)
+        XCTAssertTrue(model.knownHosts.history.isEmpty)
+        do { try await run(["hosts", "discover", "nowhere"], model); XCTFail("An unknown source was accepted") } catch {}
+
+        let folder = model.recordings.folder
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let cast = folder.appendingPathComponent("2026-11-23 10.00.00 web.cast")
+        try Data("{\"version\":2,\"width\":80,\"height\":24,\"title\":\"web\",\"timestamp\":1795000000,\"duration\":1.5}\n[0.5,\"o\",\"hi\"]\n".utf8).write(to: cast)
+        let listed = try await run(["recordings", "list"], model) as? [[String: Any]]
+        XCTAssertEqual(listed?.first?["file"] as? String, cast.lastPathComponent)
+        XCTAssertEqual(listed?.first?["title"] as? String, "web")
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-cast-\(UUID()).cast")
+        addTeardownBlock { try? FileManager.default.removeItem(at: copy) }
+        try await run(["recordings", "export", cast.lastPathComponent, copy.path], model)
+        XCTAssertEqual(try Data(contentsOf: copy), try Data(contentsOf: cast))
+        do { try await run(["recordings", "export", cast.lastPathComponent, copy.path], model); XCTFail("An existing file was overwritten") } catch {}
+        try await run(["recordings", "remove", cast.lastPathComponent], model)
+        XCTAssertTrue(model.recordings.saved.isEmpty)
+
+        model.agents.record(client: "test", action: "Listed sessions", outcome: "0 shown")
+        XCTAssertFalse(model.agents.history.isEmpty)
+        try await run(["agents", "clear-history"], model)
+        XCTAssertTrue(model.agents.history.isEmpty)
     }
 }

@@ -129,6 +129,10 @@ extension WorkspaceCommand {
                 if let detail = event.detail { info["detail"] = detail }
                 return info
             }
+        case "clear-history":
+            try count(args, 0...0)
+            access.clearHistory()
+            return ["history": 0]
         case "revoke":
             try count(args, 0...1)
             if let selector = args.first {

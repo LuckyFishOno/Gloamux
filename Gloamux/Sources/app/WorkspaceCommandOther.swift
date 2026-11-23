@@ -11,6 +11,8 @@ extension WorkspaceCommand {
         .docker: ["context", "shell", "user"],
         .kubectl: ["context", "namespace", "container", "shell"],
         .ssm: ["profile", "region"],
+        .rdp: ["gateway", "resolution", "retina", "quality", "clipboard"],
+        .vnc: ["gateway", "clipboard"],
     ]
 
     static let otherKinds: [ContainerSession.Tool] = [.serial, .telnet, .mosh, .docker, .kubectl, .ssm]
@@ -37,12 +39,21 @@ extension WorkspaceCommand {
         case "edit-other":
             guard args.count >= 2 else { throw Usage("Wrong number of arguments. Run gloamux sessions --help.") }
             let node = try item(args[0], in: tree)
-            guard var session = node.container, otherKinds.contains(session.tool) else {
-                throw Usage("Select a serial, Telnet, Mosh, container, pod, or SSM session.")
+            guard var session = node.container, otherKinds.contains(session.tool) || session.tool.opensDesktop else {
+                throw Usage("Select a serial, Telnet, Mosh, container, pod, SSM, RDP, or VNC session.")
             }
             for (key, value) in try pairs(args.dropFirst()) {
-                if key == "target" { session.target = value.trimmingCharacters(in: .whitespacesAndNewlines) }
-                else { try apply(key, value, to: &session) }
+                if key == "gateway", session.tool.opensDesktop {
+                    // Through SSH: a saved SSH connection, as the form's menu lists.
+                    if value == "-" { session.gatewaySessionID = nil; continue }
+                    let gateway = try item(value, in: tree)
+                    guard let connection = gateway.connection, !connection.isFTP else { throw Usage("Choose a saved SSH connection, or -.") }
+                    session.gatewaySessionID = gateway.id
+                } else if key == "target" {
+                    let target = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if target != session.target { session.rdpFingerprint = nil }
+                    session.target = target
+                } else { try apply(key, value, to: &session) }
             }
             try session.validate()
             try tree.updateContainer(node.id, name: node.name, container: session, environment: node.environment)
@@ -51,7 +62,7 @@ extension WorkspaceCommand {
         }
     }
 
-    private static func pairs(_ args: ArraySlice<String>) throws -> [(String, String)] {
+    static func pairs(_ args: ArraySlice<String>) throws -> [(String, String)] {
         try args.map { argument in
             guard let equals = argument.firstIndex(of: "="), equals != argument.startIndex else {
                 throw Usage("Give settings as NAME=VALUE, such as baud=115200. Run gloamux sessions --help.")
@@ -102,6 +113,20 @@ extension WorkspaceCommand {
             let flows: [String: SerialPort.Settings.Flow] = ["none": .none, "rts-cts": .hardware, "dtr-dsr": .dtrDsr, "xon-xoff": .software]
             guard let flow = flows[clear ? "none" : value] else { throw Usage("Choose none, rts-cts, dtr-dsr, or xon-xoff flow control.") }
             session.flow = flow == .none ? nil : flow.rawValue
+        case "resolution":
+            if clear || value == "fit" { session.desktopResolution = nil; return }
+            guard let resolution = DesktopResolution(value) else {
+                throw Usage("Choose fit or \(DesktopResolution.presets.map { "\($0.width)x\($0.height)" }.joined(separator: ", ")).")
+            }
+            session.desktopResolution = resolution
+        case "retina":
+            session.desktopRetina = try switchValue(clear ? "off" : value) ? true : nil
+        case "quality":
+            guard clear || DesktopQuality(rawValue: value) != nil else { throw Usage("Choose lan, broadband, or low.") }
+            session.desktopQuality = clear ? nil : DesktopQuality(rawValue: value).flatMap { $0 == .lan ? nil : $0 }
+        case "gateway": throw Usage("Set gateway with edit-other.")
+        case "clipboard":
+            session.sharesClipboard = clear ? nil : try switchValue(value)
         case "encoding":
             guard clear || TerminalEncoding(rawValue: value) != nil else {
                 throw Usage("Choose \(TerminalEncoding.allCases.map(\.rawValue).joined(separator: ", ")).")
@@ -112,8 +137,16 @@ extension WorkspaceCommand {
         }
     }
 
+    static func switchValue(_ value: String) throws -> Bool {
+        switch value {
+        case "on", "true", "yes": return true
+        case "off", "false", "no": return false
+        default: throw Usage("Use on or off.")
+        }
+    }
+
     /// What `sessions show` prints for an Other connection.
-    static func describeOther(_ session: ContainerSession) -> [String: Any] {
+    @MainActor static func describeOther(_ session: ContainerSession) -> [String: Any] {
         var info: [String: Any] = [:]
         switch session.tool {
         case .serial:
@@ -133,7 +166,15 @@ extension WorkspaceCommand {
             ]
             for (key, value) in names { if let value { info[key] = value } }
         case .mosh: if let user = session.user { info["user"] = user }
+        case .rdp:
+            info["resolution"] = session.desktopResolution.map { "\($0.width)x\($0.height)" } ?? "fit"
+            info["retina"] = session.desktopRetina == true && session.desktopResolution == nil
+            info["quality"] = (session.desktopQuality ?? .lan).rawValue
         default: break
+        }
+        if session.tool.opensDesktop {
+            let global = preferences.object(forKey: RemoteDesktopSession.clipboardKey) as? Bool ?? true
+            info["clipboard"] = session.sharesClipboard ?? global
         }
         if session.tool == .serial || session.tool == .telnet { info["encoding"] = (session.encoding ?? .utf8).rawValue }
         return info

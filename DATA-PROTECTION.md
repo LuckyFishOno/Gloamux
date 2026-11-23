@@ -1,5 +1,7 @@
 # Gloamux data protection inventory
 
+[English](DATA-PROTECTION.md) · [繁體中文](DATA-PROTECTION.zh-TW.md)
+
 Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 0.13.0 source on November 23, 2026. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
 
 ## Protection classes

@@ -193,7 +193,7 @@ struct OutputTriggerSettings: View {
                 TextField(T("Pattern"), text: $draft.pattern).appFont(.body.monospaced())
                 Toggle(T("Regular expression"), isOn: $draft.regex)
                 Toggle(T("Match case"), isOn: $draft.caseSensitive)
-                Picker(T("Action"), selection: $draft.action) {
+                AppPicker(T("Action"), selection: $draft.action, current: T(draft.action.title)) {
                     ForEach(OutputTrigger.Action.allCases, id: \.self) { Text(T($0.title)).tag($0) }
                 }
             }

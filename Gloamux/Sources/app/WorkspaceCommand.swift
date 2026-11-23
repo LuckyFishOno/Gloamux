@@ -18,8 +18,11 @@ public enum WorkspaceCommand {
         let open = [model] + windows.filter { $0 !== model }
         let result: Any
         switch command {
-        case "sessions": result = try await sessions(action, args, model)
-        case "hosts": result = try hosts(action, args, model)
+        case "sessions": result = try await sessions(action, args, model, live: live)
+        case "hosts":
+            result = ["list", "history", "trust", "replace"].contains(action) ? try hosts(action, args, model)
+                : try await hostTools(action, args, model)
+        case "recordings": result = try recordings(action, args, model)
         case "commands":
             if ["send", "run"].contains(action) {
                 try requireLive(live, model)
@@ -92,7 +95,7 @@ public enum WorkspaceCommand {
         guard range.contains(args.count) else { throw Usage("Wrong number of arguments. Run gloamux <command> --help.") }
     }
 
-    @MainActor private static func sessions(_ action: String, _ args: [String], _ model: WorkspaceModel) async throws -> Any {
+    @MainActor private static func sessions(_ action: String, _ args: [String], _ model: WorkspaceModel, live: Bool) async throws -> Any {
         let tree = model.sessionTree
         func describe(_ node: SessionTreeNode) -> [String: Any] {
             var info: [String: Any] = ["id": node.id.uuidString, "name": node.name, "kind": node.isFolder ? "folder" : "session"]
@@ -104,10 +107,14 @@ public enum WorkspaceCommand {
                 info["host"] = config.host
                 info["port"] = config.port
                 info["username"] = config.username
+                info.merge(describeOptions(config, tree)) { current, _ in current }
             } else if let other = node.container {
                 info["protocol"] = other.tool.rawValue
                 info["target"] = other.target
                 if other.tool.usesHost { info["port"] = other.effectivePort }
+                if other.tool.opensDesktop {
+                    info["gateway"] = other.gatewaySessionID.map { tree.node($0)?.name ?? $0.uuidString } ?? "-"
+                }
                 info.merge(describeOther(other)) { current, _ in current }
             }
             return info
@@ -150,6 +157,8 @@ public enum WorkspaceCommand {
             profile.fileProtocol = FileProtocolChoice(rawValue: scheme)
             profile.ftpSecurity = security
             return ["id": try tree.add(name: name, parent: parent, connection: profile).uuidString]
+        case "options":
+            return try await sessionOptions(args, model, live: live)
         case "add-other", "edit-other", "serial-ports":
             return try otherSessions(action, args, tree, folder: folder)
         case "rename":

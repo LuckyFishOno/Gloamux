@@ -1,5 +1,7 @@
 # Xshell and MobaXterm feature backlog
 
+[English](FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.zh-TW.md)
+
 Baseline reviewed on November 20, 2026. The backlog covers documented product features, settings, and integration workflows in Xshell 8 and MobaXterm 26.6, including the Professional Customizer and the November 11 Xshell update. Windows-specific workflows have macOS counterparts below. Each checkbox is a Gloamux development item. An open item can include capabilities already present in the app. Optional items that Gloamux does not plan to build were removed on November 22, 2026.
 
 - **Xshell** · [Features and specifications](https://www.netsarang.com/en/xshell-all-features/) · [Version 8 manual](https://www.netsarang.com/docs/Xshell8_manual.pdf) · [What's new](https://www.xshell.com/en/whats-new/) · [Update history](https://www.xshell.com/en/xshell-update-history/)
@@ -10,16 +12,16 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Start with a local terminal tab. Keep saved sessions in a searchable folder tree with add, edit, rename, duplicate through copy/paste, move, and remove operations.
 - [x] Open saved sessions in tabs and in their own windows. Preview Xshell folder imports and keep the imported folder hierarchy.
 - [x] Show two independent terminals in side-by-side or stacked layouts.
-- [x] Offer macOS, Terminal, and Files layout presets from the top bar and CLI. Apply the saved layout on the next app launch.
+- [x] Offer Default, Classic, and Workbench layout presets from the top bar and CLI. Apply the saved layout on the next app launch.
 - [x] Connect to `user@host` from the command palette, open saved sessions and tabs from the palette, the menu bar, Spotlight, Shortcuts, and `gloamux://` links.
-- [x] Connect from the Xshell layout's address bar with `ssh://user@host:port`, `user@host`, or a host.
+- [x] Connect from the Classic layout's address bar with `ssh://user@host:port`, `user@host`, or a host.
 - [x] Reopen the last launch's saved sessions and local terminals as tabs (Settings › General). A failed startup connection leaves the other tabs open.
 - [x] Drag tabs onto panes to split them, split without a pane limit, and take a pane out of its split as its own tab.
 - [x] Select tabs by number, move through them with shortcuts, reorder them, and rename them.
 - [x] Duplicate a tab next to the original, move a tab to its own window, and move that window back to the tab bar without disconnecting.
-- [x] Enter full screen from the Xshell and MobaXterm layouts' toolbars, as well as from the window.
-- [x] Start the session log, import a highlight set, open the triggers, and lock the workspace from the Xshell layout's toolbar.
-- [x] From the MobaXterm layout's ribbon, type into every terminal of the window (MultiExec), start XQuartz, open the saved passwords, and list every connected SSH session's tunnels with their connection counts. The CLI does the same with `gloamux tabs multiexec`, `gloamux xserver`, `gloamux signins`, and `gloamux forwards live-list`.
+- [x] Enter full screen from the Classic and Workbench layouts' toolbars, as well as from the window.
+- [x] Start the session log, import a highlight set, open the triggers, and lock the workspace from the Classic layout's toolbar.
+- [x] From the Workbench layout's ribbon, type into every terminal of the window (MultiExec), start XQuartz, open the saved passwords, and list every connected SSH session's tunnels with their connection counts. The CLI does the same with `gloamux tabs multiexec`, `gloamux xserver`, `gloamux signins`, and `gloamux forwards live-list`.
 - [x] Import Xshell folders, MobaXterm exports, OpenSSH config, CSV, PuTTY and KiTTY registry exports, and Gloamux sessions files with a preview. Export Gloamux sessions files and CSV.
 - [x] Export profiles for a team without passwords. Keep storage separate for each macOS account.
 
@@ -55,17 +57,17 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 
 - [x] Save, search, edit and delete single-line quick commands. Insert them into the selected terminal or confirm before running them.
 - [x] Type into every pane of a split group at once, with a toggle to stop.
-- [x] Send a line from the Xshell layout's compose bar to the current session or to every open session.
+- [x] Send a line from the Classic layout's compose bar to the current session or to every open session.
 - [x] Type a saved session's startup commands into each new shell.
 - [x] Add output triggers with literal or regex patterns that notify, play a sound, or mark the tab. Settings › Triggers lists, edits, and disables rules, and each rule fires at most once every 10 seconds per terminal.
 - [ ] Release a supported CLI with operation parity across the GUI. Use the same application operations and workspace, stable session IDs, terminal mode, machine-readable output, cancellation, exit codes, and shell completion. Document installation and test both entry points for each GUI feature.
 - [x] Ship the `gloamux` executable product with file commands across SFTP, SCP, FTP, and FTPS, session and folder management, import and export, SSH trust review, active-window tab control, saved and live forwarding, quick commands, themes, JSON, exit codes, and Bash and Zsh completion.
-- [ ] Ship a local MCP server for approved sessions and transfer actions. Provide short shared terminal excerpts, proposed commands, visible activity, per-session permissions, review for writes, and revocation. Leave credential material under Gloamux control.
+- [x] Ship a local MCP server for approved sessions. Provide short shared terminal excerpts, proposed commands, visible activity, per-session permissions, review before a command runs, and revocation. File transfer actions for agents are not built. Leave credential material under Gloamux control.
 
 ## File transfer and remote editing
 
 - [x] Browse directories and upload, download, rename, and delete files from an SSH/SFTP session in the GUI. Preserve local files on failed downloads.
-- [x] Show the remote file list alongside the terminal in the Files layout.
+- [x] Show the remote file list alongside the terminal in the Workbench layout.
 - [x] Show a local file list beside the remote one, follow the shell's current folder, sort columns, and open a saved SSH profile directly in the file browser.
 - [x] Show or hide hidden files on both sides of File Transfer.
 - [x] Create folders, show permissions and modification times, drag files in from Finder, and upload and download folders recursively with progress.
@@ -96,7 +98,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 
 ## Utilities and distribution
 
-- [x] Show CPU, memory, network, uptime, users, and disk use for this Mac or a Linux server in the MobaXterm layout's monitoring bar.
+- [x] Show CPU, memory, network, uptime, users, and disk use for this Mac or a Linux server in the Workbench layout's monitoring bar.
 
 ## Beyond the Xshell and MobaXterm baseline
 

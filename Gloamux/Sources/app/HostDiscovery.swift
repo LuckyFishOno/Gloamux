@@ -278,7 +278,7 @@ struct HostDiscoveryView: View {
                 Spacer()
                 if let added { Text(added).foregroundStyle(.secondary).appFont(.callout) }
                 Button(String(format: T("Add %d sessions"), discovery.chosen.count)) { add() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appProminent)
                     .disabled(discovery.chosen.isEmpty)
             }
         }
@@ -437,6 +437,10 @@ struct ContainerSessionEditor: View {
     @State private var encoding = TerminalEncoding.utf8
     @State private var environment: SessionEnvironment?
     @State private var gateway: UUID?
+    @State private var resolution: DesktopResolution?
+    @State private var retina = false
+    @State private var quality = DesktopQuality.lan
+    @State private var sharesClipboard = RemoteDesktopSession.sharesClipboard
     @State private var choices: [String] = []
     @State private var listing = false
     @State private var error: String?
@@ -459,7 +463,7 @@ struct ContainerSessionEditor: View {
         EditorContainer(inline: draftTab != nil) {
             if draftTab == nil || !tool.opensDesktop {
                 sizedRow("Type", width: 240) {
-                    Picker(T("Type"), selection: $tool) {
+                    AppPicker(T("Type"), selection: $tool, current: T(tool.title), fills: draftTab != nil) {
                         ForEach(availableTools) { tool in Label(T(tool.title), systemImage: tool.symbol).tag(tool) }
                     }
                     .disabled(editing != nil && !tool.opensDesktop)
@@ -493,17 +497,18 @@ struct ContainerSessionEditor: View {
                 if tool.opensDesktop {
                     sizedRow("Through SSH", width: 270) {
                         HStack(spacing: 8) {
-                            Picker(T("Through SSH"), selection: $gateway) {
+                            AppPicker(T("Through SSH"), selection: $gateway, current: gatewayTitle, fills: draftTab != nil) {
                                 Text(T("Direct")).tag(UUID?.none)
                                 ForEach(sshSessions) { node in Text(node.name).tag(Optional(node.id)) }
                             }
                             InfoButton(T("Connects to the desktop through an SSH tunnel from this saved session. The SSH connection encrypts the traffic, which plain VNC does not, and reaches desktops only that server can reach. Enter the desktop's address as that server sees it."))
                         }
                     }
+                    desktopOptions
                 }
             case .serial:
                 sizedRow("Speed", width: 140) {
-                    Picker(T("Speed"), selection: $baud) {
+                    AppPicker(T("Speed"), selection: $baud, current: String(baud), fills: draftTab != nil) {
                         ForEach(SerialPort.Settings.speeds, id: \.self) { Text(String($0)).tag($0) }
                     }
                 }
@@ -538,7 +543,7 @@ struct ContainerSessionEditor: View {
                     .pickerStyle(.segmented)
                 }
                 sizedRow("Text encoding", width: 180) {
-                    Picker(T("Text encoding"), selection: $encoding) {
+                    AppPicker(T("Text encoding"), selection: $encoding, current: encoding.title, fills: draftTab != nil) {
                         ForEach(TerminalEncoding.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                 }
@@ -572,7 +577,7 @@ struct ContainerSessionEditor: View {
                     Button(T("Cancel"), action: cancel).keyboardShortcut(.cancelAction)
                     Spacer()
                     Button(T("Open")) { open() }.disabled(draft == nil)
-                    Button(T(editing == nil ? "Save" : "Save changes")) { save() }.buttonStyle(.borderedProminent).disabled(draft == nil || Optional(name).nonEmpty == nil)
+                    Button(T(editing == nil ? "Save" : "Save changes")) { save() }.buttonStyle(.appProminent).disabled(draft == nil || Optional(name).nonEmpty == nil)
                 }
             }
         }
@@ -587,8 +592,49 @@ struct ContainerSessionEditor: View {
         }
     }
 
+    /// Display and sharing for a desktop: RDP's size, Retina scaling, and quality, and the clipboard for both.
+    @ViewBuilder private var desktopOptions: some View {
+        if tool == .rdp {
+            sizedRow("Resolution", width: 270) {
+                HStack(spacing: 8) {
+                    AppPicker(T("Resolution"), selection: $resolution, current: resolution?.title ?? T("Fit to window"), fills: draftTab != nil) {
+                        Text(T("Fit to window")).tag(DesktopResolution?.none)
+                        ForEach(DesktopResolution.presets, id: \.self) { Text($0.title).tag(Optional($0)) }
+                    }
+                    InfoButton(T("Fit to window follows the window as you resize it. A fixed size stays the same and is scaled to fit the window."))
+                }
+            }
+            checkRow("Display", "Optimize for Retina displays", isOn: $retina,
+                     info: "Asks the desktop for twice the pixels at 200% scaling, so text is sharp on a Retina display. Uses more bandwidth. Works with Fit to window.")
+                .disabled(resolution != nil)
+            sizedRow("Connection quality", width: 270) {
+                HStack(spacing: 8) {
+                    AppPicker(T("Connection quality"), selection: $quality, current: T(quality.title), fills: draftTab != nil) {
+                        ForEach(DesktopQuality.allCases, id: \.self) { Text(T($0.title)).tag($0) }
+                    }
+                    InfoButton(T("Best quality shows the wallpaper, smooth fonts, and visual effects. Balanced hides the wallpaper. Fastest also turns off themes, animations, and font smoothing for a slow network."))
+                }
+            }
+        }
+        checkRow("Clipboard", "Share clipboard", isOn: $sharesClipboard,
+                 info: "Text you copy on this Mac goes to the remote desktop when you click into it, and text copied there comes back to this Mac.")
+    }
+
+    /// A checkbox with its own title: in the new-connection form it sits in the field column under a row label.
+    @ViewBuilder private func checkRow(_ title: String, _ label: String, isOn: Binding<Bool>, info: String) -> some View {
+        let toggle = HStack(spacing: 6) {
+            Toggle(T(label), isOn: isOn)
+            InfoButton(T(info))
+        }
+        if draftTab != nil {
+            LabeledContent(T(title)) { toggle.toggleStyle(.checkbox).padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading) }
+        } else {
+            toggle
+        }
+    }
+
     private var environmentPicker: some View {
-        Picker(T("Environment"), selection: $environment) {
+        AppPicker(T("Environment"), selection: $environment, current: T(environment?.title ?? "None"), fills: draftTab != nil) {
             Text(T("None")).tag(SessionEnvironment?.none)
             ForEach(SessionEnvironment.allCases) { Text(T($0.title)).tag(Optional($0)) }
         }
@@ -597,7 +643,7 @@ struct ContainerSessionEditor: View {
     private var inlineActions: some View {
         HStack {
             Button(T("Save")) { save() }.disabled(draft == nil || Optional(name).nonEmpty == nil)
-            Button(T("Connect")) { open() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            Button(T("Connect")) { open() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                 .disabled(draft == nil)
         }
         .fixedSize()
@@ -628,12 +674,25 @@ struct ContainerSessionEditor: View {
                                        port: remote ? Int(portNumber) : nil, baud: serial ? baud : nil, format: serial ? format : nil,
                                        flow: serial && flow != .none ? flow.rawValue : nil)
         if serial, encoding != .utf8 { session.encoding = encoding }
-        if session.tool.opensDesktop { session.gatewaySessionID = gateway }
+        if session.tool.opensDesktop {
+            session.gatewaySessionID = gateway
+            session.sharesClipboard = sharesClipboard == RemoteDesktopSession.sharesClipboard ? nil : sharesClipboard
+        }
+        if session.tool == .rdp {
+            session.desktopResolution = resolution
+            session.desktopRetina = retina && resolution == nil ? true : nil
+            session.desktopQuality = quality == .lan ? nil : quality
+        }
         if session.tool == .rdp, let previous = editing?.container, previous.tool == .rdp,
            previous.target == session.target, previous.effectivePort == session.effectivePort {
             session.rdpFingerprint = previous.rdpFingerprint
         }
         return (try? session.validate()) == nil ? nil : session
+    }
+
+    private var gatewayTitle: String {
+        guard let gateway else { return T("Direct") }
+        return sshSessions.first { $0.id == gateway }?.name ?? T("Direct")
     }
 
     /// Saved SSH sessions a desktop can tunnel through, by name.
@@ -674,6 +733,10 @@ struct ContainerSessionEditor: View {
         encoding = session.encoding ?? .utf8
         environment = editing.environment
         gateway = session.gatewaySessionID
+        resolution = session.desktopResolution
+        retina = session.desktopRetina == true
+        quality = session.desktopQuality ?? .lan
+        sharesClipboard = session.sharesClipboard ?? RemoteDesktopSession.sharesClipboard
     }
 
     /// Lists running containers, pods, or managed instances for the menu.

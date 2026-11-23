@@ -175,10 +175,10 @@ private struct RecordingPlayerView: View {
                     Text(formatClock(player.position)).appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     Slider(value: Binding(get: { player.position }, set: { player.seek($0) }), in: 0...max(player.duration, 0.01))
                     Text(formatClock(player.duration)).appFont(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    Picker(T("Speed"), selection: $player.speed) {
+                    AppPicker(T("Speed"), selection: $player.speed, current: "\(player.speed.formatted())×") {
                         ForEach([0.5, 1, 2, 4], id: \.self) { Text("\($0.formatted())×").tag($0) }
                     }
-                    .labelsHidden().frame(width: 70)
+                    .labelsHidden()
                     Button(T("Export…"), action: export)
                 }
                 .padding(10)
