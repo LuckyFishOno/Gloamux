@@ -6,7 +6,7 @@ Functional and stress results for the November 24, 2026 working tree are in the 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.2 (build 3)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.2.1 (build 4)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
 
 ## First milestones
 

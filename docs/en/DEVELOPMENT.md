@@ -99,6 +99,7 @@ Naming:
 - `layout set` takes `default`, `classic`, and `workbench`, stored as `macos`, `terminal`, and `transfer`. Earlier names such as `xshell` and `mobaxterm` still work.
 - The Classic and Workbench chrome is in `ClassicLayouts.swift`. Its model support (address bar, compose bar, folder following, host monitoring) is in `ClassicWorkspace.swift`.
 - The Default layout's toolbar switches between File Transfer and Terminal. A new connection tab lists Local, SSH, RDP, VNC, and Other connection. Local starts the login shell in place. Choosing another protocol opens its form in that tab.
+- `ThemeTitlebar` colors the title bar with the window background and a fill under the toolbar that lets clicks through. It leaves `titlebarAppearsTransparent` off, as SwiftUI sets it: a transparent title bar passes clicks to the window content, so double-clicking it would no longer fill or zoom the window. Switching layouts replaces the view, which removes its fill as it leaves the window.
 
 ### Windows and MultiExec
 

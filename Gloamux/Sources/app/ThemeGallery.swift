@@ -243,6 +243,12 @@ struct ThemeTitlebar: NSViewRepresentable {
         private let fill = Fill()
         private var observers: [NSObjectProtocol] = []
 
+        /// Switching layouts replaces this view, so the fill leaves the title bar with it instead of piling up there.
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            if newWindow !== window { fill.removeFromSuperview() }
+        }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             observers.forEach(NotificationCenter.default.removeObserver)
@@ -267,7 +273,8 @@ struct ThemeTitlebar: NSViewRepresentable {
 
         private func apply() {
             guard let window, let color else { return }
-            window.titlebarAppearsTransparent = true
+            // The title bar stays opaque, as SwiftUI leaves it. A transparent title bar hands its clicks to the window
+            // content, so double-clicking it would no longer fill or zoom the window; the fill gives it the color.
             window.backgroundColor = color
             fill.layer?.backgroundColor = color.cgColor
             // The toolbar draws a blurred system backdrop over the window color. The fill covers that backdrop

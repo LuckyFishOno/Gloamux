@@ -114,6 +114,34 @@ import AppKit
         XCTAssertEqual(window.backgroundColor, ThemeColor(hex: "#102030")?.nsColor)
     }
 
+    /// Switching layouts builds a new title bar view and changing the theme paints it again. Neither may make the title
+    /// bar transparent, which hands its double-clicks to the window content so the window no longer fills or zooms,
+    /// and a view that leaves the window takes its fill with it.
+    func testRepaintingTheTitlebarKeepsItsDoubleClickAndLeavesOneFill() {
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 400, height: 200), styleMask: [.titled, .closable, .resizable],
+                              backing: .buffered, defer: false)
+        window.toolbar = NSToolbar(identifier: "titlebar-test")
+        let titlebar = window.standardWindowButton(.closeButton)?.superview
+        XCTAssertNotNil(titlebar)
+        func fills() -> Int { titlebar?.subviews.filter { String(describing: type(of: $0)) == "Fill" }.count ?? -1 }
+
+        var view = ThemeTitlebar.TitlebarView()
+        window.contentView?.addSubview(view)
+        view.color = WorkspaceTheme.native.header.nsColor
+        XCTAssertFalse(window.titlebarAppearsTransparent, "The title bar keeps handling its own clicks")
+        XCTAssertEqual(fills(), 1)
+        for color in ["#102030", "#203040", "#304050"] {
+            view.removeFromSuperview()
+            XCTAssertEqual(fills(), 0, "A title bar view that leaves the window removes its fill")
+            view = ThemeTitlebar.TitlebarView()
+            window.contentView?.addSubview(view)
+            view.color = ThemeColor(hex: color)?.nsColor
+            XCTAssertFalse(window.titlebarAppearsTransparent)
+            XCTAssertEqual(fills(), 1)
+            XCTAssertEqual(window.backgroundColor, ThemeColor(hex: color)?.nsColor)
+        }
+    }
+
     func testColorDecodingPreservesAlphaAndRejectsInvalidInputs() {
         XCTAssertEqual(ThemeColor(hex: "#abcd"), ThemeColor(hex: "#aabbccdd"))
         XCTAssertEqual(ThemeColor(hex: "#123"), ThemeColor(hex: "#112233ff"))

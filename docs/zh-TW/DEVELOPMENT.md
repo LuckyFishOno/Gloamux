@@ -99,6 +99,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - `layout set` 接受 `default`、`classic` 和 `workbench`，分別存成 `macos`、`terminal` 和 `transfer`。`xshell`、`mobaxterm` 等舊名稱仍然可用。
 - 經典和工作台的外框程式碼在 `ClassicLayouts.swift`，模型支援（網址列、輸入列、跟隨資料夾、主機監控）在 `ClassicWorkspace.swift`。
 - 預設版面的工具列可以在檔案傳輸和終端之間切換。新連線分頁列出本機、SSH、RDP、VNC 和其他連線。本機會在原分頁啟動登入 shell；其他通訊協定會開啟各自的表單。
+- `ThemeTitlebar` 用視窗背景色和工具列下方一層不攔截點擊的底色替標題列上色。它不開啟 `titlebarAppearsTransparent`，維持 SwiftUI 的設定：透明的標題列會把點擊交給視窗內容，雙擊就不再填滿或縮放視窗。切換版面會替換這個畫面，它離開視窗時會一併移除自己的底色。
 
 ### 視窗與多重執行
 
