@@ -408,6 +408,7 @@ CSV 欄位：`host`（必填），以及選填的 `folder`（例如 `Team/Prod`�
 
 - 工具列的 **工作區主題** 或 **設定 › 外觀** 提供 73 種工作區主題：Gloamux 自己的主題、Ubuntu、Kali、GNOME、KDE Breeze、Tango 和 Linux 主控台等 Linux 配色，以及 GitHub、One Dark Pro、Dracula、Tokyo Night、Catppuccin、Nord、Gruvbox 等熱門的 Visual Studio Code 主題。可以用名稱搜尋。所有終端都使用選取的主題。
 - **設定 › 文字** 設定工作階段的字型和大小、方塊、底線或直線游標（可閃爍），以及在模糊桌面上的背景不透明度。
+- **系統等寬字型** 和其他工作階段字型都能顯示 Powerline 與 Nerd Font 提示圖示。Gloamux 內附符號後備字型，這些圖示不需要另外安裝字型；若要使用完整的修補版文字字型，可安裝後在 **設定 › 文字 › 字型** 選取。
 - 在終端中，⌘+、⌘− 和 ⌘0 改變工作階段字級。在工作階段以外，或在任何地方加按 ⌥，則改變 **應用程式字級**（8 到 28 pt），也就是按鈕和選單等其餘介面的大小。
 - **設定 › 一般** 的 **語言** 提供英文、繁體中文、簡體中文、日文和西班牙文，預設跟隨 Mac 的語言。Gloamux 自己的文字立即改變；macOS 繪製的選單會在下次開啟 Gloamux 時改變。
 

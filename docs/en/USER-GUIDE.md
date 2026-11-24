@@ -408,6 +408,7 @@ CSV columns: `host` (required), and optionally `folder` (for example `Team/Prod`
 
 - **Color theme** in the toolbar, or **Settings › Appearance**, offers 73 workspace themes: Gloamux's own, Linux palettes such as Ubuntu, Kali, GNOME, KDE Breeze, Tango, and the Linux console, and popular Visual Studio Code themes such as GitHub, One Dark Pro, Dracula, Tokyo Night, Catppuccin, Nord, and Gruvbox. Search the list by name. Every terminal uses the selected theme.
 - **Settings › Text** sets the session font and size, a block, underline, or bar cursor that can blink, and the background opacity over a blurred desktop.
+- Powerline and Nerd Font prompt icons work with **System monospaced** and other session fonts. Gloamux includes a symbol fallback, so these icons need no separate font installation. To use a complete patched text face, install it and select it in **Settings › Text › Font**.
 - ⌘+, ⌘−, and ⌘0 change the session font in a terminal. Outside a session, or with ⌥ added anywhere, they change the **Application font size** (8 to 28 pt), which sizes the rest of the interface, including buttons and menus.
 - **Language** in **Settings › General** offers English, Traditional Chinese, Simplified Chinese, Japanese, and Spanish. By default Gloamux follows the Mac's language. Gloamux's own text changes at once, and the menus macOS draws change the next time Gloamux opens.
 

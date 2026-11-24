@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import Foundation
 import Terminal
 
@@ -76,6 +77,8 @@ enum TerminalPreferences {
     static func monospacedFamilies() -> [String] {
         let manager = NSFontManager.shared
         return manager.availableFontFamilies.filter { family in
+            // The bundled fallback contains icons, not a complete text face.
+            guard family != "Symbols Nerd Font Mono" else { return false }
             guard let member = manager.availableMembers(ofFontFamily: family)?.first, let name = member.first as? String,
                   let font = NSFont(name: name, size: 13) else { return false }
             return font.isFixedPitch && !family.hasPrefix(".")
@@ -97,6 +100,22 @@ struct TerminalFonts: Equatable {
 
     private static var cache: [String: TerminalFonts] = [:]
 
+    /// macOS deliberately falls back to LastResort for private-use characters unless a font is named explicitly.
+    /// Keep this process-local and ship the symbols with the app, so a fresh Mac needs no system font installation.
+    private static let symbols: NSFontDescriptor? = {
+        guard let url = Bundle.module.url(forResource: "SymbolsNerdFontMono-Regular", withExtension: "ttf") else { return nil }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        guard let font = NSFont(name: "SymbolsNFM", size: 13) else { return nil }
+        return font.fontDescriptor.withSize(0)
+    }()
+
+    private static func withSymbols(_ font: NSFont) -> NSFont {
+        guard let symbols else { return font }
+        let existing = font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor] ?? []
+        let descriptor = font.fontDescriptor.addingAttributes([.cascadeList: [symbols] + existing])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
+    }
+
     static var current: TerminalFonts { make(name: TerminalPreferences.fontName, size: TerminalPreferences.fontSize) }
 
     static func make(name: String, size: Double) -> TerminalFonts {
@@ -109,6 +128,9 @@ struct TerminalFonts: Equatable {
             regular = font
             bold = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
         }
+        // Converting to bold can discard the cascade, so add it after both text faces have been chosen.
+        regular = withSymbols(regular)
+        bold = withSymbols(bold)
         let fonts = TerminalFonts(regular: regular, bold: bold,
                                   cellWidth: ("M" as NSString).size(withAttributes: [.font: regular]).width,
                                   lineHeight: NSLayoutManager().defaultLineHeight(for: regular), key: key)

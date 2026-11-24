@@ -4,6 +4,17 @@
 
 Rebuilt and verified on November 24, 2026 with the architecture changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3). The tested package is `build/Gloamux.app`.
 
+## Terminal symbol fix in 1.2.2 (build 5)
+
+Verified on November 24, 2026, on top of `1363ebf` (1.2.1 build 4). The local candidate was `build/font-fix/Gloamux.app`; the release build repeats the Swift suite and package checks.
+
+- The default regular and bold fonts previously resolved Powerline/Nerd Font private-use characters to LastResort. TextKit also laid out those missing glyphs at a different advance from the terminal cell grid. The four initial regression cases failed before the fix; all six final `TerminalFontTests` pass, covering actual glyph faces, 13/20 pt positions, cursor offsets, single/double-width icons, fixed row height, a selected Menlo face, and ordinary CJK/emoji fallback. An in-place colored left/right prompt redraw stays on one screen row.
+- Full Swift suite: **476 cases, 468 passed, 8 skipped, 0 failed**. The skips are the same three external SSH and five Xshell sample checks. The candidate passes deep strict code-signature verification and feature-contract self-test **9/9**; the bundled font, its MIT license, and provenance are present in its resource bundle.
+- A separate bundle identifier and throwaway workspace loaded real Oh My Zsh Agnoster and Powerlevel10k (os_icon, dir, prompt_char, status, time) through local zsh. Visual checks with the default system monospaced font confirmed Powerline segments, Apple/home/clock icons, regular/bold symbol samples, Chinese, emoji, and the right prompt. No font was installed in the user's font folders. A process-only probe of the official MesloLGS NF Regular confirmed it is fixed-pitch and accepted by the existing picker. The Mac that reported the issue and Intel hardware have not been tested.
+- The release terminal benchmark ran five 2 MB workloads at 120 × 40. Candidate redraws measured **0.54–1.72 ms**, against **0.47–1.60 ms** in the installed baseline; the largest added time was 0.23 ms. Echo p99 was 0.019 ms versus 0.021 ms. These are single-run local measurements, not a new full application stress run.
+
+The remaining sections preserve the earlier 1.2 architecture and stress-test record.
+
 ## Functional and regression checks
 
 | Check | Result |

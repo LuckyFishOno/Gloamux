@@ -157,6 +157,7 @@ Naming:
 - `TerminalScreen` also tracks mouse modes (1000, 1002, 1003, with SGR coordinates for 1006), focus reports (1004), DECSCUSR cursor shapes, and OSC 52 clipboard writes, which `terminalReceived` applies only when **Settings › Terminal** allows them.
 - A session in another encoding is converted to UTF-8 by `TerminalDecoder` before parsing, and input is converted back in `enqueueTerminalInput`. The encoding is saved on the session (`SavedConnection.encoding`).
 - Terminal settings use the `Gloamux.terminal.*` keys in `TerminalPreferences`.
+- `TerminalFonts` adds the bundled Symbols Nerd Font Mono v3.5.1 to both regular and bold font cascades after choosing the text faces. macOS otherwise uses LastResort for the private-use Powerline/Nerd Font characters, even when an unrelated installed font covers the same code point. The font is registered only for the app process, not installed for the user; its unmodified upstream file, MIT license, source URL, and SHA-256 are in `Resources/TerminalFonts`. The icon-only face is excluded from the text-font picker. `TerminalLineRenderer` resolves private-use glyphs against that cascade, adjusts their advances to the parser's cell widths, and fixes paragraph line height to the text font's grid. ASCII style runs stay batched; ordinary Unicode fallback remains available. `TerminalFontTests` checks actual TextKit glyph faces, positions, cursor offsets, and row heights.
 
 ### Local processes
 
@@ -336,6 +337,7 @@ Verification on November 24, 2026 of the uncommitted architecture changes passed
 |---|---|
 | [IronRDP](https://github.com/Devolutions/IronRDP) (remote desktop engine) | [MIT](../../Gloamux/RDP/licenses/ironrdp-MIT.txt) and [Apache 2.0](../../Gloamux/RDP/licenses/ironrdp-Apache-2.0.txt), shipped with the app. [Cargo.lock](../../Gloamux/RDP/Cargo.lock) records the Rust dependencies. |
 | [Sparkle](https://github.com/sparkle-project/Sparkle) (in-app updates) | MIT-style license, shipped in the app as `Sparkle-LICENSE.txt`. |
+| [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts) Symbols Nerd Font Mono v3.5.1 (terminal prompt icons) | [MIT](../../Gloamux/Sources/app/Resources/TerminalFonts/NerdFontsSymbols-LICENSE.txt), shipped in the app's resource bundle with its [provenance](../../Gloamux/Sources/app/Resources/TerminalFonts/PROVENANCE.txt). The icon sets it collects keep their own licenses, listed in Nerd Fonts' [license audit](https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/license-audit.md). |
 | Visual Studio Code theme colors | [MIT notice](../../Gloamux/Sources/app/Resources/vscode-themes-license.txt). |
 | Marketplace theme colors | [License notices](../../Gloamux/Sources/app/Resources/vscode-community-themes-licenses.txt) of the MIT-licensed themes. |
 | Swift packages | Resolved in [Package.resolved](../../Gloamux/Package.resolved). |

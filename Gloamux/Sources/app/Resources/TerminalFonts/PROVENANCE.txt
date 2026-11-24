@@ -1,0 +1,9 @@
+Symbols Nerd Font Mono, Nerd Fonts v3.5.1
+
+Unmodified upstream file:
+https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/patched-fonts/NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf
+SHA-256: fe471e538392f51910faab985fa8e192a39dd3426125edd15b71b3680df0e749
+
+The upstream MIT license is included as NerdFontsSymbols-LICENSE.txt.
+Gloamux registers this font for its own process only, as a fallback for terminal symbols.
+It is not installed in the user's font folders and is not offered as a primary text font.

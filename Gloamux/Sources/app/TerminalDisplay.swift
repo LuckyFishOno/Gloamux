@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreText
 import Terminal
 import Formats
 
@@ -961,6 +962,9 @@ struct TerminalLineRenderer {
     let link: (UInt16) -> String?
     let fonts: TerminalFonts
     private var cache: [CellStyle: [NSAttributedString.Key: Any]] = [:]
+    private let paragraph: NSParagraphStyle
+    private struct SymbolKey: Hashable { let character: Character; let bold: Bool; let width: UInt8 }
+    private var symbols: [SymbolKey: (font: NSFont, kern: CGFloat)] = [:]
     /// UTF-16 offset of the cursor within the last line built with a cursor column.
     private(set) var lastCursorOffset: Int?
 
@@ -968,6 +972,10 @@ struct TerminalLineRenderer {
          link: @escaping (UInt16) -> String? = { _ in nil }, fonts: TerminalFonts = .standard) {
         self.background = background; self.foreground = foreground; self.ansi = ansi; self.color = color; self.link = link
         self.fonts = fonts
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = fonts.lineHeight
+        paragraph.maximumLineHeight = fonts.lineHeight
+        self.paragraph = paragraph
     }
 
     mutating func attributes(_ style: CellStyle) -> [NSAttributedString.Key: Any] {
@@ -976,7 +984,7 @@ struct TerminalLineRenderer {
         var cellBackground = color(style.background, background, ansi)
         if style.inverse { swap(&cellForeground, &cellBackground) }
         var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: style.invisible ? cellBackground : cellForeground,
-            .font: style.bold ? fonts.bold : fonts.regular]
+            .font: style.bold ? fonts.bold : fonts.regular, .paragraphStyle: paragraph]
         // The default background is the view's own, so it can be see-through; only colored cells paint their own.
         if style.background != .default || style.inverse { attributes[.backgroundColor] = cellBackground }
         if style.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
@@ -987,6 +995,23 @@ struct TerminalLineRenderer {
         }
         cache[style] = attributes
         return attributes
+    }
+
+    /// A private-use prompt icon still occupies the parser's cell width when its fallback font has different
+    /// advances. Resolve the actual face explicitly: measuring the primary font would measure a missing glyph.
+    private mutating func symbol(_ cell: Cell) -> (font: NSFont, kern: CGFloat)? {
+        guard let value = cell.character.unicodeScalars.first?.value,
+              (0xE000...0xF8FF).contains(value) || (0xF0000...0xFFFFD).contains(value) || (0x100000...0x10FFFD).contains(value) else { return nil }
+        let key = SymbolKey(character: cell.character, bold: cell.style.bold, width: cell.width)
+        if let cached = symbols[key] { return cached }
+        let text = String(cell.character) as NSString
+        let base = cell.style.bold ? fonts.bold : fonts.regular
+        let font = CTFontCreateForString(base as CTFont, text, CFRange(location: 0, length: text.length)) as NSFont
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text as String, attributes: [.font: font]))
+        let advance = CTLineGetTypographicBounds(line, nil, nil, nil)
+        let metrics = (font: font, kern: CGFloat(cell.width) * fonts.cellWidth - CGFloat(advance))
+        symbols[key] = metrics
+        return metrics
     }
 
     mutating func line(_ cells: [Cell], cursorColumn: Int?, cursorColor: NSColor?) -> NSMutableAttributedString {
@@ -1003,8 +1028,17 @@ struct TerminalLineRenderer {
             if let cursorColumn, (column..<(column + Int(cell.width))).contains(cursorColumn) {
                 cursor = NSRange(location: length, length: glyphLength)
             }
-            if cell.style != runStyle { flush(); runStyle = cell.style }
-            run += glyph; length += glyphLength
+            if let symbol = symbol(cell) {
+                flush(); runStyle = nil
+                var attributes = attributes(cell.style)
+                attributes[.font] = symbol.font
+                attributes[.kern] = symbol.kern
+                line.append(NSAttributedString(string: glyph, attributes: attributes))
+            } else {
+                if cell.style != runStyle { flush(); runStyle = cell.style }
+                run += glyph
+            }
+            length += glyphLength
         }
         flush()
         // Plain web addresses can be ⌘-clicked too.

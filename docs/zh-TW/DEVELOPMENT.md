@@ -157,6 +157,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - `TerminalScreen` 也追蹤滑鼠模式（1000、1002、1003，以及 1006 的 SGR 座標）、焦點回報（1004）、DECSCUSR 游標形狀和 OSC 52 剪貼簿寫入；`terminalReceived` 只在 **設定 › 終端** 允許時才套用剪貼簿寫入。
 - 其他編碼的工作階段會在解析前由 `TerminalDecoder` 轉成 UTF-8，輸入則在 `enqueueTerminalInput` 中轉回去。編碼存在連線上（`SavedConnection.encoding`）。
 - 終端設定使用 `TerminalPreferences` 中的 `Gloamux.terminal.*` 鍵。
+- `TerminalFonts` 選好文字字型後，會在一般與粗體的 cascade list 加入內附的 Symbols Nerd Font Mono v3.5.1。否則 macOS 對 Powerline／Nerd Font 的私用區字元會使用 LastResort，即使其他已安裝字型恰好涵蓋相同碼位。符號字型只註冊於 App 程序，不會安裝到使用者的字型資料夾；未修改的上游檔案、MIT 授權、來源網址和 SHA-256 放在 `Resources/TerminalFonts`。只有圖示的字型不會出現於文字字型選單。`TerminalLineRenderer` 依此 cascade 解析私用區圖示，把圖示前進寬度校正成解析器的格寬，並固定段落列高。ASCII 仍依樣式合併，其他 Unicode 字型後備維持可用。`TerminalFontTests` 檢查實際 TextKit 字型、位置、游標偏移和列高。
 
 ### 本機程序
 
@@ -336,6 +337,7 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 |---|---|
 | [IronRDP](https://github.com/Devolutions/IronRDP)（遠端桌面引擎） | [MIT](../../Gloamux/RDP/licenses/ironrdp-MIT.txt) 和 [Apache 2.0](../../Gloamux/RDP/licenses/ironrdp-Apache-2.0.txt)，隨 App 發布。[Cargo.lock](../../Gloamux/RDP/Cargo.lock) 記錄 Rust 相依套件。 |
 | [Sparkle](https://github.com/sparkle-project/Sparkle)（App 內更新） | MIT 類型授權，以 `Sparkle-LICENSE.txt` 隨 App 發布。 |
+| [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts) Symbols Nerd Font Mono v3.5.1（終端提示圖示） | [MIT](../../Gloamux/Sources/app/Resources/TerminalFonts/NerdFontsSymbols-LICENSE.txt)，連同[來源紀錄](../../Gloamux/Sources/app/Resources/TerminalFonts/PROVENANCE.txt)放在 App 的資源套件中。其收錄的各圖示集保留各自的授權，列於 Nerd Fonts 的[授權稽核](https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/license-audit.md)。 |
 | Visual Studio Code 主題顏色 | [MIT 聲明](../../Gloamux/Sources/app/Resources/vscode-themes-license.txt)。 |
 | Marketplace 主題顏色 | MIT 授權主題的[授權聲明](../../Gloamux/Sources/app/Resources/vscode-community-themes-licenses.txt)。 |
 | Swift 套件 | 解析結果記錄在 [Package.resolved](../../Gloamux/Package.resolved)。 |
