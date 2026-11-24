@@ -4,11 +4,11 @@
 
 Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
 
-Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 1.1 (build 2) source, including in-app updates, on November 23, 2026, and against the 1.2 (build 3) changes on November 24, 2026. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
+Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 1.1 (build 2) source, including in-app updates, on November 23, 2026, and against the 1.2 (build 3) and 1.3 (build 6) changes on November 24, 2026. The 1.3 jump host list stores only session IDs in `sessions.json`; secrets typed for each jump host stay in memory and are cleared when the connection starts, and the route check reads `$SSH_CONNECTION` from each server only when asked. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
 
 ## Protection classes
 
-These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.2.2 (build 5).
+These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3 (build 6).
 
 | Class | Meaning | Required protection |
 |---|---|---|

@@ -1064,7 +1064,8 @@ struct SessionPane: View {
     @State private var namingConnection = false
     @State private var connectionName = ""
     @State private var keyNeedsPassphrase = true
-    @State private var jumpKeyNeedsPassphrase = true
+    /// Whether each listed jump host's key file is encrypted, by key path.
+    @State private var jumpKeysNeedingPassphrase: Set<String> = []
     /// The Local row was clicked: it shows so at once, and the terminal replaces the form on the next frame.
     @State private var openingLocal = false
     /// The SSH form's width, which decides how its option rows wrap.
@@ -1179,13 +1180,16 @@ struct SessionPane: View {
         .task(id: tab.connected) { if tab.connected { await showSelectedPanel() } }
         .onChange(of: tab.identityPath) { _, _ in tab.password = ""; tab.keyPassphrase = ""; tab.error = nil }
         .task(id: tab.identityPath) { keyNeedsPassphrase = await Self.needsPassphrase(tab.identityPath) }
-        .task(id: model.sessionTree.node(tab.jumpSessionID)?.connection?.identityPath) {
-            jumpKeyNeedsPassphrase = await Self.needsPassphrase(model.sessionTree.node(tab.jumpSessionID)?.connection?.identityPath)
+        .task(id: jumpKeyPaths) {
+            var encrypted: Set<String> = []
+            for path in jumpKeyPaths where await Self.needsPassphrase(path) { encrypted.insert(path) }
+            jumpKeysNeedingPassphrase = encrypted
         }
         .onChange(of: tab.useAgent) { _, _ in tab.password = "" }
-        .onChange(of: tab.jumpSessionID) { _, id in
-            tab.jumpSecret = ""
-            if id != nil { tab.useProxy = false }
+        .onChange(of: tab.jumpPath) { _, path in
+            // A secret typed for a hop that is no longer listed is dropped.
+            tab.jumpSecrets = tab.jumpSecrets.filter { path.contains($0.key) }
+            if !path.isEmpty { tab.useProxy = false }
         }
     }
 
@@ -1243,6 +1247,7 @@ struct SessionPane: View {
             .contentShape(Rectangle())
             .onDrag { PaneDrag.provider(for: tab.id) }
             .help(T("Drag onto a pane to split it"))
+            if tab.connected && tab.route.count > 1 { RouteHeaderButton(model: model, tab: tab) }
 
             if let environment = tab.environment { EnvironmentBadge(environment: environment) }
             RecordingIndicator(model: model, tab: tab)
@@ -1421,11 +1426,11 @@ struct SessionPane: View {
             }.onSubmit { Task { await model.connect(tab) } }
             // One row when the pane is wide enough; in a narrow split pane, the proxy settings move to a second row.
             // Chosen from the measured width: ViewThatFits built every arrangement to try it, which slowed opening.
-            let oneRow = (tab.useProxy && tab.jumpSessionID == nil ? 940 : 660) * textScale
+            let oneRow = (tab.useProxy && tab.jumpPath.isEmpty ? 940 : 660) * textScale
             if sshFormWidth >= oneRow {
                 HStack {
                     keyOptions
-                    if tab.jumpSessionID == nil {
+                    if tab.jumpPath.isEmpty {
                         Divider().frame(height: 16)
                         proxyOptions(hostWidth: 170)
                     }
@@ -1439,19 +1444,14 @@ struct SessionPane: View {
                     } else {
                         VStack(alignment: .leading, spacing: 8) { keyOptions; savePasswordButton }
                     }
-                    if tab.jumpSessionID == nil {
+                    if tab.jumpPath.isEmpty {
                         HStack { proxyOptions(hostWidth: nil) }
                     }
                 }
             }
+            if !tab.jumpPath.isEmpty { jumpHostCards }
             HStack {
-                JumpHostPicker(store: model.sessionTree, excluding: tab.savedSessionID, selection: $tab.jumpSessionID)
-                    .frame(maxWidth: 290)
-                if let jump = model.sessionTree.node(tab.jumpSessionID)?.connection,
-                   jump.identityPath == nil ? jump.usesAgent != true : jumpKeyNeedsPassphrase {
-                    let title = jump.identityPath == nil ? "Jump host password" : "Jump host key passphrase"
-                    SecureField(T(title), text: $tab.jumpSecret).frame(maxWidth: 220)
-                }
+                addJumpHostButton
                 // The main button sits where filling in ends, as in a macOS dialog; Return does the same.
                 Spacer(minLength: 8)
                 if !tab.busy {
@@ -1477,6 +1477,76 @@ struct SessionPane: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sshFormWidth = $0 }
         .disabled(tab.busy)
+    }
+
+    /// Key files of the listed jump hosts, to learn which ones need a passphrase.
+    private var jumpKeyPaths: [String] {
+        tab.jumpPath.compactMap { model.sessionTree.node($0)?.connection?.identityPath }
+    }
+
+    /// One card per listed jump host, in the order Gloamux connects through them; the destination comes after the last.
+    private var jumpHostCards: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(T("SSH jump hosts")).appFont(.callout.weight(.semibold)).foregroundStyle(.secondary)
+                InfoButton(T("Gloamux connects to these in order, from the top, and reaches this server from the last one. A password typed here is used for this connection only; after it works, it is remembered like any other."))
+            }
+            ForEach(Array(tab.jumpPath.enumerated()), id: \.element) { index, id in
+                jumpHostCard(index: index, id: id)
+            }
+        }
+        .frame(maxWidth: 640, alignment: .leading)
+    }
+
+    private func jumpHostCard(index: Int, id: UUID) -> some View {
+        let others = Set(tab.jumpPath).subtracting([id])
+        let selection = Binding<UUID?>(
+            get: { id },
+            set: { new in
+                guard let new, let position = tab.jumpPath.firstIndex(of: id) else { return }
+                tab.jumpPath[position] = new
+            })
+        return HStack(spacing: 8) {
+            Text(verbatim: "\(index + 1)").appFont(.callout.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.secondary).frame(minWidth: 16)
+            JumpHostPicker(store: model.sessionTree, excluding: tab.savedSessionID, selection: selection,
+                           fills: true, hidden: others, allowsNone: false)
+                .frame(maxWidth: 300)
+            if let jump = model.sessionTree.node(id)?.connection,
+               jump.identityPath.map({ jumpKeysNeedingPassphrase.contains($0) }) ?? (jump.usesAgent != true) {
+                let title = jump.identityPath == nil ? "Jump host password" : "Jump host key passphrase"
+                SecureField(T(title), text: Binding(get: { tab.jumpSecrets[id] ?? "" }, set: { tab.jumpSecrets[id] = $0 }))
+                    .frame(maxWidth: 220)
+            }
+            Spacer(minLength: 0)
+            Button {
+                tab.jumpPath.removeAll { $0 == id }
+            } label: {
+                Image(systemName: "xmark").appFont(.system(size: 11, weight: .semibold)).frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(.secondary)
+            .help(T("Remove this jump host"))
+            .accessibilityLabel(T("Remove this jump host"))
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(format: T("Jump host %d"), index + 1))
+    }
+
+    /// Adds the next jump host after the listed ones: the first saved session that is not listed yet.
+    private var addJumpHostButton: some View {
+        let candidates = model.sessionTree.jumpCandidates(excluding: tab.savedSessionID).filter { !tab.jumpPath.contains($0.id) }
+        return Button {
+            if let next = candidates.first { tab.jumpPath.append(next.id) }
+        } label: {
+            Label(T("Add jump host"), systemImage: "plus")
+        }
+        .disabled(candidates.isEmpty || tab.jumpPath.count >= SessionTreeStore.maximumJumpHops)
+        .help(T(candidates.isEmpty && tab.jumpPath.isEmpty ? "Save another SSH session first to use it as a jump host." : "Connect through another saved SSH session"))
+        .accessibilityIdentifier("addJumpHostButton")
     }
 
     @ViewBuilder private var keyOptions: some View {

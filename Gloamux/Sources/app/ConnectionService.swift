@@ -40,12 +40,14 @@ struct JumpHostFailure: Error {
 
     /// The SSH settings a saved session connects with: the same values a tab filled from it connects with.
     static func sshTarget(_ settings: SavedConnection) -> SavedConnection {
-        SavedConnection(host: settings.host.trimmingCharacters(in: .whitespacesAndNewlines), port: settings.port,
-                        username: settings.username, proxyHost: settings.proxyHost,
-                        proxyPort: settings.proxyHost == nil ? nil : settings.proxyPort ?? 1080,
-                        identityPath: settings.identityPath, jumpSessionID: settings.jumpSessionID,
-                        usesAgent: settings.usesAgent == true, agentSocket: settings.agentSocket,
-                        proxyKind: settings.proxyKind ?? .socks5, confirmsEachConnection: settings.asksEachConnection)
+        var target = SavedConnection(host: settings.host.trimmingCharacters(in: .whitespacesAndNewlines), port: settings.port,
+                                     username: settings.username, proxyHost: settings.proxyHost,
+                                     proxyPort: settings.proxyHost == nil ? nil : settings.proxyPort ?? 1080,
+                                     identityPath: settings.identityPath,
+                                     usesAgent: settings.usesAgent == true, agentSocket: settings.agentSocket,
+                                     proxyKind: settings.proxyKind ?? .socks5, confirmsEachConnection: settings.asksEachConnection)
+        target.setJumpPath(settings.jumpPath)
+        return target
     }
 
     /// The jump hosts before `target`, first hop first. `id` is the session being opened, so a route back to it fails.
@@ -76,20 +78,27 @@ struct JumpHostFailure: Error {
     /// Confirms the owner where a session asks on every connection, reads passwords that only the locked vault holds
     /// with Touch ID, then signs in through each jump host to `target`. `jumped` sees each jump host session as it
     /// opens, so the owner of the attempt can close it if the attempt is abandoned. An attempt that stops being
-    /// current throws `CancellationError`; a failure at a jump host throws `JumpHostFailure`.
-    func openSSH(_ target: SavedConnection, hops: [SavedConnection], secret: String, jumpSecret: String,
+    /// current throws `CancellationError`; a failure at a jump host throws `JumpHostFailure`. `jumpSecrets` are passwords
+    /// or key passphrases typed for the hops, in the same order as `hops`; an empty or missing one uses what is saved.
+    func openSSH(_ target: SavedConnection, hops: [SavedConnection], secret: String, jumpSecrets: [String] = [],
                  handler: SignInHandler, jumped: (SSHSession) -> Void = { _ in }) async throws -> SSHSession {
+        func typed(_ index: Int) -> String { index < jumpSecrets.count ? jumpSecrets[index] : "" }
         // An unlocked password vault already confirmed the owner for this launch, so it does not ask per connection.
         // While it is locked, a session marked to ask on every connection asks: Touch ID or the Mac password.
         let vaultUnlocked = await vault.state == "Unlocked"
-        let asks = !vaultUnlocked
-            && ((target.asksEachConnection && secret.isEmpty) || hops.contains(where: \.asksEachConnection))
+        var asks = false
+        if !vaultUnlocked {
+            asks = target.asksEachConnection ? await usesSavedSecret(target, typed: secret) : false
+            for (index, hop) in hops.enumerated() where !asks && hop.asksEachConnection {
+                asks = await usesSavedSecret(hop, typed: typed(index))
+            }
+        }
         let reason = String(format: T("connect to %@"), "\(target.username)@\(target.host)")
         var confirmed = false
         // A password that only the locked vault holds is read with Touch ID for this one connection. That prompt is
         // also the per-connection check; the vault stays locked.
         if !vaultUnlocked, await vault.touchIDEnrolled {
-            let accounts = (secret.isEmpty ? [target] : []) + hops
+            let accounts = (secret.isEmpty ? [target] : []) + hops.indices.filter { typed($0).isEmpty }.map { hops[$0] }
             let needed = Set(accounts.flatMap { connection in
                 ["\(connection.username)@\(KnownHosts.endpoint(host: connection.host, port: connection.port))"]
                     + (connection.identityPath.map { [WorkspaceModel.passphraseID($0)] } ?? [])
@@ -110,15 +119,15 @@ struct JumpHostFailure: Error {
             guard handler.isCurrent else { throw CancellationError() }
             handler.status("Connecting…")
         }
-        // Each hop is reached through the one before it. The typed jump secret belongs to the host the destination is
-        // reached from; earlier hops use their key or the password remembered for this session.
+        // Each hop is reached through the one before it, with the secret typed for it or else its key or the password
+        // remembered for it.
         var jump: SSHSession?
         do {
             for (index, hop) in hops.enumerated() {
                 handler.status("Connecting to jump host…")
                 let server: SSHSession
                 do {
-                    server = try await establish(hop, secret: index == hops.count - 1 ? jumpSecret : "", handler: handler, via: jump)
+                    server = try await establish(hop, secret: typed(index), handler: handler, via: jump)
                 } catch {
                     throw JumpHostFailure(host: hop.host, ofMany: hops.count > 1, underlying: error)
                 }
@@ -135,6 +144,16 @@ struct JumpHostFailure: Error {
             try? await jump?.close()
             throw error
         }
+    }
+
+    /// Whether signing in to `connection` would use what this Mac keeps for it: a key, or a password or key
+    /// passphrase remembered after an earlier sign-in. The per-connection check guards only those, so a new session's
+    /// first connection, which has nothing saved yet, does not ask; neither does one with the password typed now.
+    private func usesSavedSecret(_ connection: SavedConnection, typed: String) async -> Bool {
+        guard typed.isEmpty else { return false }
+        if connection.usesKeys { return true }
+        let id = "\(connection.username)@\(KnownHosts.endpoint(host: connection.host, port: connection.port))"
+        return await vault.hasRemembered(id: id)
     }
 
     private func establish(_ configuration: SavedConnection, secret: String, handler: SignInHandler,
@@ -240,7 +259,8 @@ struct JumpHostFailure: Error {
                  fingerprint: String?, asksEachConnection: Bool, handler: SignInHandler) async throws -> FTPTransfer {
         let account = Self.credentialID(username: username, host: host, port: port, ftp: true)
         let vaultUnlocked = await vault.state == "Unlocked"
-        if asksEachConnection, !vaultUnlocked, typedPassword.isEmpty {
+        // Like SSH, only a remembered password is guarded: anonymous FTP and a first sign-in do not ask.
+        if asksEachConnection, !vaultUnlocked, typedPassword.isEmpty, await vault.hasRemembered(id: account) {
             handler.status("Waiting for Touch ID…")
             do { try await confirmOwner(String(format: T("connect to %@"), account)) }
             catch { throw WorkspaceError.invalid("This session asks for Touch ID or the Mac password before it connects.") }

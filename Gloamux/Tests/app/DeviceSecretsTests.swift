@@ -117,6 +117,13 @@ import MasterPassword
         let tab = model.addTab()
         tab.host = "127.0.0.1"; tab.port = "1"; tab.username = "alice"
         tab.confirmsEachConnection = true
+        // A new session has nothing saved yet, so its first connection has nothing for Touch ID to guard.
+        await model.connect(tab)
+        XCTAssertEqual(reasons, [], "The first connection of a new session does not ask")
+        XCTAssertNotEqual(tab.error, "This session asks for Touch ID or the Mac password before it connects.")
+
+        // Once a password is remembered for the account, using it needs the owner.
+        try await model.vault.save(id: "alice@[127.0.0.1]:1", password: "remembered")
         await model.connect(tab)
         XCTAssertEqual(reasons.count, 1)
         XCTAssertFalse(tab.connected)
@@ -127,14 +134,23 @@ import MasterPassword
         XCTAssertEqual(reasons.count, 1, "A password typed for this connection needs no extra confirmation.")
 
         tab.confirmsEachConnection = false
+        tab.password = ""
         await model.connect(tab)
         XCTAssertEqual(reasons.count, 1)
+
+        // A key is something this Mac keeps for the session, so it is guarded from the first connection.
+        let keyed = model.addTab()
+        keyed.host = "127.0.0.1"; keyed.port = "1"; keyed.username = "bob"
+        keyed.identityPath = "/keys/id_ed25519"
+        keyed.confirmsEachConnection = true
+        await model.connect(keyed)
+        XCTAssertEqual(reasons.count, 2, "A key login asks")
 
         // An unlocked vault already confirmed the owner: no prompt per connection.
         await model.configureVault(password: "master-secret", create: true)
         tab.confirmsEachConnection = true
         await model.connect(tab)
-        XCTAssertEqual(reasons.count, 1, "The unlocked vault takes the place of the per-connection check.")
+        XCTAssertEqual(reasons.count, 2, "The unlocked vault takes the place of the per-connection check.")
         await model.closeAll()
     }
 

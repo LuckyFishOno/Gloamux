@@ -66,11 +66,12 @@ import Foundation
             let items = collected.sessions.compactMap { session -> SessionsFile.Item? in
                 guard var connection = session.node.connection else { return nil }
                 let (path, address) = jump(connection)
-                connection.jumpSessionID = nil
+                let earlier = connection.jumpPath.dropLast().compactMap { paths[$0] }
+                connection.setJumpPath([])
                 connection.identityPath = shareable(connection.identityPath)
                 connection.agentSocket = shareable(connection.agentSocket)
                 return SessionsFile.Item(folder: session.folder, name: session.node.name, connection: connection,
-                                         jump: path, jumpAddress: address)
+                                         jump: path, jumpAddress: address, earlierJumps: earlier.isEmpty ? nil : earlier)
             }
             let file = SessionsFile(name: collected.name, exported: now, folders: collected.folders, items: items)
             let encoder = JSONEncoder()
@@ -128,11 +129,14 @@ import Foundation
             }
             if let socket = shareable(connection.agentSocket) { out += "    IdentityAgent \(configValue(socket))\n" }
             if connection.forwardsAgent == true { out += "    ForwardAgent yes\n" }
-            if let id = connection.jumpSessionID {
-                if let jump = aliases[id] { out += "    ProxyJump \(jump)\n" }
-                else if let target = store.node(id)?.connection {
-                    out += "    ProxyJump \(target.username.isEmpty ? "" : target.username + "@")\(target.host)\(target.port == 22 ? "" : ":\(target.port)")\n"
+            if !connection.jumpPath.isEmpty {
+                // Several listed jump hosts become one comma-separated ProxyJump, first dialed first.
+                let hops = connection.jumpPath.compactMap { id -> String? in
+                    if let jump = aliases[id] { return jump }
+                    guard let target = store.node(id)?.connection else { return nil }
+                    return "\(target.username.isEmpty ? "" : target.username + "@")\(target.host)\(target.port == 22 ? "" : ":\(target.port)")"
                 }
+                if !hops.isEmpty { out += "    ProxyJump \(hops.joined(separator: ","))\n" }
             } else if let host = connection.proxyHost, let port = connection.proxyPort {
                 let kind = connection.proxyKind ?? .socks5
                 let flag = kind == .http ? "connect" : kind == .socks4 ? "4" : "5"

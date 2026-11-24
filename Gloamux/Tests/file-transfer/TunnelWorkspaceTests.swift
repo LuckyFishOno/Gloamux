@@ -69,7 +69,7 @@ import XCTest
                 let item = try XCTUnwrap(reloaded.sessionTree.node(target))
                 let tab = try XCTUnwrap(reloaded.openSaved(item))
                 tab.password = "target-fixture"
-                tab.jumpSecret = "jump-fixture"
+                tab.jumpSecrets[jump] = "jump-fixture"
 
                 await self.approve(reloaded, tab, endpoint: "[127.0.0.1]:\(jumpPort)")
                 await self.approve(reloaded, tab, endpoint: "[\(targetName)]:\(targetPort)")
@@ -78,7 +78,7 @@ import XCTest
                 XCTAssertTrue(tab.connected, tab.error ?? "")
                 XCTAssertTrue(tab.terminalReady, tab.error ?? "")
                 XCTAssertEqual(tab.password, "")
-                XCTAssertEqual(tab.jumpSecret, "")
+                XCTAssertTrue(tab.jumpSecrets.isEmpty)
                 XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("sessions.json"), encoding: .utf8)
                     .contains("-fixture"), false)
                 await reloaded.refreshFiles(tab)
@@ -119,7 +119,7 @@ import XCTest
                                                          generation: await model.vault.sessionGeneration)
                     let tab = try XCTUnwrap(model.openSaved(XCTUnwrap(model.sessionTree.node(target))))
                     tab.password = "target-fixture"
-                    tab.jumpSecret = "middle-fixture"
+                    tab.jumpSecrets[middle] = "middle-fixture"
                     await self.approve(model, tab, endpoint: "[127.0.0.1]:\(firstPort)")
                     await self.approve(model, tab, endpoint: "[middle.gloamux.invalid]:\(middlePort)")
                     await self.approve(model, tab, endpoint: "[target.gloamux.invalid]:\(targetPort)")
@@ -127,6 +127,60 @@ import XCTest
                     XCTAssertTrue(tab.connected, tab.error ?? "")
                     XCTAssertTrue(tab.terminalReady, tab.error ?? "")
                     await model.closeAll()
+                }
+            }
+        }
+    }
+
+    func testHopsListedOnOneSessionConnectInOrderWithAPasswordTypedForEach() async throws {
+        let targetAuth = ScopedPassword(user: "target", secret: "target-fixture")
+        try await OpenSSHFixture.withServer(interactive: true, auth: targetAuth) { targetPort, targetFolder in
+            try Data("on the destination".utf8).write(to: targetFolder.appendingPathComponent("on-target.txt"))
+            let middleAuth = ScopedPassword(user: "middle", secret: "middle-fixture")
+            try await OpenSSHFixture.withServer(auth: middleAuth, route: .init(host: "target.gloamux.invalid", port: targetPort)) { middlePort, _ in
+                let firstAuth = ScopedPassword(user: "first", secret: "first-fixture")
+                try await OpenSSHFixture.withServer(auth: firstAuth, route: .init(host: "middle.gloamux.invalid", port: middlePort)) { firstPort, _ in
+                    let root = self.scratch()
+                    let model = try WorkspaceModel(storage: root)
+                    // Neither hop names the other: the order comes only from the destination's list.
+                    let first = try model.sessionTree.add(name: "First", parent: nil, connection: .init(
+                        host: "127.0.0.1", port: firstPort, username: "first"))
+                    let middle = try model.sessionTree.add(name: "Middle", parent: nil, connection: .init(
+                        host: "middle.gloamux.invalid", port: middlePort, username: "middle"))
+                    var settings = SavedConnection(host: "target.gloamux.invalid", port: targetPort, username: "target")
+                    settings.setJumpPath([first, middle])
+                    let target = try model.sessionTree.add(name: "Target", parent: nil, connection: settings)
+                    let reloaded = try WorkspaceModel(storage: root)
+                    XCTAssertEqual(reloaded.sessionTree.node(target)?.connection?.jumpPath, [first, middle])
+                    let tab = try XCTUnwrap(reloaded.openSaved(XCTUnwrap(reloaded.sessionTree.node(target))))
+                    XCTAssertEqual(tab.jumpPath, [first, middle])
+                    tab.password = "target-fixture"
+                    tab.jumpSecrets = [first: "first-fixture", middle: "middle-fixture"]
+                    await self.approve(reloaded, tab, endpoint: "[127.0.0.1]:\(firstPort)")
+                    await self.approve(reloaded, tab, endpoint: "[middle.gloamux.invalid]:\(middlePort)")
+                    await self.approve(reloaded, tab, endpoint: "[target.gloamux.invalid]:\(targetPort)")
+                    await tab.savedConnectionTask?.value
+                    XCTAssertTrue(tab.connected, tab.error ?? "")
+                    XCTAssertTrue(tab.terminalReady, tab.error ?? "")
+                    XCTAssertTrue(tab.jumpSecrets.isEmpty)
+                    XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("sessions.json"), encoding: .utf8)
+                        .contains("-fixture"), false)
+
+                    // The header shows the route, and each server names where the connection reached it from.
+                    XCTAssertEqual(tab.route.map(\.name), ["First", "Middle", "Target"])
+                    XCTAssertEqual(tab.route.map(\.endpoint), ["[127.0.0.1]:\(firstPort)", "[middle.gloamux.invalid]:\(middlePort)",
+                                                              "[target.gloamux.invalid]:\(targetPort)"])
+                    XCTAssertTrue(tab.route.allSatisfy { $0.fingerprint?.hasPrefix("SHA256:") == true })
+                    await reloaded.checkRoute(tab)
+                    XCTAssertEqual(tab.route.compactMap { $0.seen?.from }, ["127.0.0.1", "127.0.0.1", "127.0.0.1"])
+                    XCTAssertTrue(tab.route[2].cameFrom(tab.route[1]))
+                    XCTAssertTrue(tab.connected, "Checking the route leaves the connection open")
+
+                    // Files go the same way as the terminal: the destination's folder, not a jump host's.
+                    await reloaded.refreshFiles(tab)
+                    XCTAssertEqual(tab.entries.map(\.name), ["on-target.txt"])
+                    await reloaded.closeAll()
+                    XCTAssertTrue(tab.route.isEmpty)
                 }
             }
         }

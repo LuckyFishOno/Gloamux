@@ -84,7 +84,7 @@ extension WorkspaceModel {
         do {
             let target = ConnectionService.sshTarget(settings)
             let hops = try connections.jumpHosts(for: target, excluding: item.id)
-            return try await connections.openSSH(target, hops: hops, secret: secret ?? "", jumpSecret: "", handler: signIn)
+            return try await connections.openSSH(target, hops: hops, secret: secret ?? "", handler: signIn)
         } catch {
             throw WorkspaceError.invalid(ConnectionService.failureText(error, reported: nil))
         }

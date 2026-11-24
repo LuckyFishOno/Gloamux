@@ -258,6 +258,21 @@ import GloamuxNetwork
         web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
         XCTAssertEqual(web.proxy, ProxyConfiguration(kind: .http, host: "proxy.example.com", port: 1080))
         XCTAssertNil(web.jumpSessionID)
+
+        // Several jump hosts, first dialed first; a repeated one is refused.
+        try await run(["sessions", "add", "Inner", "ssh", "inner.example.com", "ops"], model)
+        try await run(["sessions", "options", "Web", "jump=Bastion,Inner"], model)
+        web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
+        let ids = ["Bastion", "Inner"].compactMap { name in model.sessionTree.nodes.first { $0.name == name }?.id }
+        XCTAssertEqual(web.jumpPath, ids)
+        XCTAssertNil(web.proxyHost, "The proxy belongs on the jump host")
+        let listed = try await run(["sessions", "show", "Web"], model) as? [String: Any]
+        XCTAssertEqual(listed?["jump"] as? String, "Bastion,Inner")
+        do { try await run(["sessions", "options", "Web", "jump=Bastion,Bastion"], model); XCTFail("A repeated hop was accepted") } catch {}
+        try await run(["sessions", "options", "Web", "jump=-"], model)
+        web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
+        XCTAssertTrue(web.jumpPath.isEmpty)
+        XCTAssertNil(web.earlierJumpSessionIDs)
         XCTAssertNil(web.startupCommands)
         XCTAssertNil(web.forwardsX11)
         XCTAssertNil(web.encoding)

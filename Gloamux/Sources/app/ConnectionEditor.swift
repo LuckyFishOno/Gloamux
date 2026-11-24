@@ -18,7 +18,8 @@ struct ConnectionEditor: View {
     @State private var confirmsEachConnection: Bool
     private let vaultOverrideNote = "If you have set up a password vault and it is unlocked, this setting does not apply: connections use the vault without asking."
     @State private var opensFiles: Bool
-    @State private var jumpSessionID: UUID?
+    /// Jump hosts, first dialed first.
+    @State private var jumpPath: [UUID]
     @State private var usesProxy: Bool
     @State private var proxyHost: String
     @State private var proxyPort: String
@@ -57,7 +58,7 @@ struct ConnectionEditor: View {
         _confirmsEachConnection = State(initialValue: item == nil ? true : settings?.asksEachConnection == true)
         savedAsks = item == nil ? nil : settings?.asksEachConnection == true
         _opensFiles = State(initialValue: settings?.opensFiles == true)
-        _jumpSessionID = State(initialValue: settings?.jumpSessionID)
+        _jumpPath = State(initialValue: settings?.jumpPath ?? [])
         _usesProxy = State(initialValue: settings?.proxyHost != nil)
         _proxyHost = State(initialValue: settings?.proxyHost ?? "")
         _proxyPort = State(initialValue: String(settings?.proxyPort ?? 1080))
@@ -140,6 +141,38 @@ struct ConnectionEditor: View {
         }
     }
 
+    /// One row per jump host, first dialed first, each with its own remove button, then a button that adds one.
+    @ViewBuilder private var jumpHostRows: some View {
+        ForEach(Array(jumpPath.enumerated()), id: \.element) { index, id in
+            let selection = Binding<UUID?>(
+                get: { id },
+                set: { new in
+                    guard let new, let position = jumpPath.firstIndex(of: id) else { return }
+                    jumpPath[position] = new
+                })
+            LabeledContent(String(format: T("Jump host %d"), index + 1)) {
+                HStack(spacing: 6) {
+                    JumpHostPicker(store: store, excluding: item?.id, selection: selection,
+                                   hidden: Set(jumpPath).subtracting([id]), allowsNone: false)
+                    Button { jumpPath.removeAll { $0 == id } } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.borderless)
+                        .help(T("Remove this jump host"))
+                        .accessibilityLabel(T("Remove this jump host"))
+                }
+            }
+        }
+        let candidates = store.jumpCandidates(excluding: item?.id).filter { !jumpPath.contains($0.id) }
+        LabeledContent(jumpPath.isEmpty ? T("SSH jump host") : "") {
+            HStack(spacing: 6) {
+                Button { if let next = candidates.first { jumpPath.append(next.id) } } label: {
+                    Label(T("Add jump host"), systemImage: "plus")
+                }
+                .disabled(candidates.isEmpty || jumpPath.count >= SessionTreeStore.maximumJumpHops)
+                InfoButton(T("Gloamux connects to the jump hosts in order, from the first, and reaches this server from the last one. Only the first one uses its own jump host settings."))
+            }
+        }
+    }
+
     @ViewBuilder private var sshFields: some View {
                 TextField(T("Username"), text: $username)
                 IdentityFilePicker(path: $identityPath)
@@ -170,8 +203,8 @@ struct ConnectionEditor: View {
                         Text(verbatim: socket).appFont(.caption.monospaced()).lineLimit(1).truncationMode(.middle).help(socket)
                     }
                 }
-                JumpHostPicker(store: store, excluding: item?.id, selection: $jumpSessionID)
-                if jumpSessionID == nil {
+                jumpHostRows
+                if jumpPath.isEmpty {
                     Toggle(T("Proxy"), isOn: $usesProxy)
                     if usesProxy {
                         ProxyKindPicker(kind: $proxyKind, labeled: true)
@@ -272,7 +305,7 @@ struct ConnectionEditor: View {
             } catch { self.error = error.localizedDescription }
             return
         }
-        let proxy = usesProxy && jumpSessionID == nil
+        let proxy = usesProxy && jumpPath.isEmpty
         guard let port = Int(port), !proxy || Int(proxyPort) != nil else {
             error = "Enter a valid port."
             return
@@ -281,10 +314,11 @@ struct ConnectionEditor: View {
             host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: port,
             username: username.trimmingCharacters(in: .whitespacesAndNewlines),
             proxyHost: proxy ? proxyHost.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
-            proxyPort: proxy ? Int(proxyPort) : nil, identityPath: identityPath, opensFiles: opensFiles, jumpSessionID: jumpSessionID,
+            proxyPort: proxy ? Int(proxyPort) : nil, identityPath: identityPath, opensFiles: opensFiles,
             usesAgent: usesAgent, agentSocket: item?.connection?.agentSocket, proxyKind: proxyKind,
             confirmsEachConnection: confirmsEachConnection
         )
+        connection.setJumpPath(jumpPath)
         let startup = startupCommands.trimmingCharacters(in: .whitespacesAndNewlines)
         connection.startupCommands = startup.isEmpty ? nil : String(startup.prefix(8000))
         connection.forwardsAgent = forwardsAgent ? true : nil
@@ -494,20 +528,29 @@ struct JumpHostPicker: View {
     @ObservedObject var store: SessionTreeStore
     let excluding: UUID?
     @Binding var selection: UUID?
+    /// Takes the width it is given and truncates a long name, as in the connect form's button row; a fixed-size menu there
+    /// grew past its frame and over the fields beside it, and squeezed its label into a tall column.
+    var fills = false
+    /// Sessions already listed as other hops, left out of the menu.
+    var hidden: Set<UUID> = []
+    /// Offers None. A hop in a list is removed with its own button instead.
+    var allowsNone = true
 
     var body: some View {
-        let candidates = store.jumpCandidates(excluding: excluding)
+        let candidates = store.jumpCandidates(excluding: excluding).filter { !hidden.contains($0.id) }
         let current = selection.map { id in
             candidates.first { $0.id == id }.map { $0.name + " · " + ($0.connection?.host ?? "") } ?? T("Unavailable jump host")
         } ?? T("None")
-        AppPicker(T("SSH jump host"), selection: $selection, current: current) {
-            Text(T("None")).tag(UUID?.none)
+        AppPicker(title: T("SSH jump host"), selection: $selection, current: current, fills: fills) {
+            if allowsNone { Text(T("None")).tag(UUID?.none) }
             if let selection, !candidates.contains(where: { $0.id == selection }) {
                 Text(T("Unavailable jump host")).tag(Optional(selection))
             }
             ForEach(candidates) { item in
                 Text(item.name + " · " + (item.connection?.host ?? "")).tag(Optional(item.id))
             }
+        } label: {
+            if allowsNone { Text(T("SSH jump host")).lineLimit(1).fixedSize() }
         }
     }
 }

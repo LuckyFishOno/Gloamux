@@ -87,9 +87,10 @@ struct ImportCollector {
         return add(label, in: [Self.jumpFolder], connection: connection, jump: previous)
     }
 
-    mutating func link(_ components: [String], to jump: [String]) {
+    mutating func link(_ components: [String], to jump: [String], after earlier: [[String]]? = nil) {
         guard let index = entries.firstIndex(where: { $0.components == components }) else { return }
         entries[index].jump = jump
+        entries[index].earlierJumps = earlier
     }
 
     func result(name: String) -> ProfileImport {
@@ -591,6 +592,8 @@ struct SessionsFile: Codable {
         var jump: [String]?
         /// `user@host:port` of a jump host that was not exported with this session.
         var jumpAddress: String?
+        /// Folders and names of the jump hosts dialed before `jump`, first one first, when the session lists several.
+        var earlierJumps: [[String]]?
     }
 
     var format = Self.format
@@ -621,7 +624,7 @@ struct SessionsFile: Codable {
         for item in file.items {
             let path = (item.folder + [item.name]).joined(separator: " / ")
             var connection = item.connection
-            connection.jumpSessionID = nil
+            connection.setJumpPath([])
             connection.identityPath = ImportText.expandHome(connection.identityPath)
             connection.agentSocket = connection.usesAgent == true ? ImportText.expandHome(connection.agentSocket) : nil
             guard (try? connection.validate()) != nil else {
@@ -632,10 +635,16 @@ struct SessionsFile: Codable {
             links.append((components, item))
         }
         for (components, item) in links {
-            if let jump = item.jump, let target = paths[jump] { collector.link(components, to: target) }
+            // Hosts listed before the last one come along only when all of them are in this file.
+            let earlier = item.earlierJumps?.compactMap { paths[$0] }
+            let complete = earlier?.count == item.earlierJumps?.count ? earlier : nil
+            if item.earlierJumps != nil && complete == nil {
+                collector.addNote(components, "Some jump hosts could not be found in this file. Set the jump hosts in Gloamux.")
+            }
+            if let jump = item.jump, let target = paths[jump] { collector.link(components, to: target, after: complete) }
             else if let address = item.jumpAddress.flatMap(CSVSessionImport.address),
                     let hop = try? collector.hop(host: address.host, port: address.port, username: address.user ?? NSUserName(), previous: nil) {
-                collector.link(components, to: hop)
+                collector.link(components, to: hop, after: complete)
             } else if item.jump != nil {
                 collector.addNote(components, "The jump host could not be found in this file. Set the jump host in Gloamux.")
             }

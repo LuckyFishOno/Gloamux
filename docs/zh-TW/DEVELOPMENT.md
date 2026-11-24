@@ -114,6 +114,8 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - **單一視窗：** 它的分頁、選取、分割、版面狀態、工具視窗、多重執行和鎖定。
 - **單一連線：** `SessionTab` 擁有它的 SSH 工作階段、尚在建立的跳板主機、檔案通道、shell、轉送、保持連線與重新連線的工作，以及 `epoch`。`disconnect` 會關閉這些並更換 `epoch`，為舊連線開始的工作會結束或被忽略。它也會取消 `reconnectTask`；被取消的重新連線嘗試不會再排下一次。把分頁移到自己的視窗（`moveTabToWindow`）再移回來，連線保持不變；關閉那個視窗會中斷連線，關閉工作區視窗也會一併關閉這些視窗。
 - `ConnectionService`（`model.connections`）只用共用資料開啟 SSH 與 FTP 連線：擁有者確認、以 Touch ID 讀取密碼庫、跳板主機、登入、保存憑證，以及檔案通道（`openFiles`）。每次連線都帶一個 `SignInHandler`。`TabSignIn` 在分頁中顯示主機金鑰與登入問題、保存成功的憑證，分頁的 `epoch` 一變就停止；`CommandSignIn` 只接受已信任或 `--host-key` 指定的金鑰、用 `--interactive` 回答，且不保存任何東西。回傳的連線由呼叫端擁有。
+- 連線在 `SavedConnection.jumpPath` 列出它的跳板：`jumpSessionID` 是最後一台（舊版目錄也有的欄位），`earlierJumpSessionIDs` 是它之前的幾台。`SessionTreeStore.jumpChain` 會把第一台自己的跳板鏈放在清單前面，和 OpenSSH 的 `ProxyJump` 一樣，所以只有一台跳板時串接方式不變。`openSSH` 依 `hops` 的順序接收每一層輸入的機密（`jumpSecrets`）。匯出時寫入 `earlierJumps`（Gloamux 格式）或以逗號分隔的 `ProxyJump`（OpenSSH）；CSV 只保留最後一台跳板。
+- 經由跳板連上後，`SessionTab.route` 列出每個 `RouteStop`（名稱、端點、已信任的主機金鑰指紋），`routeSessions` 保留各層跳板的工作階段。`checkRoute` 只在使用者要求時才在每一台執行 `printf '%s' "$SSH_CONNECTION"`，因為設有強制指令的伺服器會改跑那個指令；`RouteStop.Seen` 只接受四個欄位且為 IP 位址的回覆。
 - `SessionTab.connectionState` 是 `disconnected`、`connected` 或 `lost`，`moveConnection(to:)` 會拒絕不合法的變化（從未連上的分頁不會變成連線中斷）。`connected` 與 `transportLost` 都由它讀出。
 - 經 SSH 連到的遠端桌面擁有一個 `DesktopGateway`：只有 SSH 連線和本機轉送，沒有隱藏的終端機分頁。`GatewaySignIn` 在桌面窗格中顯示主機金鑰與登入問題。`WorkspaceModel.settleHostKey` 是信任或取代金鑰的唯一位置，分頁和閘道共用。
 
@@ -138,7 +140,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 ### 解鎖與確認
 
 - 密碼庫把 Touch ID 解鎖用的資料以 Secure Enclave 保護放在記憶體中。新的 App 程序需要主密碼。
-- 密碼庫解鎖時，`connect` 會略過每個連線的 `confirmsEachConnection` 檢查；鎖定時則會執行，在使用已存機密前呼叫 `WorkspaceModel.confirmOwner`（Touch ID 或 Mac 密碼）。新連線預設開啟這項檢查。
+- 密碼庫解鎖時，`connect` 會略過每個連線的 `confirmsEachConnection` 檢查；鎖定時則會執行，在使用已存機密前呼叫 `WorkspaceModel.confirmOwner`（Touch ID 或 Mac 密碼）。新連線預設開啟這項檢查。檢查只保護金鑰，或為該帳號記住的密碼與密語（`CredentialVault.hasRemembered`，不讀取機密），所以尚未保存任何東西的第一次連線、這次輸入的密碼，以及匿名 FTP 都不會詢問。
 - 需要的機密只存在已鎖定的密碼庫（`CredentialVault.lockedVaultIDs`），且本次啟動已設定好 Touch ID 時，`readWithTouchID` 會在不解鎖密碼庫的情況下把那些項目讀進 `sessionPasswords`，這次提示也代替了每個連線的檢查。測試用 `enableTouchIDForTesting` 取代提示。
 
 ### Secure Enclave SSH 金鑰
@@ -188,6 +190,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 能否連線的圓點來自對每個可見已存主機 SSH 連接埠的非阻塞 TCP 連線，一次最多六個，每 90 秒一次。透過代理、跳板或容器的連線不會檢查。
 - 選單列項目、指令面板（`CommandPalette.swift`）、Spotlight（`SpotlightIndex`，只有名稱和位址）、`gloamux://open?id=` 和 `gloamux://new-terminal` 連結，以及捷徑動作，都呼叫同一組 `WorkspaceModel` 操作。
 - `package-app.sh` 會對 SwiftPM 為 `ShellIntents` 產生的常數值執行 `appintentsmetadataprocessor`，寫出 `Metadata.appintents`。少了它 App 仍能運作，但捷徑裡不會列出 Gloamux 的動作。
+- 1.2.2 的這次 Siri 事件中，`linkd` 登記 ad hoc 簽章 App 的執行中程序失敗（缺少 Team ID），把原本的 App 當成冷啟動，並在 30 秒閒置寬限期後送出 Quit Apple 事件。1.3 (build 6) 起的保護會在工作區視窗開著時，於 `applicationShouldTerminate` 拒絕這個 Quit（`QuitRequest` 從 `keySenderPIDAttr` 取得寄件者 PID，再由 `proc_pidpath` 查執行檔名稱）。沒有工作區、無法識別寄件者或其他寄件者時，仍走原有退出流程；⌘Q、Dock、登出與重新開機保留原有處理。六項 `QuitRequestTests` 檢查判斷條件與程序名稱查詢，封裝版的寄件者模擬測試見 VERIFICATION；修正版的真實 Siri 請求仍待驗證。
 
 ## 檔案與通訊協定
 

@@ -127,10 +127,20 @@ import Darwin
 
     func testACommandAsksTheOwnerForASessionThatAsksEveryTime() async throws {
         let model = try workspace()
-        let item = try add(model, "Asks", SavedConnection(host: "127.0.0.1", port: try closedPort(), username: "ops",
+        let port = try closedPort()
+        let item = try add(model, "Asks", SavedConnection(host: "127.0.0.1", port: port, username: "ops",
                                                            confirmsEachConnection: true))
         var asked: [String] = []
         model.confirmOwner = { reason in asked.append(reason); throw CancellationError() }
+        // Nothing is saved for a new session, so the first connection goes on without asking and finds no password.
+        let first = await commandError {
+            try await model.withFileConnection(item, protocol: nil, secret: nil, allowPlainFTP: false,
+                                               access: FileCommandAccess()) { _ in }
+        }
+        XCTAssertEqual(asked, [])
+        XCTAssertEqual(first, "No password is saved for this account. Enter a connection password.")
+
+        try await model.vault.save(id: "ops@" + KnownHosts.endpoint(host: "127.0.0.1", port: port), password: "remembered")
         let refused = await commandError {
             try await model.withFileConnection(item, protocol: nil, secret: nil, allowPlainFTP: false,
                                                access: FileCommandAccess()) { _ in }
@@ -151,8 +161,10 @@ import Darwin
 
     func testDisconnectingWhileTheOwnerConfirmsEndsTheAttemptQuietly() async throws {
         let model = try workspace()
-        let settings = SavedConnection(host: "127.0.0.1", port: try closedPort(), username: "ops", confirmsEachConnection: true)
+        let port = try closedPort()
+        let settings = SavedConnection(host: "127.0.0.1", port: port, username: "ops", confirmsEachConnection: true)
         let item = try add(model, "Asks", settings)
+        try await model.vault.save(id: "ops@" + KnownHosts.endpoint(host: "127.0.0.1", port: port), password: "remembered")
         let tab = model.tabs[0]
         model.configureSaved(tab, item, settings)
         var waiting: CheckedContinuation<Void, Error>?

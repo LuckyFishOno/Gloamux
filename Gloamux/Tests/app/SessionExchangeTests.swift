@@ -232,6 +232,23 @@ import GloamuxNetwork
         XCTAssertTrue(config.contains("Host prod-gate\n    HostName gate.example.com\n    User ops\n    IdentityFile ~/.ssh/id_ed25519\n"))
         XCTAssertTrue(config.contains("Host prod-db-primary\n    HostName db.internal\n    Port 2200\n    User postgres\n    ProxyJump prod-gate\n    LocalForward 5432 127.0.0.1:5432\n"))
         XCTAssertTrue(config.contains("Host via-outside\n    HostName in.example.com\n    User y\n    ProxyJump x@out.example.com:2022\n"))
+
+        // Several listed jump hosts: one comma-separated ProxyJump, and the list survives a Gloamux export and import.
+        let originalDB = try XCTUnwrap(tree.nodes.first { $0.name == "=db, primary" && $0.parent == prod }?.id)
+        var deep = SavedConnection(host: "deep.internal", username: "z")
+        deep.setJumpPath([gate, originalDB])
+        try tree.add(name: "deep", parent: team, connection: deep)
+        let listed = String(decoding: try SessionExport.data(tree, root: nil, format: .openSSH), as: UTF8.self)
+        XCTAssertTrue(listed.contains("Host team-deep\n    HostName deep.internal\n    User z\n    ProxyJump team-prod-gate,team-prod-db-primary\n"), listed)
+        let again = try SessionsFile.read(try SessionExport.data(tree, root: team, format: .gloamux))
+        let deepEntry = try entry(again, "deep")
+        XCTAssertNil(deepEntry.connection?.earlierJumpSessionIDs, "Local IDs are not written to the file")
+        XCTAssertEqual(deepEntry.earlierJumps, [["Prod", "gate"]])
+        let second = try tree.importProfiles(again, name: "Again", parent: nil)
+        let importedDeep = try XCTUnwrap(tree.nodes.first { $0.name == "deep" && isUnder($0.id, second) })
+        let hops = try XCTUnwrap(importedDeep.connection?.jumpPath).map { tree.node($0)?.name }
+        XCTAssertEqual(hops, ["gate", "=db, primary"])
+        XCTAssertFalse(try XCTUnwrap(importedDeep.connection?.jumpPath).contains(gate), "The copy links to the imported hosts")
         XCTAssertFalse(config.contains(home), "The file names no user's own folder")
         XCTAssertEqual(SessionExport.alias(["Team", "網站 1"]), "team-網站-1")
 

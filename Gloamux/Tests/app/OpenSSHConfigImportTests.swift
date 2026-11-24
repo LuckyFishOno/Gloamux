@@ -215,4 +215,58 @@ import GloamuxNetwork
         looped.jumpSessionID = ids[2]
         XCTAssertThrowsError(try tree.updateConnection(ids[0], name: "hop0", connection: looped))
     }
+
+    func testASessionsListedJumpHostsComeInOrderAfterTheFirstOnesOwnChain() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("jump-list-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let tree = try SessionTreeStore(url: dir.appendingPathComponent("sessions.json"))
+        let outer = try tree.add(name: "outer", parent: nil, connection: .init(host: "outer.test", username: "u"))
+        let a = try tree.add(name: "a", parent: nil, connection: .init(host: "a.test", username: "u", jumpSessionID: outer))
+        let elsewhere = try tree.add(name: "elsewhere", parent: nil, connection: .init(host: "x.test", username: "u"))
+        let b = try tree.add(name: "b", parent: nil, connection: .init(host: "b.test", username: "u", jumpSessionID: elsewhere))
+        let c = try tree.add(name: "c", parent: nil, connection: .init(host: "c.test", username: "u"))
+        var d = SavedConnection(host: "d.test", username: "u")
+        d.setJumpPath([a, b, c])
+        XCTAssertEqual(d.jumpSessionID, c, "The last listed hop is the one the destination is reached from")
+        XCTAssertEqual(d.earlierJumpSessionIDs, [a, b])
+        let id = try tree.add(name: "d", parent: nil, connection: d)
+        // Only the first listed hop goes through its own jump host, as with OpenSSH's ProxyJump.
+        XCTAssertEqual(tree.jumpChain(for: d, excluding: id)?.map(\.host), ["outer.test", "a.test", "b.test", "c.test"])
+
+        var single = SavedConnection(host: "e.test", username: "u")
+        single.setJumpPath([b])
+        XCTAssertNil(single.earlierJumpSessionIDs)
+        XCTAssertEqual(tree.jumpChain(for: single, excluding: nil)?.map(\.host), ["x.test", "b.test"], "One hop works as before")
+
+        var repeated = SavedConnection(host: "f.test", username: "u")
+        repeated.setJumpPath([a, c, a])
+        XCTAssertThrowsError(try repeated.validate())
+        var orphan = SavedConnection(host: "g.test", username: "u")
+        orphan.earlierJumpSessionIDs = [a]
+        XCTAssertThrowsError(try orphan.validate(), "Earlier hops need a last one")
+        var throughOuter = SavedConnection(host: "h.test", username: "u")
+        throughOuter.setJumpPath([a, outer])
+        XCTAssertThrowsError(try tree.add(name: "h", parent: nil, connection: throughOuter), "outer would be passed twice")
+        let reopened = try SessionTreeStore(url: dir.appendingPathComponent("sessions.json"))
+        XCTAssertEqual(reopened.node(id)?.connection?.jumpPath, [a, b, c])
+    }
+}
+
+final class RouteStopTests: XCTestCase {
+    func testTheServersReplyIsReadOnlyWhenItIsAnSSHConnectionLine() {
+        let seen = RouteStop.Seen(sshConnection: "10.0.0.30 51234 10.0.0.40 22\n")
+        XCTAssertEqual(seen.from, "10.0.0.30")
+        XCTAssertEqual(seen.address, "10.0.0.40")
+        XCTAssertEqual(RouteStop.Seen(sshConnection: "fe80::1%en0 50000 fe80::2%en0 22").from, "fe80::1%en0")
+        // A shell that does not expand the variable, an empty reply, or a forced command's output tells nothing.
+        for reply in ["$SSH_CONNECTION", "", nil, "Welcome to the backup server", "a b c d"] as [String?] {
+            XCTAssertNil(RouteStop.Seen(sshConnection: reply).from, reply ?? "nil")
+        }
+        let c = RouteStop(name: "C", endpoint: "[c]:22", fingerprint: nil, seen: .init(sshConnection: "10.0.0.20 1 10.0.0.30 22"))
+        let d = RouteStop(name: "D", endpoint: "[d]:22", fingerprint: nil, seen: .init(sshConnection: "10.0.0.30 2 10.0.0.40 22"))
+        let direct = RouteStop(name: "D", endpoint: "[d]:22", fingerprint: nil, seen: .init(sshConnection: "10.0.0.20 2 10.0.0.40 22"))
+        XCTAssertTrue(d.cameFrom(c))
+        XCTAssertFalse(direct.cameFrom(c), "Reached from B, not from C")
+    }
 }

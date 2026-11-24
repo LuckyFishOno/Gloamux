@@ -15,12 +15,13 @@
 | Gloamux 1.2 (build 3) | `v1.2` | `1.2` | `3` |
 | Gloamux 1.2.1 (build 4) | `v1.2.1` | `1.2.1` | `4` |
 | Gloamux 1.2.2 (build 5) | `v1.2.2` | `1.2.2` | `5` |
-| **下一個一般版本範例：Gloamux 1.3 (build 6)** | `v1.3` | `1.3` | `6` |
+| Gloamux 1.3 (build 6) | `v1.3` | `1.3` | `6` |
+| **下一個一般版本範例：Gloamux 1.4 (build 7)** | `v1.4` | `1.4` | `7` |
 
 - 版本是使用者看到的號碼。一般發布提高第二個數字（1.1、1.2），重大改版提高第一個數字（2.0）。第三個數字只用在已發布版本的純修正版（1.1.1）。
-- Build 號碼每發布一次就加一，不論版本為何，且絕不重複使用。Tag 也不重複使用，所以替換壞掉的 DMG 時，要發一個修正版並用下一個 build 號碼，例如 1.3.1 (build 7)。
+- Build 號碼每發布一次就加一，不論版本為何，且絕不重複使用。Tag 也不重複使用，所以替換壞掉的 DMG 時，要發一個修正版並用下一個 build 號碼，例如 1.4.1 (build 8)。
 - Release 標題固定是 `Gloamux 版本 (build 號碼)`，tag 固定是 `v版本`。
-- 本機建置使用和最新 release 相同的版號，也就是 `Gloamux/scripts/package-app.sh` 裡的預設值（目前是 `version=${GLOAMUX_VERSION:-1.2.2}` 和 `build_number=${GLOAMUX_BUILD:-5}`）。發布的 commit 要把它們調成新版號，否則 `release.sh` 不會建置。
+- 本機建置使用和最新 release 相同的版號，也就是 `Gloamux/scripts/package-app.sh` 裡的預設值（目前是 `version=${GLOAMUX_VERSION:-1.3}` 和 `build_number=${GLOAMUX_BUILD:-6}`）。發布的 commit 要把它們調成新版號，否則 `release.sh` 不會建置。
 
 ## 開始之前
 
@@ -56,7 +57,7 @@ gh release list -R LuckyFishOno/Gloamux --limit 5
 
 每次發布都要逐項檢查，兩種語言都要改：
 
-- [ ] `Gloamux/scripts/package-app.sh`：把預設值改成新版號，例如 `version=${GLOAMUX_VERSION:-1.3}` 和 `build_number=${GLOAMUX_BUILD:-6}`，本機建置就會和發布版顯示相同版本。
+- [ ] `Gloamux/scripts/package-app.sh`：把預設值改成新版號，例如 `version=${GLOAMUX_VERSION:-1.4}` 和 `build_number=${GLOAMUX_BUILD:-7}`，本機建置就會和發布版顯示相同版本。
 - [ ] `README.md` 和 `README.zh-TW.md`：`Current release: **Gloamux 版本 (build 號碼)**.` 這一行（中文是 `目前版本：**Gloamux 版本 (build 號碼)**。`）。兩份都寫上新版之前，`release.sh publish` 不會執行。
 - [ ] `docs/*/USER-GUIDE.md`：上次發布以來所有使用者看得到的改變，寫進對應的章節，以及選單、快捷鍵、設定和命令列一覽，名稱要和 App 顯示的完全一致（中文手冊使用 App 的繁體中文名稱）。
 - [ ] `README` 的功能清單和「為什麼用它」表格：有新增或移除主打功能時才改。
@@ -81,13 +82,13 @@ git grep -nIi -e "$(id -un)" -e "$(hostname -s)" -- . ':!*.lproj' || echo "no pe
 ```sh
 git add -A
 git status --short          # 檢查：沒有機密，沒有產生出來的檔案
-git commit -m "Release Gloamux 1.3 (build 6)" -m "- Short list of the user-facing changes"
+git commit -m "Release Gloamux 1.4 (build 7)" -m "- Short list of the user-facing changes"
 ```
 
 ## 4. 建置並檢查 DMG
 
 ```sh
-Gloamux/scripts/release.sh build 1.3 6
+Gloamux/scripts/release.sh build 1.4 7
 ```
 
 工作目錄必須是乾淨的，因為 DMG 是從已 commit 的原始碼建置。之後若再提交原始碼或文件，發布前請重新建置，讓封裝對應 release 記載的 commit。腳本會：
@@ -112,7 +113,7 @@ git push origin main
 用英文把說明寫到 `build/release/版本-號碼/notes.md`（`build/` 資料夾不會被 commit）。不要自己加建置資訊段落，`release.sh` 會自動附上。範本：
 
 ```markdown
-**Gloamux 1.3 (build 6)** adds … and fixes ….
+**Gloamux 1.4 (build 7)** adds … and fixes ….
 
 ## Highlights
 - **Feature name.** What it does for the user, in one sentence.
@@ -141,10 +142,10 @@ Requires macOS 14 or later and an Apple silicon Mac (M1 or newer). The app is ad
 ## 7. 發布
 
 ```sh
-Gloamux/scripts/release.sh publish 1.3 6 build/release/1.3-6/notes.md
+Gloamux/scripts/release.sh publish 1.4 7 build/release/1.4-7/notes.md
 ```
 
-腳本會再次確認工作目錄乾淨、DMG 仍符合校驗碼、兩份 README 都寫上這個版本，以及 GitHub 上的 `main` 就是你建置的 commit。它會把說明轉成 HTML（透過 GitHub 的 Markdown API），並寫出 `appcast.xml`，也就是已安裝的版本會讀取的更新清單：版本、build 號碼、說明，以及 DMG 的 EdDSA 簽章（`Gloamux/scripts/appcast.sh`）。接著建立 tag 和標題為 `Gloamux 1.3 (build 6)` 的最新 release，附上 `Gloamux.dmg` 和 `appcast.xml`、加上建置資訊，並確認 README 的下載連結（`releases/latest/download/Gloamux.dmg`）可以下載，以及 `releases/latest/download/appcast.xml` 提供的是新的 build。從這一刻起，Gloamux 1.1 以後的版本會透過 **Gloamux › 檢查更新** 和每日檢查提供這次更新。
+腳本會再次確認工作目錄乾淨、DMG 仍符合校驗碼、兩份 README 都寫上這個版本，以及 GitHub 上的 `main` 就是你建置的 commit。它會把說明轉成 HTML（透過 GitHub 的 Markdown API），並寫出 `appcast.xml`，也就是已安裝的版本會讀取的更新清單：版本、build 號碼、說明，以及 DMG 的 EdDSA 簽章（`Gloamux/scripts/appcast.sh`）。接著建立 tag 和標題為 `Gloamux 1.4 (build 7)` 的最新 release，附上 `Gloamux.dmg` 和 `appcast.xml`、加上建置資訊，並確認 README 的下載連結（`releases/latest/download/Gloamux.dmg`）可以下載，以及 `releases/latest/download/appcast.xml` 提供的是新的 build。從這一刻起，Gloamux 1.1 以後的版本會透過 **Gloamux › 檢查更新** 和每日檢查提供這次更新。
 
 Gloamux 1.0 沒有更新功能，使用者需要手動安裝新版一次；1.1 的說明已寫明這點。
 
@@ -171,4 +172,4 @@ Gloamux 1.0 沒有更新功能，使用者需要手動安裝新版一次；1.1 �
 | `the update feed at ... does not offer build N` | GitHub 可能要一分鐘才會提供新的附檔，稍候再開一次網址。如果 release 裡沒有 `appcast.xml`，用 `gh release upload v版本 檔案 -R LuckyFishOno/Gloamux` 上傳 `build/release/版本-號碼/appcast.xml`。 |
 | `gh` 要求登入 | 執行 `gh auth login` 並選 GitHub.com。 |
 | `release.sh build` 時某個測試失敗 | 單獨執行那個測試，例如 `swift test --package-path Gloamux --filter SshTests.KeyFormatTests/testPEMAndPKCS8KeysSignIn`。少數會啟動程序或伺服器的測試，在整套同時執行時可能失敗、單獨執行則通過；單獨通過的話，重新執行 `release.sh build`。單獨也失敗就是真的 bug，請在新的 commit 修正。 |
-| 已發布的 DMG 有問題 | 不要替換附檔或移動 tag。修正後發一個修正版並用下一個 build 號碼，例如 1.3.1 (build 7)，並在說明中註明它取代哪個 build。 |
+| 已發布的 DMG 有問題 | 不要替換附檔或移動 tag。修正後發一個修正版並用下一個 build 號碼，例如 1.4.1 (build 8)，並在說明中註明它取代哪個 build。 |

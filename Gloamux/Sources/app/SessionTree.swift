@@ -20,7 +20,17 @@ public struct SavedConnection: Codable, Equatable, Sendable {
     public var proxyKind: ProxyKind?
     public var identityPath: String?
     var opensFiles: Bool?
+    /// The jump host this connection is reached from: the last one in `jumpPath`.
     public var jumpSessionID: UUID?
+    /// Jump hosts dialed before `jumpSessionID`, first one first, when this session lists more than one. Only the first
+    /// host of the list goes through its own jump host, as with OpenSSH's ProxyJump; the others' own settings are not used.
+    var earlierJumpSessionIDs: [UUID]?
+    /// The jump hosts this session lists, first dialed first; empty without one.
+    var jumpPath: [UUID] { jumpSessionID.map { (earlierJumpSessionIDs ?? []) + [$0] } ?? [] }
+    mutating func setJumpPath(_ path: [UUID]) {
+        jumpSessionID = path.last
+        earlierJumpSessionIDs = path.count > 1 ? Array(path.dropLast()) : nil
+    }
     /// Offers the SSH agent's keys before the identity file.
     public var usesAgent: Bool?
     /// An agent socket other than `SSH_AUTH_SOCK`, such as one named by `IdentityAgent` in an OpenSSH config.
@@ -67,7 +77,7 @@ public struct SavedConnection: Codable, Equatable, Sendable {
     func validate() throws {
         if isFTP {
             guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, (1...65535).contains(port), identityPath == nil,
-                  usesAgent == nil, forwardsX11 != true, jumpSessionID == nil, proxyHost == nil, forwardingRules?.isEmpty ?? true,
+                  usesAgent == nil, forwardsX11 != true, jumpSessionID == nil, earlierJumpSessionIDs == nil, proxyHost == nil, forwardingRules?.isEmpty ?? true,
                   ftpFingerprint.map({ FTPSettings.isFingerprint($0) }) ?? true else {
                 throw WorkspaceError.invalid("Invalid saved connection settings.")
             }
@@ -76,6 +86,12 @@ public struct SavedConnection: Codable, Equatable, Sendable {
         if let forwardingRules { try ForwardingRule.validateSaved(forwardingRules) }
         if jumpSessionID != nil && proxyHost != nil {
             throw WorkspaceError.invalid("Set the proxy on the jump host rather than on the destination.")
+        }
+        if let earlier = earlierJumpSessionIDs {
+            guard jumpSessionID != nil, !earlier.isEmpty, Set(jumpPath).count == jumpPath.count,
+                  jumpPath.count <= SessionTreeStore.maximumJumpHops else {
+                throw WorkspaceError.invalid("Jump hosts must not loop and can chain at most 8 hosts.")
+            }
         }
         guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !username.isEmpty,
               (1...65535).contains(port), (proxyHost == nil) == (proxyPort == nil),
@@ -173,22 +189,30 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
     /// The jump hosts a connection passes through, first hop (the one Gloamux dials) first.
     /// Returns nil when a link is missing, loops, or exceeds the limit.
     func jumpChain(for connection: SavedConnection, excluding id: UUID?) -> [SavedConnection]? {
+        jumpRoute(for: connection, excluding: id)?.compactMap(\.connection)
+    }
+
+    /// The saved sessions of `jumpChain`, with their names, first hop first.
+    func jumpRoute(for connection: SavedConnection, excluding id: UUID?) -> [SessionTreeNode]? {
         var indexed = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         let start = id ?? UUID()
         indexed[start] = SessionTreeNode(id: start, name: "_", connection: connection)
-        return Self.jumpChain(from: start, in: indexed)?.compactMap(\.connection)
+        return Self.jumpChain(from: start, in: indexed)
     }
 
     /// Hosts reached before `id`, ordered from the first hop to the last. The node itself is not included.
+    /// A session's listed jump hosts come in order; the first of them is reached through its own jump hosts, if any.
     static func jumpChain(from id: UUID, in indexed: [UUID: SessionTreeNode]) -> [SessionTreeNode]? {
-        var chain: [SessionTreeNode] = []
+        var chain: [SessionTreeNode] = []   // From the destination backward.
         var seen: Set<UUID> = [id]
-        var next = indexed[id]?.connection?.jumpSessionID
-        while let current = next {
-            guard seen.insert(current).inserted, chain.count < maximumJumpHops,
-                  let node = indexed[current], node.connection != nil else { return nil }
-            chain.append(node)
-            next = node.connection?.jumpSessionID
+        var path = indexed[id]?.connection?.jumpPath ?? []
+        while let first = path.first {
+            for hop in path.reversed() {
+                guard seen.insert(hop).inserted, chain.count < maximumJumpHops,
+                      let node = indexed[hop], node.connection != nil else { return nil }
+                chain.append(node)
+            }
+            path = indexed[first]?.connection?.jumpPath ?? []
         }
         return chain.reversed()
     }
@@ -264,7 +288,7 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
             try node.connection?.validate()
             try node.container?.validate()
             if node.connection != nil && node.container != nil { throw WorkspaceError.invalid("Invalid saved connection settings.") }
-            if node.connection?.jumpSessionID != nil {
+            if node.connection?.jumpPath.isEmpty == false {
                 guard jumpChain(from: node.id, in: indexed) != nil else {
                     throw WorkspaceError.invalid("Jump hosts must not loop and can chain at most 8 hosts.")
                 }
@@ -378,6 +402,14 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
             guard let jump = entry.jump, let target = imported[jump], let id = imported[entry.components],
                   let index = updated.firstIndex(where: { $0.id == id }) else { continue }
             updated[index].connection?.jumpSessionID = target
+            // Listed hops come along only when every one of them was imported and the chain stays valid.
+            let earlier = (entry.earlierJumps ?? []).compactMap { imported[$0] }
+            guard let listed = entry.earlierJumps, !listed.isEmpty, earlier.count == listed.count else { continue }
+            updated[index].connection?.setJumpPath(earlier + [target])
+            let indexed = Dictionary(uniqueKeysWithValues: updated.map { ($0.id, $0) })
+            if (try? updated[index].connection?.validate()) == nil || Self.jumpChain(from: id, in: indexed) == nil {
+                updated[index].connection?.setJumpPath([target])
+            }
         }
         try commit(updated)
         selection = root.id

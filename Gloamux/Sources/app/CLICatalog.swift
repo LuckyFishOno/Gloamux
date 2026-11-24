@@ -106,7 +106,7 @@ public enum CLICatalog {
               kubectl POD       context=CONTEXT namespace=NAMESPACE container=CONTAINER shell=/bin/sh
               ssm     INSTANCE  profile=AWS_PROFILE region=REGION
             SSH connections take these with options (- resets a setting):
-              jump=ITEM proxy=socks5|socks4|http proxy-host=HOST proxy-port=1080
+              jump=ITEM[,ITEM...] proxy=socks5|socks4|http proxy-host=HOST proxy-port=1080
               startup='COMMAND\\nCOMMAND' forward-agent=on|off x11=on|off open-files=on|off
               files=auto|sftp|scp encoding=utf8 confirm=on|off
             FTP connections take confirm=on|off. Changing confirm asks for Touch ID or the Mac password in Gloamux.

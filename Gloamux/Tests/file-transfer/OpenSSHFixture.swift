@@ -106,8 +106,13 @@ private final class OpenSSHSubsystem: ChannelInboundHandler {
             send("\r\nTERMSIZE \(size.terminalRowHeight)x\(size.terminalCharacterWidth)\r\nREADY> ", context: context); return
         }
         if let exec = event as? SSHChannelRequestEvent.ExecRequest {
+            // Like sshd, `$SSH_CONNECTION` names both ends of the connection that reached this server.
+            let transport = context.channel.parent
+            let reply = exec.command.contains("$SSH_CONNECTION")
+                ? [transport?.remoteAddress, transport?.localAddress].map { "\($0?.ipAddress ?? "?") \($0?.port ?? 0)" }.joined(separator: " ")
+                : exec.command == "stderr" ? "STDERR OUTPUT" : exec.command.uppercased()
             let data = SSHChannelData(type: exec.command == "stderr" ? .stdErr : .channel,
-                data: .byteBuffer(ByteBuffer(string: exec.command == "stderr" ? "STDERR OUTPUT" : exec.command.uppercased())))
+                data: .byteBuffer(ByteBuffer(string: reply)))
             context.writeAndFlush(NIOAny(data)).flatMap {
                 context.triggerUserOutboundEvent(SSHChannelRequestEvent.ExitStatus(exitStatus: exec.command == "exit-7" ? 7 : 0))
             }.whenComplete { _ in context.close(promise: nil) }

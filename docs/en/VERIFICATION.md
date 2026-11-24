@@ -2,7 +2,25 @@
 
 [English](VERIFICATION.md) · [繁體中文](../zh-TW/VERIFICATION.md) · [Back to README](../../README.md)
 
-Rebuilt and verified on November 24, 2026 with the architecture changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3). The tested package is `build/Gloamux.app`.
+This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
+
+## Gloamux 1.3 (build 6): Siri quit protection, multiple jump hosts, and connection route
+
+Gloamux 1.3 (build 6) ships the changes reviewed below on top of `6bbace3` (1.2.2 build 5). The release build reruns the Swift suite, the Rust remote desktop tests, and the package checks; the release notes give its counts.
+
+### Siri quit protection review (November 24, 2026)
+
+- Source review confirmed that `GloamuxApplicationDelegate.applicationShouldTerminate` checks `QuitRequest` before closing connections or saving recordings. A Quit Apple event from `linkd` is refused while a workspace is open. With no workspace, an unknown sender, or another sender, the existing quit path remains in use.
+- The six `QuitRequestTests` were independently rerun and passed. They cover the `linkd` decision, other senders, no workspace, another event type, no current Apple event, and process-name lookup.
+- The full Swift suite on this working tree was independently rerun: **485 cases, 477 passed, 8 skipped, 0 failed**. This includes the pending owner-confirmation, multi-hop, and route-display regressions; the eight skips remain three external SSH and five Xshell sample checks.
+- Claude's recorded packaged simulation used an isolated workspace: a helper executable named `linkd` sent Quit, received cancellation (-128), and the app stayed open; another sender and a normal scripted Quit ended the app. This is a sender simulation, not a real Siri end-to-end check.
+- **Still pending:** an actual Ask Siri request against the 1.3 build, then waiting beyond the observed 30-second grace period with a workspace open. No new full application stress run was performed in this review.
+
+### Jump hosts and owner confirmation (November 24, 2026)
+
+- A new session's first connection, with nothing saved yet, or one with the password typed now, no longer asks for Touch ID; `DeviceSecretsTests` and `ConnectionServiceTests` cover it.
+- One session lists several jump hosts in order. `TunnelWorkspaceTests` connects through two listed hops with a password typed for each, checks the route's names, endpoints, and fingerprints, runs the route check, lists an SFTP folder on the destination, and checks that the route clears when the tab closes. `OpenSSHConfigImportTests`, `SessionExchangeTests`, and `WorkspaceCommandTests` cover OpenSSH `ProxyJump` lists, export and import, and `jump=A,B` in the CLI.
+- A packaged copy with an isolated workspace connected through three loopback OpenSSH servers (A, then B, then D, with a temporary key). The route popover showed each server reached from the one before it. `lsof` showed Gloamux connected only to A, with B's incoming connection owned by A's `sshd-session` and D's by B's.
 
 ## Terminal symbol fix in 1.2.2 (build 5)
 
@@ -10,7 +28,8 @@ Verified on November 24, 2026, on top of `1363ebf` (1.2.1 build 4). The local ca
 
 - The default regular and bold fonts previously resolved Powerline/Nerd Font private-use characters to LastResort. TextKit also laid out those missing glyphs at a different advance from the terminal cell grid. The four initial regression cases failed before the fix; all six final `TerminalFontTests` pass, covering actual glyph faces, 13/20 pt positions, cursor offsets, single/double-width icons, fixed row height, a selected Menlo face, and ordinary CJK/emoji fallback. An in-place colored left/right prompt redraw stays on one screen row.
 - Full Swift suite: **476 cases, 468 passed, 8 skipped, 0 failed**. The skips are the same three external SSH and five Xshell sample checks. The candidate passes deep strict code-signature verification and feature-contract self-test **9/9**; the bundled font, its MIT license, and provenance are present in its resource bundle.
-- A separate bundle identifier and throwaway workspace loaded real Oh My Zsh Agnoster and Powerlevel10k (os_icon, dir, prompt_char, status, time) through local zsh. Visual checks with the default system monospaced font confirmed Powerline segments, Apple/home/clock icons, regular/bold symbol samples, Chinese, emoji, and the right prompt. No font was installed in the user's font folders. A process-only probe of the official MesloLGS NF Regular confirmed it is fixed-pitch and accepted by the existing picker. The Mac that reported the issue and Intel hardware have not been tested.
+- A separate bundle identifier and throwaway workspace loaded real Oh My Zsh Agnoster and Powerlevel10k (os_icon, dir, prompt_char, status, time) through local zsh. Visual checks with the default system monospaced font confirmed Powerline segments, Apple/home/clock icons, regular/bold symbol samples, Chinese, emoji, and the right prompt. No font was installed in the user's font folders. A process-only probe of the official MesloLGS NF Regular confirmed it is fixed-pitch and accepted by the existing picker. Intel hardware has not been tested.
+- **User confirmation, November 24, 2026:** the user reported testing and confirmed that the prompt-symbol issue is fixed. The test machine and installation method were not specified.
 - The release terminal benchmark ran five 2 MB workloads at 120 × 40. Candidate redraws measured **0.54–1.72 ms**, against **0.47–1.60 ms** in the installed baseline; the largest added time was 0.23 ms. Echo p99 was 0.019 ms versus 0.021 ms. These are single-run local measurements, not a new full application stress run.
 
 The remaining sections preserve the earlier 1.2 architecture and stress-test record.

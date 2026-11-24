@@ -24,12 +24,17 @@ extension WorkspaceCommand {
             let clear = value == "-"
             switch key {
             case "jump":
-                if clear { connection.jumpSessionID = nil; continue }
-                let jump = try item(value, in: tree)
-                guard tree.jumpCandidates(excluding: node.id).contains(where: { $0.id == jump.id }) else {
+                if clear { connection.setJumpPath([]); continue }
+                // One item, or several separated by commas, first dialed first. A name with a comma still works alone.
+                let hops: [SessionTreeNode]
+                if let single = try? item(value, in: tree) { hops = [single] }
+                else { hops = try value.split(separator: ",").map { try item(String($0).trimmingCharacters(in: .whitespaces), in: tree) } }
+                let candidates = Set(tree.jumpCandidates(excluding: node.id).map(\.id))
+                guard !hops.isEmpty, hops.allSatisfy({ candidates.contains($0.id) }), Set(hops.map(\.id)).count == hops.count,
+                      hops.count <= SessionTreeStore.maximumJumpHops else {
                     throw Usage("Choose a saved SSH connection that does not lead back to this one, within \(SessionTreeStore.maximumJumpHops) hops.")
                 }
-                connection.jumpSessionID = jump.id
+                connection.setJumpPath(hops.map(\.id))
                 // The proxy belongs on the jump host, as the form hides it once a jump host is chosen.
                 connection.proxyHost = nil; connection.proxyPort = nil
             case "proxy":
@@ -89,7 +94,9 @@ extension WorkspaceCommand {
         guard !connection.isFTP else { return info }
         info["auth"] = connection.identityPath != nil ? "key" : connection.usesAgent == true ? "agent" : "password"
         if let key = connection.identityPath { info["key"] = key }
-        if let jump = connection.jumpSessionID { info["jump"] = tree.node(jump)?.name ?? jump.uuidString }
+        if !connection.jumpPath.isEmpty {
+            info["jump"] = connection.jumpPath.map { tree.node($0)?.name ?? $0.uuidString }.joined(separator: ",")
+        }
         if let host = connection.proxyHost, let port = connection.proxyPort {
             info["proxy"] = (connection.proxyKind ?? .socks5).rawValue
             info["proxy-host"] = host

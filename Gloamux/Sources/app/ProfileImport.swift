@@ -13,6 +13,8 @@ struct ProfileImport: Sendable {
         var notes: [String]
         /// The components of another entry in the same import that this one reaches through as its jump host.
         var jump: [String]? = nil
+        /// Entries dialed before `jump`, first one first, when the session lists several jump hosts.
+        var earlierJumps: [[String]]? = nil
         var path: String { components.joined(separator: " / ") }
     }
 

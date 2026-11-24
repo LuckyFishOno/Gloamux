@@ -82,7 +82,10 @@ struct GloamuxApplication: SwiftUI.App {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // A second Quit while connections are closing waits for the first.
         guard !quitting else { return .terminateCancel }
-        guard let models = workspaces?(), !models.isEmpty else { return .terminateNow }
+        let models = workspaces?() ?? []
+        // The system quits an app it thinks Siri opened once the intent is done; the open window stays.
+        if QuitRequest.refusesCurrentEvent(workspaceIsOpen: !models.isEmpty) { return .terminateCancel }
+        guard !models.isEmpty else { return .terminateNow }
         quitting = true
         quitRound += 1
         let round = quitRound

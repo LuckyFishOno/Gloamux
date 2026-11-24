@@ -38,8 +38,15 @@ struct HostKeyChange: Identifiable {
     public let id = UUID()
     var opensAutomatically = false
     var savedSessionID: UUID?
-    @Published var jumpSessionID: UUID?
-    @Published var jumpSecret = ""
+    /// The jump hosts the form lists, first dialed first.
+    @Published var jumpPath: [UUID] = []
+    /// Passwords or key passphrases typed for listed jump hosts, cleared when a connection starts.
+    @Published var jumpSecrets: [UUID: String] = [:]
+    /// The hosts the open connection went through, ending with the destination; empty without jump hosts.
+    @Published var route: [RouteStop] = []
+    /// The jump host sessions of `route`, first hop first, for checking the route from each server.
+    var routeSessions: [SSHSession] = []
+    @Published var checkingRoute = false
     /// Where the tab's connection is. One value, so a tab is never both connected and lost.
     @Published private(set) var connectionState: ConnectionState = .disconnected
     /// The connection dropped without the user ending it; Reconnect, or the automatic reconnect, can bring it back.
@@ -190,10 +197,13 @@ struct HostKeyChange: Identifiable {
     var decoder = TerminalDecoder(encoding: .utf8)
     /// The SSH settings this tab connects with, from its form.
     var sshTarget: SavedConnection {
-        SavedConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: Int(port) ?? 22, username: username,
-                        proxyHost: useProxy ? proxyHost : nil, proxyPort: useProxy ? Int(proxyPort) : nil, identityPath: identityPath,
-                        jumpSessionID: jumpSessionID, usesAgent: useAgent, agentSocket: agentSocket,
-                        proxyKind: proxyKind, confirmsEachConnection: confirmsEachConnection)
+        var target = SavedConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: Int(port) ?? 22,
+                                     username: username, proxyHost: useProxy ? proxyHost : nil,
+                                     proxyPort: useProxy ? Int(proxyPort) : nil, identityPath: identityPath,
+                                     usesAgent: useAgent, agentSocket: agentSocket,
+                                     proxyKind: proxyKind, confirmsEachConnection: confirmsEachConnection)
+        target.setJumpPath(jumpPath)
+        return target
     }
     public var credentialID: String {
         ConnectionService.credentialID(username: username, host: host, port: Int(port) ?? 22, ftp: ftpSecurity != nil)
@@ -337,7 +347,10 @@ enum ConnectionState: Equatable {
     var confirmOwner: (String) async throws -> Void = { reason in
         // Under XCTest no one can answer the system prompt; tests that check the prompt set their own closure.
         if NSClassFromString("XCTestCase") != nil { return }
-        try await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
+        // The context is kept until the answer arrives: a context released early ends the prompt with an error.
+        let context = LAContext()
+        defer { withExtendedLifetime(context) {} }
+        _ = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
     }
     @Published public var error: String?
     public let sessionTree: SessionTreeStore
@@ -716,6 +729,7 @@ enum ConnectionState: Equatable {
         tab.hostKeyChange = nil
         let ssh = tab.session, transfer = tab.transfer, shell = tab.shell, jump = tab.pendingJump
         tab.pendingJump = nil
+        tab.route = []; tab.routeSessions = []; tab.checkingRoute = false
         tab.disconnectWatcher?.cancel()
         tab.disconnectWatcher = nil
         tab.keepAliveTask?.cancel(); tab.keepAliveTask = nil
@@ -731,7 +745,7 @@ enum ConnectionState: Equatable {
         recordings.stop(tab)
         logs.stop(tab)
         tab.session = nil; tab.transfer = nil; tab.busy = false; tab.progress = nil; tab.status = "Disconnected"
-        tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecret = ""; tab.filesLoaded = false; tab.entries = []
+        tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecrets = [:]; tab.filesLoaded = false; tab.entries = []
         // Straight to the end state: a lost connection was up until now.
         tab.moveConnection(to: lost ? .lost : .disconnected)
         if lost {
@@ -804,16 +818,22 @@ enum ConnectionState: Equatable {
         tab.busy = true
         tab.status = "Connecting…"
         let secret = tab.identityPath == nil ? (tab.useAgent ? "" : tab.password) : tab.keyPassphrase
-        let jumpSecret = tab.jumpSecret
-        tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecret = ""
+        // The listed hops are the last ones of the chain; hops before them come from the first one's own settings.
+        let hopNames = sessionTree.jumpRoute(for: target, excluding: tab.savedSessionID)?.map(\.name) ?? []
+        let listed = tab.jumpPath.map { tab.jumpSecrets[$0] ?? "" }
+        let jumpSecrets = Array(repeating: "", count: max(0, hops.count - listed.count)) + listed.suffix(hops.count)
+        tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecrets = [:]
         defer { if tab.epoch == epoch { tab.busy = false } }
         do {
             let signIn = TabSignIn(model: self, tab: tab, epoch: epoch)
-            let ssh = try await service.openSSH(target, hops: hops, secret: secret, jumpSecret: jumpSecret, handler: signIn) { server in
-                if tab.epoch == epoch { tab.pendingJump = server }
+            let ssh = try await service.openSSH(target, hops: hops, secret: secret, jumpSecrets: jumpSecrets, handler: signIn) { server in
+                if tab.epoch == epoch { tab.pendingJump = server; tab.routeSessions.append(server) }
             }
             tab.pendingJump = nil
             tab.session = ssh
+            tab.route = hops.isEmpty ? [] : hops.enumerated().map { index, hop in
+                routeStop(index < hopNames.count ? hopNames[index] : hop.host, hop)
+            } + [routeStop(tab.title, target)]
             tab.connected = true
             tab.transportLost = false
             tab.status = "Connected"
@@ -831,6 +851,7 @@ enum ConnectionState: Equatable {
             guard tab.epoch == epoch else { return }
             let server = tab.pendingJump
             tab.pendingJump = nil
+            tab.routeSessions = []
             answerHostKey(tab, approve: false)
             answerLogin(tab, answers: nil)
             tab.status = "Connection failed"
@@ -891,11 +912,33 @@ enum ConnectionState: Equatable {
         } catch { continuation.resume(throwing: error) }
     }
 
+    private func routeStop(_ name: String, _ connection: SavedConnection) -> RouteStop {
+        let endpoint = KnownHosts.endpoint(host: connection.host, port: connection.port)
+        return RouteStop(name: name, endpoint: endpoint,
+                         fingerprint: knownHosts.trustedKey(for: endpoint).flatMap { try? KnownHosts.fingerprint($0) })
+    }
+
+    /// Asks every server on the route where it sees the connection coming from (`$SSH_CONNECTION`), so the user can
+    /// see that each one was reached from the host before it. Runs only when asked: a server with a forced command
+    /// runs that command instead.
+    func checkRoute(_ tab: SessionTab) async {
+        guard let destination = tab.session, !tab.checkingRoute, tab.route.count == tab.routeSessions.count + 1 else { return }
+        let epoch = tab.epoch
+        tab.checkingRoute = true
+        defer { if tab.epoch == epoch { tab.checkingRoute = false } }
+        for (index, session) in (tab.routeSessions + [destination]).enumerated() {
+            let reply = try? await session.runCommand("printf '%s' \"$SSH_CONNECTION\"", maxResponseBytes: 512, timeoutSeconds: 20)
+            guard tab.epoch == epoch, index < tab.route.count else { return }
+            tab.route[index].seen = RouteStop.Seen(sshConnection: reply)
+        }
+    }
+
     func updateHostKeyAndReconnect(_ tab: SessionTab, change: HostKeyChange) async {
         guard !tab.busy, !tab.connected, tab.hostKeyChange?.id == change.id else { return }
         let host = tab.host.trimmingCharacters(in: .whitespacesAndNewlines)
         let target = Int(tab.port).map { KnownHosts.endpoint(host: host, port: $0) }
-        let probe = SavedConnection(host: host, port: Int(tab.port) ?? 22, username: tab.username, jumpSessionID: tab.jumpSessionID)
+        var probe = SavedConnection(host: host, port: Int(tab.port) ?? 22, username: tab.username)
+        probe.setJumpPath(tab.jumpPath)
         let jumps = (sessionTree.jumpChain(for: probe, excluding: tab.savedSessionID) ?? [])
             .map { KnownHosts.endpoint(host: $0.host, port: $0.port) }
         guard change.endpoint == target || jumps.contains(change.endpoint) else {
@@ -1300,7 +1343,7 @@ enum ConnectionState: Equatable {
         tab.environment = sessionTree.effectiveEnvironment(item.id)
         tab.opensAutomatically = true
         tab.savedSessionID = item.id
-        tab.jumpSessionID = settings.jumpSessionID
+        tab.jumpPath = settings.jumpPath
         tab.title = item.name; tab.host = settings.host; tab.port = String(settings.port); tab.username = settings.username
         tab.encoding = settings.encoding ?? .utf8
         tab.forwardsAgent = settings.forwardsAgent == true
@@ -1387,9 +1430,10 @@ enum ConnectionState: Equatable {
         guard tab.newConnectionType?.editorTool == nil else { throw WorkspaceError.invalid("Use Save in the remote desktop form.") }
         guard let port = Int(tab.port) else { throw WorkspaceError.invalid("Enter a valid port.") }
         var settings = SavedConnection(host: tab.host.trimmingCharacters(in: .whitespacesAndNewlines), port: port, username: tab.username,
-            proxyHost: tab.useProxy ? tab.proxyHost : nil, proxyPort: tab.useProxy ? Int(tab.proxyPort) : nil, identityPath: tab.identityPath, opensFiles: tab.showsFiles, jumpSessionID: tab.jumpSessionID,
+            proxyHost: tab.useProxy ? tab.proxyHost : nil, proxyPort: tab.useProxy ? Int(tab.proxyPort) : nil, identityPath: tab.identityPath, opensFiles: tab.showsFiles,
             usesAgent: tab.useAgent, agentSocket: tab.agentSocket, proxyKind: tab.proxyKind,
             confirmsEachConnection: tab.confirmsEachConnection)
+        settings.setJumpPath(tab.jumpPath)
         settings.forwardingRules = tab.forwardingRules.isEmpty ? nil : tab.forwardingRules
         settings.forwardsX11 = tab.forwardsX11 ? true : nil
         try settings.validate()

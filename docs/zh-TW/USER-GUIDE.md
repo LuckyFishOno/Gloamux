@@ -88,8 +88,8 @@
 | **名稱**、**主機**、**連接埠**、**帳號** | 連線目的地。 |
 | **通訊協定** | SSH；或只傳檔案的 FTP、**FTPS（明確式，AUTH TLS）**、**FTPS（隱含式 TLS）**。 |
 | 金鑰選擇器 | **選擇私鑰** 開啟私鑰檔，選單也提供 **產生新金鑰檔**。**建立公鑰**／**查看公鑰** 管理 Gloamux 的 Secure Enclave 金鑰。見[金鑰](#金鑰)。 |
-| **每次連線用 Touch ID 確認** | 使用記住的密碼連線前，先要求 Touch ID。 |
-| **SSH 跳板** | 經由另一個已存連線連過去，最多可串接八層。 |
+| **每次連線用 Touch ID 確認** | 使用金鑰或記住的密碼連線前，先要求 Touch ID。第一次連線還沒有保存任何東西，不會詢問。 |
+| **SSH 跳板** | 依序經由其他已存連線連過去，最多八層。**新增跳板** 加入下一層，× 移除該層。只有第一層會再使用它自己的跳板設定。連上後，窗格標題列會顯示路徑（A › B › D）；點一下可以看每台主機的位址和主機金鑰，按 **從每台伺服器確認** 會列出每台伺服器收到的連線來自哪裡，每一台都應該是它上面那一台。終端、遠端檔案和連接埠轉發都走同一條路徑。 |
 | **代理類型**、**代理伺服器**、**代理連接埠** | SOCKS4、SOCKS4a、SOCKS5 或 HTTP CONNECT。 |
 | **轉送 SSH agent** | 讓伺服器在這個工作階段使用這台 Mac 的 SSH agent。 |
 | **轉發 X11** | 在這台 Mac 顯示遠端的 X11 程式（需要 XQuartz）。 |
@@ -161,7 +161,7 @@
 
 ### 只需登入一次
 
-密碼或金鑰密語成功登入後，Gloamux 會用 Secure Enclave 金鑰加密並保存在這台 Mac，之後連線不必再輸入。新連線預設打開 **每次連線用 Touch ID 確認**，可以在連線設定中關閉。
+密碼或金鑰密語成功登入後，Gloamux 會用 Secure Enclave 金鑰加密並保存在這台 Mac，之後連線不必再輸入。新連線預設打開 **每次連線用 Touch ID 確認**，可以在連線設定中關閉。新連線第一次連線時還沒有保存任何東西，所以不會詢問；輸入密碼後，之後的連線會在使用它前詢問。
 
 **已存密碼** 在通過 Touch ID 或 Mac 密碼後列出這些密碼，以及使用它們的連線，可以顯示、拷貝或刪除。拷貝的密碼會在 60 秒後從剪貼簿清除。
 
@@ -417,6 +417,7 @@ CSV 欄位：`host`（必填），以及選填的 `folder`（例如 `Team/Prod`�
 - **選單列** · 選單列的終端圖示可以搜尋並開啟已存連線、重新開啟最近的連線、啟動和停止有已存轉發規則的連線（並顯示有幾個轉發在執行），以及列出指令已完成的分頁。在 **設定 › 終端** 用 **顯示在選單列** 關閉。
 - **Spotlight** · 已存連線會以名稱、帳號和主機出現在 Spotlight，絕不包含密碼；選一個就會在 Gloamux 開啟。用 `gloamux settings set spotlight off` 關閉。
 - **捷徑** · 捷徑 App 提供 **Open Saved Session** 和 **New Local Terminal** 動作。
+- **Siri 退出保護** · 工作區開著時，會拒絕 Siri 任務服務在清理時送出的退出要求；仍可用 ⌘Q 或 Dock 結束 Gloamux。
 - **連結** · `gloamux://open?id=SESSION_ID` 開啟已存連線，`gloamux://new-terminal` 開啟本機終端。
 - **Dock** · 在 Dock 圖示上按右鍵選 **新增視窗**。
 - **啟動時重新打開分頁** · 在 **設定 › 一般**，會打開 Gloamux 結束時開著的連線和本機終端。
@@ -637,6 +638,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 ```sh
 gloamux sessions add "Work server" ssh server.example.com deploy
 gloamux sessions options "Work server" jump=Bastion x11=on
+gloamux sessions options "Work server" jump=Bastion,Inner   # 先經 Bastion，再經 Inner
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite

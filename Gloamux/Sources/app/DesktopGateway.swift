@@ -111,7 +111,7 @@ extension WorkspaceModel {
         do {
             let hops = try service.jumpHosts(for: target, excluding: id)
             let signIn = GatewaySignIn(gateway: gateway, knownHosts: knownHosts)
-            let ssh = try await service.openSSH(target, hops: hops, secret: "", jumpSecret: "", handler: signIn)
+            let ssh = try await service.openSSH(target, hops: hops, secret: "", handler: signIn)
             let forward: SSHLocalForward
             do { forward = try await ssh.startLocalForward(localPort: 0, targetHost: host, targetPort: port) }
             catch { try? await ssh.close(); throw error }

@@ -88,8 +88,8 @@ For a terminal on this Mac, choose **File › New local terminal** (⌘T). With 
 | **Name**, **Host**, **Port**, **Username** | Where to connect. |
 | **Protocol** | SSH, or FTP, **FTPS (explicit, AUTH TLS)**, or **FTPS (implicit TLS)** for file-only connections. |
 | Key picker | **Choose private key** opens a private key file. Its menu also offers **Generate new key file**. **Create public key** / **Show public key** manages the Gloamux Secure Enclave key. See [Keys](#keys). |
-| **Confirm each connection with Touch ID** | Asks for Touch ID before each connection that uses a remembered password. |
-| **SSH jump host** | Another saved session to connect through. Jump hosts can be chained, up to eight. |
+| **Confirm each connection with Touch ID** | Asks for Touch ID before each connection that uses a key or a remembered password. The first connection, before anything is saved, does not ask. |
+| **SSH jump host** | Other saved sessions to connect through, in order, up to eight. **Add jump host** adds the next one and × removes it. Only the first one goes through its own jump host settings. Once connected, the pane header shows the route (A › B › D); click it for each host's address and host key, and **Check from each server** to see where each server received the connection from. Each one should name the host above it. Terminal, Remote files, and port forwards all use the same route. |
 | **Proxy type**, **Proxy host**, **Proxy port** | SOCKS4, SOCKS4a, SOCKS5, or HTTP CONNECT. |
 | **Forward SSH agent** | Lets the server use this Mac's SSH agent for this session. |
 | **Forward X11** | Shows remote X11 programs on this Mac (needs XQuartz). |
@@ -161,7 +161,7 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 
 ### Sign in once
 
-After a password or key passphrase works, Gloamux keeps it on this Mac, sealed with a Secure Enclave key, so later connections need no typing. New connections start with **Confirm each connection with Touch ID** on; turn it off in the session's properties.
+After a password or key passphrase works, Gloamux keeps it on this Mac, sealed with a Secure Enclave key, so later connections need no typing. New connections start with **Confirm each connection with Touch ID** on; turn it off in the session's properties. A new session's first connection does not ask, because nothing is saved for it yet; type the password, and later connections ask before using it.
 
 **Saved passwords** lists them after Touch ID or the Mac password, with the sessions that use each one, to show, copy, or delete. A copied password is cleared from the clipboard after 60 seconds.
 
@@ -417,6 +417,7 @@ CSV columns: `host` (required), and optionally `folder` (for example `Team/Prod`
 - **Menu bar** · The terminal icon in the menu bar finds and opens saved sessions, reopens recent ones, starts and stops sessions with saved forwarding rules (showing how many forwards are running), and lists tabs whose commands finished. Turn it off with **Show in menu bar** in **Settings › Terminal**.
 - **Spotlight** · Saved sessions appear in Spotlight by name, user, and host, never passwords. Choosing one opens it in Gloamux. Turn it off with `gloamux settings set spotlight off`.
 - **Shortcuts** · The Shortcuts app offers **Open Saved Session** and **New Local Terminal**.
+- **Siri quit protection** · An open workspace stays running when Siri's task service sends its cleanup Quit request. You can still quit Gloamux with ⌘Q or the Dock.
 - **Links** · `gloamux://open?id=SESSION_ID` opens a saved session, and `gloamux://new-terminal` opens a local terminal.
 - **Dock** · Right-click the Dock icon for **New Window**.
 - **Reopen tabs at launch** · In **Settings › General**, opens the sessions and local terminals that were open when Gloamux quit.
@@ -637,6 +638,7 @@ Examples:
 ```sh
 gloamux sessions add "Work server" ssh server.example.com deploy
 gloamux sessions options "Work server" jump=Bastion x11=on
+gloamux sessions options "Work server" jump=Bastion,Inner   # through Bastion, then Inner
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite
