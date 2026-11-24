@@ -4,6 +4,10 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.3.1 (build 7): Session properties layout
+
+Verified on November 24, 2026, on top of `b4256a0` (1.3 build 6). In Session properties, a jump host menu now fills its row and truncates a long name instead of growing past the sheet, its row label stays on one line, and the sheet is 540 points wide instead of 460. A packaged copy with an isolated workspace was checked in Traditional Chinese and English with a long jump host name and two hops: every label, field, and info button stayed inside the sheet and the jump host menus lined up with the other fields. The owner confirmed the sheet without jump hosts. `OpenSSHConfigImportTests` and `WorkspaceCommandTests` passed; the release build reruns the full suites.
+
 ## Gloamux 1.3 (build 6): Siri quit protection, multiple jump hosts, and connection route
 
 Gloamux 1.3 (build 6) ships the changes reviewed below on top of `6bbace3` (1.2.2 build 5). The release build reruns the Swift suite, the Rust remote desktop tests, and the package checks; the release notes give its counts.

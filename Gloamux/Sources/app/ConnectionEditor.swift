@@ -135,7 +135,7 @@ struct ConnectionEditor: View {
             }
         }
         .padding(24)
-        .frame(width: 460)
+        .frame(width: 540)
         .sheet(isPresented: $enteringMasterPassword, onDismiss: { masterPassword = ""; masterPasswordError = nil }) {
             masterPasswordSheet
         }
@@ -150,15 +150,20 @@ struct ConnectionEditor: View {
                     guard let new, let position = jumpPath.firstIndex(of: id) else { return }
                     jumpPath[position] = new
                 })
-            LabeledContent(String(format: T("Jump host %d"), index + 1)) {
+            // The menu fills the row and truncates a long name; at its natural width it grew past the sheet, pushed the
+            // form's labels off the left edge, and squeezed this label into an empty column.
+            LabeledContent {
                 HStack(spacing: 6) {
-                    JumpHostPicker(store: store, excluding: item?.id, selection: selection,
+                    JumpHostPicker(store: store, excluding: item?.id, selection: selection, fills: true,
                                    hidden: Set(jumpPath).subtracting([id]), allowsNone: false)
+                        .labelsHidden()
                     Button { jumpPath.removeAll { $0 == id } } label: { Image(systemName: "xmark") }
                         .buttonStyle(.borderless)
                         .help(T("Remove this jump host"))
                         .accessibilityLabel(T("Remove this jump host"))
                 }
+            } label: {
+                Text(String(format: T("Jump host %d"), index + 1)).lineLimit(1).fixedSize()
             }
         }
         let candidates = store.jumpCandidates(excluding: item?.id).filter { !jumpPath.contains($0.id) }

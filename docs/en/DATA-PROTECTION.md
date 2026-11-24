@@ -8,7 +8,7 @@ Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked ag
 
 ## Protection classes
 
-These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3 (build 6).
+These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3.1 (build 7).
 
 | Class | Meaning | Required protection |
 |---|---|---|
