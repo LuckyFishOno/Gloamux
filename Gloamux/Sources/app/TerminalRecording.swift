@@ -248,7 +248,13 @@ enum SecretRedaction {
         redact([(0, text)]).first?.1 ?? text
     }
 
-    static func redact(_ chunks: [(TimeInterval, String)]) -> [(TimeInterval, String)] {
+    /// Redacts `text` as part of what surrounds it, so a part of a secret is removed too.
+    static func redact(_ text: String, before: String, after: String) -> String {
+        redact([(0, before), (0, text), (0, after)], marksContinued: true)[1].1
+    }
+
+    /// `marksContinued` also writes the mask in a chunk that holds only a later part of a secret.
+    static func redact(_ chunks: [(TimeInterval, String)], marksContinued: Bool = false) -> [(TimeInterval, String)] {
         let joined = chunks.map(\.1).joined() as NSString
         // Replacements as (range in the joined text, replacement), without overlaps.
         var replacements: [(NSRange, String)] = []
@@ -269,7 +275,7 @@ enum SecretRedaction {
             var position = range.location
             for (secret, replacement) in replacements where NSMaxRange(secret) > range.location && secret.location < NSMaxRange(range) {
                 if secret.location > position { output += joined.substring(with: NSRange(location: position, length: secret.location - position)) }
-                if secret.location >= range.location { output += replacement }
+                if secret.location >= range.location { output += replacement } else if marksContinued { output += mask }
                 position = max(position, min(NSMaxRange(secret), NSMaxRange(range)))
             }
             if position < NSMaxRange(range) { output += joined.substring(with: NSRange(location: position, length: NSMaxRange(range) - position)) }

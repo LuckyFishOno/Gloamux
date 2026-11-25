@@ -252,6 +252,40 @@ final class TerminalTextView: NSTextView {
     override var acceptableDragTypes: [NSPasteboard.PasteboardType] { [] }
     override func updateDragTypeRegistration() { unregisterDraggedTypes() }
 
+    /// The selected text with recognized secrets removed, nil without a selection. Rows the terminal wrapped are joined
+    /// and the text around the selection is read too, so a wrapped or partly selected secret is recognized.
+    func redactedSelection() -> String? {
+        let selection = selectedRange()
+        guard selection.length > 0 else { return nil }
+        let full = string as NSString
+        let limit = 65_536
+        var lineStart = 0, line = 0
+        var wraps = IndexSet()
+        while lineStart < full.length {
+            let newline = full.range(of: "\n", range: NSRange(location: lineStart, length: full.length - lineStart))
+            guard newline.location != NSNotFound else { break }
+            // The view can be a moment behind the screen, so a row counts only while it still shows the same text.
+            if let screen, newline.location + limit > selection.location, newline.location < NSMaxRange(selection) + limit,
+               let cells = screen.row(absolute: screen.trimmedLines + line), cells.last?.wraps == true,
+               String(cells.filter { $0.width != 0 }.map(\.character)) == full.substring(with: NSRange(location: lineStart, length: newline.location - lineStart)) {
+                wraps.insert(newline.location)
+            }
+            lineStart = newline.location + 1
+            line += 1
+        }
+        func part(_ start: Int, _ end: Int) -> String {
+            var text = "", position = start
+            for newline in wraps.intersection(IndexSet(integersIn: start..<end)) {
+                text += full.substring(with: NSRange(location: position, length: newline - position))
+                position = newline + 1
+            }
+            return text + full.substring(with: NSRange(location: position, length: end - position))
+        }
+        let end = NSMaxRange(selection)
+        return SecretRedaction.redact(part(selection.location, end), before: part(max(0, selection.location - limit), selection.location),
+                                      after: part(end, min(full.length, end + limit)))
+    }
+
     /// UTF-16 length of each line on screen, so an update can find where its first changed line starts.
     private var lineLengths: [Int] = []
 

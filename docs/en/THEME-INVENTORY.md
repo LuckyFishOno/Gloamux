@@ -2,7 +2,7 @@
 
 [English](THEME-INVENTORY.md) · [繁體中文](../zh-TW/THEME-INVENTORY.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 Researched on November 20, 2026. Bundled inventory rechecked against Gloamux 1.1 (build 2) on November 23, 2026. Marketplace rankings remain the November 20 snapshot. This inventory lists candidate color themes from Linux distribution terminals and the most installed Visual Studio Code themes. It records where each palette comes from and how reliable the values are.
 

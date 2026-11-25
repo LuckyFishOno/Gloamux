@@ -2,11 +2,13 @@
 
 [English](ROADMAP.md) · [繁體中文](../zh-TW/ROADMAP.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.3.1 (build 7)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.3.2 (build 8)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.3.2 (build 8): the serial form discovers devices on opening and refreshes while visible, fills a blank new target for one USB adapter, and preserves saved or typed paths. Terminal resets now keep the current grid size after resizing, preventing an out-of-bounds redraw. See the [verification record](VERIFICATION.md).
 
 ## First milestones
 

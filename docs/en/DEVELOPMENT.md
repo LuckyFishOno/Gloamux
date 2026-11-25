@@ -2,7 +2,7 @@
 
 [English](DEVELOPMENT.md) · [繁體中文](../zh-TW/DEVELOPMENT.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 ## Contents
 
@@ -151,6 +151,9 @@ Naming:
 ## Terminal
 
 ### Screen and shell integration
+
+- RIS (`ESC c`) and the current DECSTR (`CSI ! p`) implementation recreate both screen buffers at the current `rows` and `cols`, not the initial `TerminalOptions` size. Resizing can precede a reset from any transport; keeping the buffers and advertised dimensions equal prevents out-of-bounds reads in `TerminalDisplay`. `TerminalResetTests` cover growth, shrinkage, alternate screens, and repeated resize/reset cycles; `TerminalOutputViewTests` exercises the actual redraw path.
+- `SerialDevice.connected()` keeps the `/dev/cu.*` list used by `sessions serial-ports` and identifies USB adapters by their IOKit ancestry. `ContainerSessionEditor` scans immediately and every second in a cancellable, view-scoped task. Only a new blank target with exactly one USB adapter is filled automatically; saved and typed paths are preserved. No port is opened by discovery.
 
 - `TerminalScreen` (in `Sources/terminal`) records OSC 133 marks as `CommandMark`s with absolute line numbers (`trimmedLines` plus the scrollback index, so marks survive trimming) and raises `TerminalEvent.commandFinished`.
 - OSC 8 links go into a link table, and each `CellStyle` keeps a link index that SGR 0 does not clear. OSC 7 sets `workingDirectory`.

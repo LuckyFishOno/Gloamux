@@ -1,4 +1,5 @@
 import AppKit
+import Terminal
 import XCTest
 @testable import App
 
@@ -117,6 +118,64 @@ import XCTest
         model.shareWithAgents(tab)
         let later = try await call("read_shared_output", ["after": first], model) as? [String: Any]
         XCTAssertEqual(((later?["excerpts"] as? [[String: Any]])?.first?["text"] as? String)?.contains("SECRET_SCREEN"), true)
+    }
+
+    private func sharedTexts(_ model: WorkspaceModel) async throws -> [String] {
+        let shared = try await call("read_shared_output", model) as? [String: Any]
+        return try XCTUnwrap(shared?["excerpts"] as? [[String: Any]]).compactMap { $0["text"] as? String }
+    }
+
+    private let privateKey = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + String(repeating: "c3ludGhldGlj\n", count: 8_000) + "-----END OPENSSH PRIVATE KEY-----"
+
+    func testSharedTextReachesAgentsWithSecretsRedacted() async throws {
+        let model = try workspace()
+        model.agents.setEnabled(true)
+        let tab = model.addTab()
+        model.shareWithAgents(tab, selection: "key AKIAABCDEFGHIJKLMNOP\npassword=hunter22 user=alice\nls -la")
+        // The key is longer than an excerpt: cutting before redacting would keep its body without its first line.
+        model.shareWithAgents(tab, selection: privateKey + "\nafter")
+        let texts = try await sharedTexts(model)
+        XCTAssertEqual(texts, ["key [REDACTED]\npassword=[REDACTED] user=alice\nls -la", "[REDACTED]\nafter"])
+        // What Gloamux keeps is the same text agents read.
+        XCTAssertEqual(model.agents.excerpts.map(\.text), texts)
+    }
+
+    func testSharedScreenRedactsASecretThatWrapsOrStartsAboveIt() async throws {
+        let model = try workspace()
+        model.agents.setEnabled(true)
+        let wrapped = model.addTab()
+        wrapped.screen.resize(rows: 5, cols: 30)
+        model.terminalReceived(wrapped, bytes: Array("token ghp_abcdefghijklmnopqrstuvwxyz0123456789 end".utf8))
+        model.shareWithAgents(wrapped)
+        let above = model.addTab()
+        above.screen.resize(rows: 5, cols: 30)
+        let key = "-----BEGIN PRIVATE KEY-----\r\n" + String(repeating: "c3ludGhldGlj\r\n", count: 12) + "-----END PRIVATE KEY-----\r\nafter"
+        model.terminalReceived(above, bytes: Array(key.utf8))
+        model.shareWithAgents(above)
+        let texts = try await sharedTexts(model)
+        // A new tab's screen starts with a line of its own.
+        XCTAssertEqual(texts.first?.components(separatedBy: "\n").last, "token [REDACTED] end")
+        XCTAssertEqual(texts.last, "[REDACTED]\nafter")
+    }
+
+    func testTerminalSelectionRedactsWrappedAndPartlySelectedSecrets() throws {
+        let screen = TerminalScreen()
+        screen.resize(rows: 5, cols: 30)
+        screen.feed(Array("token ghp_abcdefghijklmnopqrstuvwxyz0123456789 end".utf8))
+        let view = TerminalTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        view.screen = screen
+        let rows = (0..<screen.rows).map { screen.text(lines: $0..<($0 + 1)) }
+        view.string = rows.joined(separator: "\n")
+        XCTAssertNil(view.redactedSelection())
+        let all = view.string as NSString
+        view.setSelectedRange(NSRange(location: 0, length: all.length))
+        XCTAssertEqual(view.redactedSelection()?.trimmingCharacters(in: .newlines), "token [REDACTED] end")
+        // Only the middle of the token.
+        view.setSelectedRange(NSRange(location: 14, length: 10))
+        XCTAssertEqual(view.redactedSelection(), "[REDACTED]")
+        // Only its second row.
+        view.setSelectedRange(all.range(of: rows[1]))
+        XCTAssertEqual(view.redactedSelection(), "[REDACTED] end")
     }
 
     /// The real `gloamux mcp` process speaks MCP and reaches this process the way it reaches the running app.

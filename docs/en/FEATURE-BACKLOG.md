@@ -2,7 +2,7 @@
 
 [English](FEATURE-BACKLOG.md) · [繁體中文](../zh-TW/FEATURE-BACKLOG.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 Baseline reviewed on November 20, 2026. The backlog covers documented product features, settings, and integration workflows in Xshell 8 and MobaXterm 26.6, including the Professional Customizer and the November 11 Xshell update. Windows-specific workflows have macOS counterparts below. Each checkbox is a Gloamux development item. An open item can include capabilities already present in the app. Optional items that Gloamux does not plan to build were removed on November 22, 2026.
 
@@ -95,7 +95,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [ ] Check VNC sign-in, clipboard, and the SSH tunnel against a real macOS Screen Sharing server.
 - [x] **X11** · Forward from an enabled SSH shell to the local XQuartz display. Test the connection and authorization with a simulated display.
 - [ ] **X11 display verification** · Verify app rendering, input, clipboard, and keyboard layouts with XQuartz.
-- [x] **Serial** · Select macOS serial and USB devices and configure baud rate, data bits, stop bits, parity, and flow control.
+- [x] **Serial** · Select macOS serial and USB devices and configure baud rate, data bits, stop bits, parity, and flow control. Since 1.3.2 (build 8), Gloamux discovers ports when the form opens, refreshes every second, and fills a blank new device field only for a single USB adapter.
 - [x] **Mosh and Telnet** · Open saved or ad hoc Mosh sessions through the installed client and Telnet sessions through Gloamux's connection handler.
 
 ## Utilities and distribution

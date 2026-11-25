@@ -2,7 +2,7 @@
 
 [English](../en/THEME-INVENTORY.md) · [繁體中文](THEME-INVENTORY.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+[驗證紀錄](VERIFICATION.md)包含 2026 年 11 月 25 日的本機序列埠／終端檢查，以及 11 月 24 日的全 App 壓力測試基準。
 
 2026 年 11 月 20 日調查，2026 年 11 月 23 日依 Gloamux 1.1 (build 2) 重新核對內附清單。Marketplace 排名仍保留 11 月 20 日的快照。本清單列出來自 Linux 發行版終端和安裝數最多的 Visual Studio Code 主題的候選配色，記錄每組配色的來源和數值的可靠程度。
 

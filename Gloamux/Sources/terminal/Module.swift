@@ -383,6 +383,18 @@ public final class TerminalScreen {
         }.joined(separator: "\n")
     }
 
+    /// Text of absolute lines with rows that ran past the edge joined again, so a long word is whole. Each line ends with
+    /// a newline, except a last row that continues below the range.
+    public func unwrappedText(lines range: Range<Int>) -> String {
+        range.map { line in
+            let cells = row(absolute: line)
+            guard let cells else { return "" }
+            let text = String(cells.filter { $0.width != 0 }.map(\.character))
+            if cells.last?.wraps == true { return text }
+            return text.replacingOccurrences(of: " +$", with: "", options: .regularExpression) + "\n"
+        }.joined()
+    }
+
     /// The URL of an OSC 8 link index.
     public func link(_ index: UInt16) -> String? { index == 0 || Int(index) >= links.count ? nil : links[Int(index)] }
 
@@ -570,7 +582,10 @@ public final class TerminalScreen {
     private func restoreCursor() { cursorRow = min(saved.row, rows - 1); cursorCol = min(saved.col, cols - 1); style = saved.style; originMode = saved.origin; wrapPending = false }
 
     private func reset() {
-        let o = options, sb = scrollback
+        var o = options
+        // RIS/DECSTR reset terminal state, not the window size. The initial options can predate several resizes.
+        o.rows = rows; o.cols = cols
+        let sb = scrollback
         let fresh = TerminalScreen(options: o)
         primary = fresh.primary; alternate = fresh.alternate; usingAlternate = false
         cursorRow = 0; cursorCol = 0; cursorVisible = true; applicationCursorKeys = o.applicationCursorKeys

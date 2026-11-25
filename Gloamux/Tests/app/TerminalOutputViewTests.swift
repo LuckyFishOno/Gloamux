@@ -57,6 +57,25 @@ import SwiftUI
         return nil
     }
 
+    func testResetOutputRedrawsAfterTheTerminalWasResized() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-reset-view-\(UUID())")
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let model = try WorkspaceModel(storage: root)
+        let tab = SessionTab()
+        tab.connected = true; tab.terminalReady = true
+        let window = host(TerminalDisplay(tab: tab, model: model, resizes: false))
+        try await settle()
+        for (rows, cols) in [(40, 120), (10, 30), (24, 80), (30, 80)] {
+            model.resizeTerminal(tab, rows: rows, columns: cols)
+            model.terminalReceived(tab, bytes: Array("\u{1B}c\u{1B}[\(rows);1HRESET_OK".utf8))
+            try await settle()
+            let text = try XCTUnwrap(textView(in: window.contentView)).string
+            XCTAssertTrue(text.contains("RESET_OK"))
+            XCTAssertEqual(tab.screen.rows, rows)
+            XCTAssertEqual(tab.screen.cols, cols)
+        }
+    }
+
     func testAnUnchangedWindowTitleDoesNotRedrawTheTab() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-output-title-\(UUID())")
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }

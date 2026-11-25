@@ -2,7 +2,7 @@
 
 [English](USER-GUIDE.md) · [繁體中文](../zh-TW/USER-GUIDE.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 This guide covers everything Gloamux does, in the order you are likely to need it. Menu, button, and setting names follow the English interface. The last sections provide menu, keyboard shortcut, settings, and command-line references.
 
@@ -321,6 +321,8 @@ Open or save these from the **Other connection** section of the new connection t
 | Kubernetes pod | Pod, context, namespace, container, and shell. |
 | AWS Systems Manager | Instance, profile, and region. |
 
+The serial device menu loads when the form opens and refreshes every second while Serial port is selected. A new, blank form fills in the device and name when exactly one USB serial adapter is connected. With multiple adapters, choose one from the menu; existing saved devices and typed paths are kept. The menu also includes Bluetooth and system ports and has **Refresh** for an immediate scan. The command line lists the same available paths with `gloamux sessions serial-ports`.
+
 ## 10. Automation
 
 ### Quick commands
@@ -434,7 +436,7 @@ What an agent can do:
 
 - See the allowed sessions by name and destination. It never receives passwords or keys.
 - Open an allowed session in Gloamux.
-- Read text you share with **Terminal › Share with Agents**: the selection, the last command's output, or the screen.
+- Read text you share with **Terminal › Share with Agents**: the selection, the last command's output, or the screen. Recognized passwords, tokens, and private keys are replaced with `[REDACTED]` first. Check what you share, because a secret in another form can be missed.
 - Propose a command. Gloamux brings the tab forward and shows the agent, session, destination, reason, and full command. It runs only when you choose **Run**, and only in the same live terminal.
 
 **Activity** lists every request, including refused ones. **Revoke all access** turns agent access off, removes every allowed session, and stops commands waiting for review.

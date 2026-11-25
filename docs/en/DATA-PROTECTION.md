@@ -2,13 +2,15 @@
 
 [English](DATA-PROTECTION.md) · [繁體中文](../zh-TW/DATA-PROTECTION.md) · [Back to README](../../README.md)
 
-Functional and stress results for the November 24, 2026 working tree are in the [verification record](VERIFICATION.md).
+The [verification record](VERIFICATION.md) includes the November 25, 2026 local serial/terminal checks and the November 24 full application stress baseline.
 
 Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked against the 1.1 (build 2) source, including in-app updates, on November 23, 2026, and against the 1.2 (build 3) and 1.3 (build 6) changes on November 24, 2026. The 1.3 jump host list stores only session IDs in `sessions.json`; secrets typed for each jump host stay in memory and are cleared when the connection starts, and the route check reads `$SSH_CONNECTION` from each server only when asked. This inventory lists the data Gloamux stores or handles and its current protection. It also covers planned features from the [roadmap](ROADMAP.md) and [feature backlog](FEATURE-BACKLOG.md).
 
+The 1.3.2 (build 8) serial-discovery change was checked against this inventory. Discovery reads local device paths and IOKit USB ancestry; it neither opens a serial port nor makes a network request. Device paths are held in memory and enter `sessions.json` only when a connection is saved, under the catalog's existing protection. A USB device path can contain the adapter's identifier.
+
 ## Protection classes
 
-These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3.1 (build 7).
+These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3.2 (build 8).
 
 | Class | Meaning | Required protection |
 |---|---|---|
@@ -64,7 +66,7 @@ Key generation, agent forwarding, keyboard-interactive sign-in, alternate protoc
 | FTP, FTPS, RDP, VNC, Telnet, and gateway credentials | Passwords | S1 | Use the same vault. Warn before sending a password over plain FTP or Telnet. |
 | Cloud discovery (AWS, Tailscale) and S3 | Access keys, tokens | S1 | Prefer the provider's own credential source. Store any key in the vault. |
 | CLI | Session operations | S1 boundary | The CLI never prints or accepts secrets as arguments. Use the running app or an interactive prompt for secrets. |
-| Local MCP server | Approved session access, terminal excerpts | S1 boundary and S2 | Credentials never cross the MCP boundary. Excerpts are chosen by the user and redacted. Permissions are per session and revocable. |
+| Local MCP server | Approved session access, terminal excerpts | S1 boundary and S2 | Credentials never cross the MCP boundary. Excerpts are chosen by the user and redacted with the recording rules before they are kept or sent, including a secret that wraps or is partly selected. A secret in a form the rules do not know still passes. Through 1.3.1 (build 7), excerpts were not redacted. Permissions are per session and revocable. |
 | Session logs and recordings | Terminal output and input | S2 | Encrypt at rest with the workspace key. Redact passwords typed at prompts. Exclude no-echo input. |
 | Macros, runbooks, and startup commands | Command text | S2 | Encrypt at rest. Exclude authentication input from recordings. Reference vault entries instead of embedding secrets. |
 | Connection history, audit history, and session restoration | Hosts, times, approvals | S2 and I | Encrypt at rest. Sign the audit history so entries cannot be removed silently. |

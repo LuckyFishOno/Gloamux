@@ -126,8 +126,10 @@ import AppKit
 
     // MARK: Shared text and proposals
 
+    /// Keeps `text` for agents with recognized secrets removed. It is redacted whole, before it is shortened, because a
+    /// cut could take away the part that makes a secret recognizable.
     @discardableResult func share(_ text: String, session: String) -> Excerpt? {
-        let trimmed = text.trimmingCharacters(in: .newlines)
+        let trimmed = SecretRedaction.redact(text).trimmingCharacters(in: .newlines)
         guard !trimmed.isEmpty else { return nil }
         let excerpt = Excerpt(id: UUID(), date: Date(), session: session, text: String(trimmed.utf8.suffix(65536)) ?? trimmed)
         excerpts.append(excerpt)
@@ -176,11 +178,15 @@ import AppKit
 extension WorkspaceModel {
     public var agents: AgentAccess { AgentAccess.store(for: storage) }
 
-    /// The text selected in the focused terminal, if any.
+    /// The text selected in the focused terminal, if any, with recognized secrets removed. Only a terminal counts: the
+    /// focused text view can also belong to a password field.
     static func terminalSelection() -> String? {
-        guard let view = NSApp?.keyWindow?.firstResponder as? NSTextView, view.selectedRange().length > 0 else { return nil }
-        return (view.string as NSString).substring(with: view.selectedRange())
+        guard let view = NSApp?.keyWindow?.firstResponder as? TerminalTextView else { return nil }
+        return view.redactedSelection()
     }
+
+    /// Lines read above the screen to recognize a secret that starts there. They are not shared.
+    static let sharedContextLines = 200
 
     /// Shares a terminal's selection, or else the output of its last command, or else the screen, with agents.
     func shareWithAgents(_ tab: SessionTab, selection: String? = nil) {
@@ -188,11 +194,14 @@ extension WorkspaceModel {
         var text = selection ?? ""
         if text.isEmpty, let mark = screen.commandMarks.last(where: { $0.outputLine != nil && $0.endLine != nil }),
            let output = mark.outputLine, let end = mark.endLine, end > output {
-            text = (mark.command.map { "$ " + $0 + "\n" } ?? "") + screen.text(lines: output..<end)
+            text = (mark.command.map { "$ " + $0 + "\n" } ?? "") + screen.unwrappedText(lines: output..<end)
         }
         if text.isEmpty {
             let top = screen.absoluteLine(ofRow: 0)
-            text = screen.text(lines: top..<(top + screen.rows))
+            // The screen can start inside a key or a wrapped token, which only the lines above it reveal.
+            let above = max(screen.trimmedLines, top - Self.sharedContextLines)..<top
+            text = SecretRedaction.redact(screen.unwrappedText(lines: top..<(top + screen.rows)),
+                                          before: screen.unwrappedText(lines: above), after: "")
         }
         agents.share(text, session: tab.title)
     }

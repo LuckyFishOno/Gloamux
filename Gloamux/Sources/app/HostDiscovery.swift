@@ -434,6 +434,7 @@ struct ContainerSessionEditor: View {
     @State private var quality = DesktopQuality.lan
     @State private var sharesClipboard = RemoteDesktopSession.sharesClipboard
     @State private var choices: [String] = []
+    @State private var serialDevices: [SerialDevice] = []
     @State private var listing = false
     @State private var error: String?
 
@@ -466,9 +467,14 @@ struct ContainerSessionEditor: View {
                     TextField(T(targetLabel), text: $target)
                     if !tool.usesHost {
                         Menu {
-                            if choices.isEmpty { Text(T(listing ? "Loading…" : "Nothing found")) }
-                            ForEach(choices, id: \.self) { choice in Button(choice) { target = choice; if name.isEmpty { name = (choice as NSString).lastPathComponent } } }
-                        } label: { Image(systemName: "list.bullet") }
+                            let devices = tool == .serial ? serialDevices.map(\.path) : choices
+                            if devices.isEmpty { Text(T(listing ? "Loading…" : "Nothing found")) }
+                            ForEach(devices, id: \.self) { choice in Button(choice) { target = choice; if name.isEmpty { name = (choice as NSString).lastPathComponent } } }
+                            if tool == .serial {
+                                Divider()
+                                Button(T("Refresh"), action: refreshSerialDevices)
+                            }
+                        } label: { Label(T(tool == .serial ? "Choose a connected device" : "Choose a running one"), systemImage: "list.bullet").labelStyle(.iconOnly) }
                         .menuStyle(.borderlessButton).fixedSize()
                         .help(T(tool == .serial ? "Choose a connected device" : "Choose a running one"))
                         .simultaneousGesture(TapGesture().onEnded { list() })
@@ -575,6 +581,13 @@ struct ContainerSessionEditor: View {
         }
         .modifier(EditorFormStyle(inline: draftTab != nil))
         .onAppear(perform: load)
+        .task(id: tool) {
+            guard tool == .serial else { return }
+            while !Task.isCancelled {
+                refreshSerialDevices()
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
         .onChange(of: target) { _, value in draftTab?.host = value }
         .onChange(of: user) { _, value in draftTab?.username = value }
         .onChange(of: tool) { previous, current in
@@ -731,10 +744,19 @@ struct ContainerSessionEditor: View {
         sharesClipboard = session.sharesClipboard ?? RemoteDesktopSession.sharesClipboard
     }
 
+    private func refreshSerialDevices() {
+        let devices = SerialDevice.connected()
+        if serialDevices != devices { serialDevices = devices }
+        if editing == nil, let path = SerialDevice.suggestedPath(in: devices, current: target) {
+            target = path
+            if name.isEmpty { name = (path as NSString).lastPathComponent }
+        }
+    }
+
     /// Lists running containers, pods, or managed instances for the menu.
     private func list() {
         guard !listing else { return }
-        if tool == .serial { choices = SerialPort.devices(); return }
+        if tool == .serial { refreshSerialDevices(); return }
         guard tool.runsCommand, tool != .mosh else { return }
         listing = true
         let q = ShellIntegration.quote

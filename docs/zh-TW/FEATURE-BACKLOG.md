@@ -2,7 +2,7 @@
 
 [English](../en/FEATURE-BACKLOG.md) · [繁體中文](FEATURE-BACKLOG.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+[驗證紀錄](VERIFICATION.md)包含 2026 年 11 月 25 日的本機序列埠／終端檢查，以及 11 月 24 日的全 App 壓力測試基準。
 
 基準於 2026 年 11 月 20 日審閱。本待辦涵蓋 Xshell 8 和 MobaXterm 26.6 有文件記載的產品功能、設定和整合工作流程，包含 Professional Customizer 和 11 月 11 日的 Xshell 更新。Windows 專屬的工作流程在下方列出 macOS 的對應做法。每個核取方塊都是一項 Gloamux 開發項目，未完成的項目可能已包含 App 現有的部分功能。Gloamux 不打算做的選用項目已於 2026 年 11 月 22 日移除。
 
@@ -95,7 +95,7 @@
 - [ ] 在真實的 macOS 螢幕共享伺服器上檢查 VNC 登入、剪貼簿和 SSH 通道。
 - [x] **X11** · 從已啟用的 SSH shell 轉發到本機 XQuartz 顯示。以模擬顯示測試連線和授權。
 - [ ] **X11 顯示驗證** · 以 XQuartz 驗證 App 繪製、輸入、剪貼簿和鍵盤配置。
-- [x] **序列埠** · 選擇 macOS 序列和 USB 裝置，並設定鮑率、資料位元、停止位元、同位元和流量控制。
+- [x] **序列埠** · 選擇 macOS 序列和 USB 裝置，並設定鮑率、資料位元、停止位元、同位元和流量控制。1.3.2 (build 8) 起會在表單開啟時搜尋裝置，每秒更新，且只有一個 USB 轉接器時才自動帶入新表單的空白裝置欄。
 - [x] **Mosh 與 Telnet** · 透過已安裝的用戶端開啟已存或臨時的 Mosh 工作階段，並透過 Gloamux 的連線處理開啟 Telnet 工作階段。
 
 ## 工具與發布

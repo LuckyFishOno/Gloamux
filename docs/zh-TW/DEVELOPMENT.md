@@ -2,7 +2,7 @@
 
 [English](../en/DEVELOPMENT.md) · [繁體中文](DEVELOPMENT.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+[驗證紀錄](VERIFICATION.md)包含 2026 年 11 月 25 日的本機序列埠／終端檢查，以及 11 月 24 日的全 App 壓力測試基準。
 
 ## 目錄
 
@@ -151,6 +151,9 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 ## 終端
 
 ### 畫面與 Shell 整合
+
+- RIS（`ESC c`）與目前的 DECSTR（`CSI ! p`）實作會以當下的 `rows`、`cols` 重建兩個畫面緩衝區，不使用初始 `TerminalOptions` 尺寸。任何傳輸來源都可能在縮放後送出重設；緩衝區與公開尺寸必須一致，避免 `TerminalDisplay` 讀取越界。`TerminalResetTests` 涵蓋放大、縮小、替代畫面與反覆縮放／重設；`TerminalOutputViewTests` 驗證實際重繪流程。
+- `SerialDevice.connected()` 保留 `sessions serial-ports` 使用的 `/dev/cu.*` 清單，透過 IOKit 上層裝置辨識 USB 轉接器。`ContainerSessionEditor` 以隨畫面取消的 task 立即搜尋、每秒更新。只有新表單的空白裝置欄且僅一個 USB 轉接器時才自動帶入；已儲存和手動輸入的路徑會保留。搜尋過程不開啟連接埠。
 
 - `TerminalScreen`（在 `Sources/terminal`）把 OSC 133 標記記錄成帶絕對行號的 `CommandMark`（`trimmedLines` 加上回捲索引，讓標記在修剪後仍然有效），並發出 `TerminalEvent.commandFinished`。
 - OSC 8 連結放進連結表，每個 `CellStyle` 保留一個不會被 SGR 0 清除的連結索引。OSC 7 設定 `workingDirectory`。

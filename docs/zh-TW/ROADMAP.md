@@ -2,11 +2,13 @@
 
 [English](../en/ROADMAP.md) · [繁體中文](ROADMAP.md) · [回到 README](../../README.zh-TW.md)
 
-2026 年 11 月 24 日工作目錄的功能與壓力測試結果見[驗證紀錄](VERIFICATION.md)。
+[驗證紀錄](VERIFICATION.md)包含 2026 年 11 月 25 日的本機序列埠／終端檢查，以及 11 月 24 日的全 App 壓力測試基準。
 
 [功能待辦](FEATURE-BACKLOG.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
 
-目前版本為 **Gloamux 1.3.1 (build 7)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+目前版本為 **Gloamux 1.3.2 (build 8)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+
+1.3.2 (build 8) 收錄：序列埠表單開啟時搜尋裝置並持續更新；只有一個 USB 轉接器且新表單裝置欄空白時自動帶入，保留已儲存及手動輸入的路徑。終端重設會保留縮放後的格子尺寸，避免重繪越界。詳見[驗證紀錄](VERIFICATION.md)。
 
 ## 第一階段里程碑
 
