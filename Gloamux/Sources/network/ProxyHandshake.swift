@@ -157,7 +157,8 @@ final class ProxyHandshakeHandler: ChannelDuplexHandler, RemovableChannelHandler
     }
 
     func handlerRemoved(context: ChannelHandlerContext) {
-        if !open && !failed { fail(context, NetworkError.proxyFailed("The proxy connection was closed.")) }
+        // A name with several addresses adds this handler once for each; one that never connected does not count.
+        if sent && !open && !failed { fail(context, NetworkError.proxyFailed("The proxy connection was closed.")) }
     }
 
     private func fail(_ context: ChannelHandlerContext, _ error: Error) {

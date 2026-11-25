@@ -67,7 +67,7 @@ extension WorkspaceModel {
             return names.reversed().joined(separator: " / ")
         }
         func session(_ node: SessionTreeNode, section: String) -> PaletteCommand {
-            let address = node.connection.map { "\($0.username)@\($0.host)" + ($0.port == 22 ? "" : ":\($0.port)") }
+            let address = node.connection.map { "\($0.accountPrefix)\($0.host)" + ($0.port == 22 ? "" : ":\($0.port)") }
                 ?? node.container.map { $0.tool.title + " " + $0.summary } ?? ""
             let place = folder(of: node)
             let environment = sessionTree.effectiveEnvironment(node.id).map { " · " + T($0.title) } ?? ""
@@ -142,6 +142,8 @@ extension WorkspaceModel {
                 shortcut: "⌥⌘R") { [weak self] in self?.toggleRecording(tab) }
         }
         add("recordings", "Recordings…", "play.rectangle", "Terminal") { [weak self] in self?.showRecordings() }
+        add("history", "Connection history", "clock.arrow.circlepath", "Session") { [weak self] in self?.showConnectionHistory() }
+        add("sftp.command", "New session from sftp command", "arrow.up.arrow.down.circle", "Session") { [weak self] in self?.showSFTPCommand() }
         add("runbooks", "Runbooks…", "book.pages", "Terminal") { [weak self] in self?.showRunbooks() }
         for file in runbooks.files.prefix(30) {
             add("runbook." + file.lastPathComponent, file.deletingPathExtension().lastPathComponent, "book.pages", "Runbooks") { [weak self] in
@@ -196,7 +198,12 @@ struct CommandPalette: View {
 
     private var results: [PaletteCommand] {
         var matches = PaletteSearch.filter(commands, query: query)
-        if let direct = SavedConnection.quickTarget(query) {
+        // "sftp command" is a search; a pasted command has an account, an option, or a URL.
+        if SFTPCommand.looksLike(query), ["@", " -", "://"].contains(where: query.contains) {
+            let text = query
+            matches.insert(PaletteCommand(id: "sftp.pasted", title: T("New session from sftp command"), symbol: "arrow.up.arrow.down.circle",
+                                          section: T("Session")) { [weak model] in model?.showSFTPCommand(text) }, at: 0)
+        } else if let direct = SavedConnection.quickTarget(query) {
             let address = "\(direct.username)@\(direct.host)" + (direct.port == 22 ? "" : ":\(direct.port)")
             matches.insert(PaletteCommand(id: "direct", title: String(format: T("Connect directly to %@"), address),
                                           symbol: "arrow.up.right", section: T("Session")) { [weak model] in
@@ -231,14 +238,15 @@ struct CommandPalette: View {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 row(item, selected: index == selection)
-                                    .id(index)
                                     .onTapGesture { selection = index; run(items) }
                             }
                         }
                         .padding(6)
                     }
                     .frame(maxHeight: 380)
-                    .onChange(of: selection) { _, index in scroll.scrollTo(index) }
+                    .onChange(of: selection) { _, index in
+                        if items.indices.contains(index) { scroll.scrollTo(items[index].id) }
+                    }
                 }
             }
         }
@@ -361,7 +369,7 @@ public struct MenuBarPanel: View {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         return tree.nodes.filter { node in
             guard !node.isFolder else { return false }
-            let address = node.connection.map { "\($0.username)@\($0.host):\($0.port)" } ?? node.container?.summary ?? ""
+            let address = node.connection.map { "\($0.accountPrefix)\($0.host):\($0.port)" } ?? node.container?.summary ?? ""
             return words.allSatisfy { word in node.name.localizedStandardContains(word) || address.localizedStandardContains(word) }
         }
     }
@@ -387,7 +395,7 @@ public struct MenuBarPanel: View {
     }
 
     private func sessionRow(_ node: SessionTreeNode) -> some View {
-        let detail = node.connection.map { "\($0.username)@\($0.host)" } ?? node.container?.summary
+        let detail = node.connection.map { "\($0.accountPrefix)\($0.host)" } ?? node.container?.summary
         return rowButton(node.name, symbol: node.container?.tool.symbol ?? "server.rack", detail: detail,
                          environment: tree.effectiveEnvironment(node.id)) { open(node) }
     }

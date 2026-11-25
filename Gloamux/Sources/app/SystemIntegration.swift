@@ -35,7 +35,7 @@ import ShellIntents
             attributes.title = node.name
             var folders: [String] = [], parent = node.parent
             while let folder = parent.flatMap({ indexed[$0] }) { folders.append(folder.name); parent = folder.parent }
-            let address = node.connection.map { "\($0.username)@\($0.host)" + ($0.port == 22 ? "" : ":\($0.port)") }
+            let address = node.connection.map { "\($0.accountPrefix)\($0.host)" + ($0.port == 22 ? "" : ":\($0.port)") }
                 ?? node.container.map { $0.tool.title + " " + $0.summary } ?? ""
             let place = folders.reversed().joined(separator: " / ")
             attributes.contentDescription = place.isEmpty ? address : address + " · " + place
@@ -74,7 +74,7 @@ extension WorkspaceModel {
             guard let workspace = activeWorkspace() else { return [] }
             return workspace.sessionTree.nodes.filter { !$0.isFolder }.map { node in
                 IntentSession(id: node.id, name: node.name,
-                              detail: node.connection.map { "\($0.username)@\($0.host)" } ?? node.container?.summary ?? "")
+                              detail: node.connection.map { "\($0.accountPrefix)\($0.host)" } ?? node.container?.summary ?? "")
             }
         }
     }

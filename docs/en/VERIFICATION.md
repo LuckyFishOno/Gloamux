@@ -4,6 +4,17 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4 (build 9): SFTP gateways, connection history, and sign-in fixes (November 25, 2026)
+
+Checked on the working tree on top of `f04169a` (1.3.2 build 8) before the release commit. `release.sh build` reruns the Swift and Rust suites on the release commit; the release notes carry those counts.
+
+- **Full suite.** `swift test`: **514 cases, 506 passed, 8 skipped, 0 failed**. Only Traditional Chinese texts, documents, and the version number changed after it. The skips are three external SSH and five Xshell sample checks.
+- **Package.** `package-app.sh` succeeded, the deep strict signature check passed, and the self-test reported 9/9. No Rust source changed.
+- **App.** A renamed copy of the packaged app with an isolated workspace was driven against loopback demo servers: a pasted `sftp` command, its question, the saved folders, the copy, the history window, splits, themes, and a two-pane download. Driving it found four faults, all fixed: File Transfer ignored the saved remote folder, the sheet lacked the theme color, palette rows kept old contents after typing, and the one below.
+- **Addresses.** A name with an IPv6 and an IPv4 address failed to sign in when the IPv6 address refused the connection, because the refused attempt ended the sign-in. `testNameWithOneUnreachableAddress` covers it. The HTTP and SOCKS4 proxy handshake had the same fault and the same fix, without its own test.
+- **Real server.** The packaged CLI signed in to an Ubuntu 24.04 OpenSSH 9.6 server with a key from `ssh-agent`: `gloamux sftp` (`pwd`, `get`), `gloamux files ls`, and two history records.
+- **Limits.** That server has keyboard-interactive sign-in turned off, so PAM questions and a real session-key gateway are still unchecked. The README recordings use demo servers on this Mac; their terminals relay a real Linux server.
+
 ## Gloamux 1.3.2 (build 8): shared-text redaction, serial discovery, and terminal reset
 
 Gloamux 1.3.2 (build 8) ships the changes below on top of `8bbc564` (1.3.1 build 7). At the owner's request it was published before the suites were rerun on the release commit. The test counts below come from the working tree before the release commit, which then changed only version numbers and documentation.

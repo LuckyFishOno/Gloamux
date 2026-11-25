@@ -8,9 +8,11 @@ Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked ag
 
 The 1.3.2 (build 8) serial-discovery change was checked against this inventory. Discovery reads local device paths and IOKit USB ancestry; it neither opens a serial port nor makes a network request. Device paths are held in memory and enter `sessions.json` only when a connection is saved, under the catalog's existing protection. A USB device path can contain the adapter's identifier.
 
+The 1.4 (build 9) changes were checked against this inventory on November 25, 2026. They add `connection-history.jsonl` and session keys held in memory; both are listed below.
+
 ## Protection classes
 
-These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.3.2 (build 8).
+These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.4 (build 9).
 
 | Class | Meaning | Required protection |
 |---|---|---|
@@ -40,6 +42,8 @@ Gloamux stores working files in `~/Library/Application Support/Gloamux`. The dir
 | Quick commands | `quick-commands.json` | S2 | Plaintext JSON, `0600`. | Users often paste tokens, passwords, or internal URLs into commands. |
 | Terminal scrollback | Memory, 5,000 lines per terminal by default (1,000 to 50,000) | S2 | Not persisted unless a session log or recording is on. | Output can contain secrets. Find, the CLI's `tabs read`, session logs, recordings, and excerpts the user shares with agents read from it. |
 | Session logs and recordings | Plaintext log and asciicast files, `0600`, in `0700` folders | S2 | Written only when the user turns logging or recording on. Likely secrets (private key blocks, access tokens, `password=` values) are masked before anything is written. A recording is masked and written in the background after it stops; one that cannot be written stays in memory until **Try again** saves it or the app quits, and quitting asks before dropping it. | Masking is pattern-based and misses secrets it does not recognize. The files are not encrypted and are copied into backups. |
+| Connection history | `connection-history.jsonl` | S2 | Plaintext JSON lines, `0600`, appended under a file lock. Holds times, hosts, user names, results, and copied file paths; no passwords, session keys, answers, or terminal output. A session key is cut to its first four characters. 2,000 records and one year at most. `history.enabled` turns it off. Not part of the settings backup. | Hosts and file paths are readable by any process running as the user. No tamper detection. |
+| SFTP gateway session keys | `SessionTreeStore.sessionKeys` in memory | S1 | Never written to disk. Dropped when Gloamux quits, the vault locks, or the server refuses the key. | Not cleared on idle or sleep. Swift strings cannot be reliably zeroed. |
 | Agent access and activity | `agent-access.json`, `agent-activity.json` | I and S2 | Plaintext JSON, `0600`. Access is off until the user turns it on and allows sessions in Gloamux. | No tamper detection. A process running as the user can allow sessions or remove history entries. |
 | Clipboard | System pasteboard | S2 | Gloamux reads it on paste. OSC 52 writes from remote programs are refused unless `terminal.allow-clipboard-writes` is on (off by default). | With clipboard writes on, a remote program can place secrets on the shared pasteboard and Universal Clipboard. Copy-on-select is still planned. |
 | SFTP downloads | User-chosen folder plus `.gloamux-<UUID>.partial` | S2 | The partial file is removed on failure. | Partial files use default permissions. Downloaded files are the user's responsibility, but the partial file should be `0600`. |

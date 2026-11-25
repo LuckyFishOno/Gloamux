@@ -4,7 +4,7 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.3.2 (build 8)**.
+Current release: **Gloamux 1.4 (build 9)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
@@ -55,6 +55,24 @@ Gloamux is for people who look after servers from a Mac and would rather not jug
 ## See it
 
 <p align="center">
+  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="Typing in one terminal, splitting a second server beside it, changing the theme, and downloading files in the two-pane view" />
+</p>
+
+Split servers side by side, change the theme, and switch to the two-pane view to copy files with a resumable queue.
+
+<p align="center">
+  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="Pasting an sftp command once, saving it as a session, answering the server's question, and the file being downloaded" />
+</p>
+
+For a gateway that only allows `sftp` with a session key, paste the command once. Gloamux saves it as a session, copies its files, and later asks only for a new key, which it never stores.
+
+<p align="center">
+  <img src="docs/assets/gloamux-history.png" width="1000" alt="Connection history listing three connections, with the selected one's sign-in and downloaded file, and a Download log button" />
+</p>
+
+Every connection leaves a record: when, where, how it ended, and which files were copied. Read it or download it as a log.
+
+<p align="center">
   <img src="docs/assets/gloamux-new-connection.png" width="1320" alt="The New connection tab with the RDP section open, showing resolution, Retina, connection quality, and clipboard options" />
 </p>
 
@@ -63,10 +81,11 @@ New connection lists Local, SSH, RDP, VNC, and Other connection. A remote deskto
 ## Features
 
 - **Terminal** · Tabs, drag-to-split panes, local shell, shell integration (prompt marks, command status, notifications), find, logs, recordings with secrets masked, and 73 themes.
-- **SSH** · Passwords, Ed25519, ECDSA, and RSA keys, `ssh-agent`, Secure Enclave keys, keyboard-interactive sign-in, up to eight jump hosts listed in order with a route that shows each hop, SOCKS and HTTP proxies, port forwarding, agent forwarding, and X11 through XQuartz.
-- **Files** · A file sidebar that follows the focused pane, a two-pane transfer view with a resumable queue, Quick Look, and editing remote files in Mac apps, over SFTP, SCP, FTP, and FTPS.
+- **SSH** · Passwords, Ed25519, ECDSA, and RSA keys, `ssh-agent`, Secure Enclave keys, keyboard-interactive (PAM) sign-in, gateways that take a session key in place of the user name, up to eight jump hosts listed in order with a route that shows each hop, SOCKS and HTTP proxies, port forwarding, agent forwarding, and X11 through XQuartz.
+- **Files** · A file sidebar that follows the focused pane, a two-pane transfer view with a resumable queue, Quick Look, and editing remote files in Mac apps, over SFTP, SCP, FTP, and FTPS. Paste an `sftp` command once to keep it as a session.
 - **Remote desktop** · RDP with Network Level Authentication and VNC, including macOS Screen Sharing, in a Gloamux tab, with an optional SSH tunnel and a shared clipboard.
 - **Other connections** · Serial ports, Telnet, Mosh, Docker containers, Kubernetes pods, and AWS Systems Manager sessions.
+- **History** · A record of every connection with its files, to view, search, or download.
 - **Safety** · Production, Staging, Test, and Development tags, confirmation of risky commands, host key review and history, and a workspace lock.
 - **Bring your sessions** · Import from Xshell, MobaXterm, PuTTY or KiTTY, OpenSSH, and CSV, and export without passwords. Find hosts with Bonjour, Tailscale, and AWS.
 - **Automation** · Quick commands, output triggers, Markdown runbooks, the command palette, Spotlight, Shortcuts, and `gloamux://` links.
@@ -131,6 +150,9 @@ gloamux sessions options "Work server" jump=Bastion x11=on
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite
+gloamux sessions from-sftp "Report gateway" 'sftp -P 4997 KEY@gateway.example.com'
+gloamux sftp "Report gateway"
+gloamux history list
 gloamux tabs list
 gloamux tabs run TAB_ID "uptime"
 gloamux tabs read TAB_ID 50
@@ -141,6 +163,8 @@ gloamux config export ~/Gloamux.gloamuxconfig
 ```
 
 `gloamux files` speaks SFTP, SCP, FTP, and explicit and implicit FTPS with the saved session's sign-in, proxy, jump hosts, and host trust. Pass `--password-stdin` for a one-time password, `--vault-password-stdin` to unlock the vault for one command, and `--host-key` with a fingerprint you verified for a server seen for the first time. Supplied credentials are never saved.
+
+`gloamux sftp` signs in once and then takes `sftp` commands, from a saved session, the usual `sftp` options, or a whole pasted command with `--command`. `gloamux history` lists, exports, and removes connection records.
 
 `gloamux tabs` and `gloamux commands send|run` act on the running app; tab IDs from `gloamux tabs list` work in every window. Management commands return JSON, and file commands accept `--json`. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux --help`, or `gloamux <command> --help` for each command.
 
@@ -184,7 +208,7 @@ swift test --package-path Gloamux
 cd Gloamux/RDP && cargo test --release
 ```
 
-The Swift suite has about 400 tests, including loopback SSH, SFTP, FTP, and forwarding servers. A few checks against configured remote hosts and sample Xshell files are skipped when those are not present.
+The Swift suite has about 500 tests, including loopback SSH, SFTP, FTP, and forwarding servers. A few checks against configured remote hosts and sample Xshell files are skipped when those are not present.
 
 ## Local data and privacy
 

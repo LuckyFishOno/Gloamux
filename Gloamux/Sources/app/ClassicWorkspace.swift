@@ -11,6 +11,7 @@ extension WorkspaceModel {
     /// A full target connects at once; a bare host opens a tab with the connection form filled in.
     @discardableResult func openAddress(_ input: String) -> SessionTab? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if SFTPCommand.looksLike(text) { showSFTPCommand(text); return selected }
         if text.lowercased().hasPrefix("ssh://") { text = String(text.dropFirst(6)) }
         while text.hasSuffix("/") { text.removeLast() }
         guard !text.isEmpty else { return nil }

@@ -75,6 +75,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 | `quick-commands.json` | 常用指令，以純文字儲存。請不要把機密放進已存指令。 |
 | `layout.json`、`appearance.json`、`settings.json` | 工作區版面、主題和工作區設定。 |
 | `triggers.json` | 輸出觸發規則。 |
+| `connection-history.jsonl` | 每次連線的事件，一行一個（見 `ConnectionHistory`）。 |
 | `open-tabs.json`、`recent-sessions.json` | 啟動時要重新打開的分頁，以及最近開啟的連線。 |
 | `agent-access.json`、`agent-activity.json` | AI 代理存取、允許的連線和活動紀錄。 |
 | `ssh-key-secure-enclave` | Gloamux 的 Secure Enclave SSH 金鑰（見 `AppSSHKey`）。 |
@@ -203,6 +204,8 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 檔案傳輸都經過 `TransferQueue`，由 `WorkspaceModel.transfers` 在檔案側欄（`RemoteFileSidebar`，本機終端時顯示 `LocalTreeState`）、雙欄的 `FileTransferView` 和所有版面之間共用。預設版面在 `workspaceMode` 為 `.files` 時於主視窗顯示 `FileTransferView`，並跟著選取的分頁；經典和工作台則在附伺服器選單的 `FileTransferWindow` 中顯示。
 - 佇列在分頁的 SFTP 通道上一次執行一個項目。上傳會先寫入暫存的 `.name.gloamux-….partial` 檔，再用 `RemoteFileSystem.commitUpload` 放到定位；已有檔案時使用 `replace`，不會先刪除舊檔。下載會在目的地旁寫入隱藏的暫存檔。CLI 上傳和 **在這台 Mac 編輯** 也會先放在遠端的暫存名稱，再用同樣方式提交。
 - `SFTPTransfer` 同時保持 16 個 32 KiB 的讀取或寫入，並在工作取消時停止。
+- `SFTPCommand` 解析貼上的 `sftp` 指令，並拒絕會改變連線路徑或執行程式的選項。`SavedConnection.signIn` 是 `questions` 或 `session-key`；session key 只存在 `SessionTreeStore.sessionKeys`。
+- `AuthWatcher` 只跟隨真正連上的 channel。一個名稱有多個位址時，每個位址各有一個 channel，被拒絕的位址不能讓登入失敗。
 - 遠端快速查看會把一個最多 100 MB 的檔案複製到私有暫存資料夾，並在下一次預覽和結束時刪除。
 - 已存的轉發規則與連線一起存在 `sessions.json`。本機和動態轉發在這台 Mac 的回送介面上監聽；反向轉發會請伺服器在它的回送介面上監聽。監聽連接埠留空會自動分配。
 

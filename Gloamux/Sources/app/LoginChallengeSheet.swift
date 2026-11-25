@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Ssh
 
@@ -18,9 +19,13 @@ struct LoginChallengeSheet: View {
     var body: some View {
         let challenge = prompt.challenge
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 6) {
+            if prompt.asksSessionKey { HStack(spacing: 6) {
+                Label(T("Session key"), systemImage: "key.horizontal").appFont(.title2.bold())
+                InfoButton(T("Paste the key, or the whole sftp command it came in. Gloamux keeps it until you quit and never saves it."))
+            } } else { HStack(spacing: 6) {
                 Label(T("Sign-in questions"), systemImage: "person.badge.key").appFont(.title2.bold())
                 InfoButton(T("The server asks these questions, for example for a password or a verification code. Gloamux sends the answers only to this server and does not save them."))
+            }
             }
             Text(prompt.endpoint).appFont(.headline)
             if !challenge.name.isEmpty {
@@ -37,14 +42,16 @@ struct LoginChallengeSheet: View {
             }
             ForEach(Array(challenge.prompts.enumerated()), id: \.offset) { index, question in
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(verbatim: Self.label(question.text)).appFont(.caption).foregroundStyle(.secondary)
+                    if !prompt.asksSessionKey {
+                        Text(verbatim: Self.label(question.text)).appFont(.caption).foregroundStyle(.secondary)
+                    }
                     Group {
                         if question.hidden { SecureField("", text: $answers[index]) }
                         else { TextField("", text: $answers[index]) }
                     }
                     .textFieldStyle(.roundedBorder)
                     .focused($focused, equals: index)
-                    .accessibilityLabel(Text(verbatim: Self.label(question.text)))
+                    .accessibilityLabel(Text(verbatim: prompt.asksSessionKey ? T("Session key") : Self.label(question.text)))
                     .accessibilityIdentifier("loginAnswer\(index)")
                     .onSubmit { advance(from: index) }
                 }
@@ -52,6 +59,12 @@ struct LoginChallengeSheet: View {
             HStack {
                 Button(T("Cancel")) { answer(nil) }.keyboardShortcut(.cancelAction)
                 Spacer()
+                if prompt.asksSessionKey {
+                    Button(T("Paste"), systemImage: "doc.on.clipboard") {
+                        if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty { answers = [text] }
+                    }
+                    .help(T("Paste from the clipboard"))
+                }
                 Button(T("Connect")) { answer(answers) }
                     .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("answerLoginButton")

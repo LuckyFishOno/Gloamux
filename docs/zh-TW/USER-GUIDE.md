@@ -130,6 +130,18 @@
 
 - 密碼、Ed25519、ECDSA 或 RSA 金鑰、`ssh-agent` 的金鑰，或這台 Mac Secure Enclave 裡的 Gloamux 金鑰。
 - 伺服器自己提出的問題（keyboard-interactive），例如輸入密碼後的驗證碼，會顯示在對話框中。連線的密碼會回答第一個密碼問題。答案絕不會被儲存。
+- 已存連線設定裡的 **登入方式** 可選 **密碼或金鑰**、**每次回答伺服器的問題**（不存密碼，所有問題都會顯示）或 **每次輸入 session key**。
+
+### SFTP 閘道與 session key
+
+有些存取閘道只允許 `sftp`，並且每次給一組新的 session key 代替使用者名稱。
+
+- 在連線樹的 **+** 選單或指令面板選 **從 sftp 指令新增工作階段**，或直接把指令貼進面板。指令可以跨行，也可以包含 `lcd`、`cd`、`get` 和 `put`。
+- Gloamux 會讀出主機、連接埠、登入方式和資料夾，用不到的選項列在 **未包含**。會改變連線路徑或執行程式的選項（例如 `-J`、`ProxyCommand`）會被拒絕。
+- **儲存並連線** 會存成連線，並傳輸指令裡的檔案。**取代既有檔案** 預設關閉。
+- 之後開啟這個連線，只要輸入新的 key。可以貼 key 本身、`key@host`，或整段新指令；如果指令的主機或連接埠不同，會被拒絕。
+- key 只留在記憶體，直到 Gloamux 結束、密碼庫鎖定或伺服器拒絕為止，絕不會被儲存。這類連線不會自動重連，也不能當跳板。
+- 連線設定裡的 **遠端資料夾** 和 **這台 Mac 的資料夾** 決定檔案傳輸一開始打開哪裡。
 
 ### 主機金鑰
 
@@ -213,6 +225,12 @@
 ### 搜尋
 
 ⌘F 以純文字或正規表示式搜尋終端和回捲內容，並標出所有符合的地方；⌘G 和 ⇧⌘G 逐一切換。
+
+### 連線歷史
+
+- **終端 › 連線歷史** 列出每一次連線：時間、位置、結果，以及傳輸了哪些檔案。選一筆看細節、搜尋清單，或按 **下載紀錄** 把那一筆存成文字檔；有終端紀錄時會一併附上。
+- 選單可以把清單匯出成 CSV 或 JSON、清除或關閉。在一筆上按右鍵可刪除。
+- 不包含密碼、session key、回答和終端內容。session key 只顯示前四個字元。紀錄保留一年，最多 2,000 筆。
 
 ### 連線紀錄
 
@@ -355,7 +373,7 @@ SSH 連線使用 SFTP、舊版 SCP，或在伺服器沒有 SFTP 子系統時改�
 
 ### 指令面板
 
-⇧⌘P 可以找已存連線、已開啟的分頁，或任何工作區動作，例如分割、版面、主題、錄影和 runbook。輸入 `user@host` 可直接連線。
+⇧⌘P 可以找已存連線、已開啟的分頁，或任何工作區動作，例如分割、版面、主題、錄影和 runbook。輸入 `user@host` 可直接連線，貼上 `sftp` 指令可存成連線。
 
 ## 11. 安全
 
@@ -476,6 +494,7 @@ AI 代理可以：
 | | **開始錄影** / **停止錄影** | ⌥⌘R |
 | | **錄影** | |
 | | **開始連線紀錄** / **停止連線紀錄** | ⌥⌘L |
+| | **連線歷史** | |
 | | **顯示連線紀錄** | |
 | | **儲存輸出** | ⇧⌘S |
 | | **在文字編輯器打開輸出** | |
@@ -556,6 +575,7 @@ AI 代理可以：
 | **記錄每個連線**（`terminal.log-every-session`） | 從每個終端開啟到關閉都記錄下來。 |
 | **紀錄格式**（`terminal.log-format`） | **純文字**，或保留顏色的 **含控制序列**。 |
 | **連線紀錄** · **在 Finder 中顯示** | 打開紀錄資料夾。 |
+| **保留連線歷史**（`history.enabled`） | 每次連線存一筆。預設開啟。 |
 
 ### 文字
 
@@ -612,7 +632,9 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 |---|---|
 | `gloamux ssh SESSION` | 在目前的終端開啟已存 SSH 連線的 shell，並以遠端 shell 的結束狀態結束。選項：`--password-stdin`、`--vault-password-stdin`、`--host-key FINGERPRINT`、`--interactive`。 |
 | `gloamux files OP --session S` | `ls`、`pwd`、`stat`、`get`、`put`、`mkdir`、`mv`、`rm`、`rmdir`、`chmod`。選項：`--protocol sftp\|scp\|ftp\|ftps`、`--recursive`、`--overwrite`、`--resume`、`--allow-plain-ftp`、`--json`，以及 `ssh` 的登入選項。Ctrl-C 會刪除未完成的檔案。 |
-| `gloamux sessions` | `list`、`show`、`mkdir`、`add`、`edit`、`options`、`add-other`、`edit-other`、`serial-ports`、`rename`、`move`、`remove`、`env`、`auth`、`cert`、`import`、`export`。 |
+| `gloamux sftp SESSION` | 登入一次，從終端或標準輸入讀取 `sftp` 指令（`ls`、`cd`、`get`、`put`、`mkdir`、`rename`、`rm`、`chmod` 等）。也接受帶主機的 `sftp` 選項，或用 `--command FILE\|-` 讀入整段貼上的指令。選項：`--password-stdin`（密碼或 session key）、`--vault-password-stdin`、`--host-key FINGERPRINT`、`--overwrite`。 |
+| `gloamux history` | `list`、`show`、`log ID PATH`、`export PATH.csv\|PATH.json`、`remove`、`clear`。 |
+| `gloamux sessions` | `list`、`show`、`mkdir`、`add`、`edit`、`options`、`add-other`、`edit-other`、`serial-ports`、`rename`、`move`、`remove`、`env`、`auth`、`cert`、`from-sftp`、`import`、`export`。 |
 | `gloamux hosts` | `list`、`history`、`clear-history`、`trust`、`replace`、`remove`、`export`（輸出成 `known_hosts`）、`discover bonjour\|tailscale\|aws`。 |
 | `gloamux tabs` | `list`、`show`、`open`、`open-window`、`connect`、`local`、`select`、`rename`、`duplicate`、`close`、`disconnect`、`reconnect`、`split`、`unsplit`、`broadcast`、`multiexec`、`window`、`attach`、`read`、`send`、`run`、`readonly`、`log`、`record`、`encoding`、`integration`、`view`、`colors`、`highlights`。需要 App 正在執行。 |
 | `gloamux forwards` | `list`、`add`、`remove`（已存規則）；`live-list`、`start`、`stop`（執行中的轉發）。類型：`local`、`remote`、`dynamic`。 |

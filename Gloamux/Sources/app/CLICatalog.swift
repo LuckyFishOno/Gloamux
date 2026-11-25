@@ -6,7 +6,7 @@ public struct CLICommand: Sendable {
     public enum Runner: Sendable {
         /// Operations on a workspace, run by the running app or, without it, here (`WorkspaceCommand.run`).
         case workspace
-        case ssh, files, mcp, xserver, completion, benchmark
+        case ssh, sftp, files, mcp, xserver, completion, benchmark
     }
 
     public let name: String
@@ -72,10 +72,13 @@ public enum CLICatalog {
               --json                       Print a JSON result
               --                           Treat remaining arguments as paths
             """),
+        CLICommand("sftp",
+                   summary: "Copy files over one SFTP connection, like sftp",
+                   runner: .sftp),
         CLICommand("sessions",
                    summary: "List and manage saved sessions and folders",
                    runner: .workspace,
-                   operations: ["list", "show", "mkdir", "add", "add-other", "edit", "options", "edit-other", "serial-ports", "rename", "move", "remove", "env", "auth", "cert", "import", "export"],
+                   operations: ["list", "show", "mkdir", "add", "add-other", "edit", "options", "edit-other", "serial-ports", "rename", "move", "remove", "env", "auth", "cert", "from-sftp", "import", "export"],
                    localPaths: ["import": [1], "export": [1]],
                    help: """
             list | show ITEM
@@ -87,8 +90,9 @@ public enum CLICatalog {
             serial-ports
             rename ITEM NAME | move ITEM FOLDER | remove ITEM
             env ITEM production|staging|test|development|-
-            auth ITEM password|agent|key [ABSOLUTE_KEY_PATH]
+            auth ITEM password|agent|key|questions|session-key [ABSOLUTE_KEY_PATH]
             cert ITEM VERIFIED_FTPS_SHA256
+            from-sftp NAME 'SFTP COMMAND' [FOLDER]
             import FORMAT PATH [IMPORT_NAME [FOLDER]]
             export FORMAT PATH [ITEM]
 
@@ -108,11 +112,13 @@ public enum CLICatalog {
             SSH connections take these with options (- resets a setting):
               jump=ITEM[,ITEM...] proxy=socks5|socks4|http proxy-host=HOST proxy-port=1080
               startup='COMMAND\\nCOMMAND' forward-agent=on|off x11=on|off open-files=on|off
-              files=auto|sftp|scp encoding=utf8 confirm=on|off
+              files=auto|sftp|scp encoding=utf8 confirm=on|off remote-folder=PATH local-folder=PATH
             FTP connections take confirm=on|off. Changing confirm asks for Touch ID or the Mac password in Gloamux.
             Remote desktops saved with add take these with edit-other:
               rdp       gateway=SSH_ITEM resolution=fit|1920x1080 retina=on|off quality=lan|broadband|low clipboard=on|off
               vnc       gateway=SSH_ITEM clipboard=on|off
+            auth takes password, agent, key PATH, questions (answer the server each time), or session-key (enter a key in
+            place of the user name each time). from-sftp saves the session an sftp command describes; a key in it is not saved.
             serial-ports lists the serial devices connected to this Mac. edit-other also takes target=TARGET.
             Open a saved session with gloamux tabs open ITEM.
             """),
@@ -211,6 +217,17 @@ public enum CLICatalog {
             list | export FILE ABSOLUTE_CAST_PATH | remove FILE
             Recordings are asciinema .cast files with secrets masked. Start and stop one with gloamux tabs record.
             remove moves the file to the Trash.
+            """),
+        CLICommand("history",
+                   summary: "List or export the connection history",
+                   runner: .workspace,
+                   operations: ["list", "show", "log", "export", "remove", "clear"],
+                   localPaths: ["log": [1], "export": [0]],
+                   help: """
+            list [COUNT] | show ID | log ID PATH | export PATH.csv|PATH.json | remove ID | clear
+
+            Each connection is one record: when, where, how it ended, and which files were copied. log writes one record as
+            text, with its terminal log when there is one. Turn history off with gloamux settings set history.enabled off.
             """),
         CLICommand("appearance",
                    summary: "Manage the workspace theme",

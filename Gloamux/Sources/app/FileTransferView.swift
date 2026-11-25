@@ -213,7 +213,7 @@ struct RemoteItem: Identifiable, Hashable {
             let transfer = try await model.sftp(for: tab)
             // A reply from a connection that has since ended or been replaced is dropped, even after it arrives.
             let epoch = tab.epoch
-            let directory = try await transfer.readDirectory(path ?? folder ?? ".")
+            let directory = try await transfer.readDirectory(path ?? folder ?? tab.remoteFolder ?? ".")
             guard generation == mine, tab.epoch == epoch else { return }
             items = directory.entries.map {
                 RemoteItem(path: RemoteTreeState.child(directory.path, $0.name), name: $0.name, isDirectory: $0.isDirectory,
@@ -267,11 +267,12 @@ struct FileTransferView: View {
         }
         .background(model.theme.background.color)
         .onAppear {
-            if local.items.isEmpty { local.load() }
+            if !openSessionFolder(), local.items.isEmpty { local.load() }
             if !target.followsSelection, target.tabID == nil {
                 target.tabID = (model.selected.flatMap { $0.connected && !$0.isLocal ? $0 : nil } ?? model.remoteTabs.first)?.id
             }
         }
+        .onChange(of: currentTab?.id) { _, _ in openSessionFolder() }
         .onChange(of: queue.revision) { _, _ in
             local.load()
             if let tab = currentTab { Task { await tab.remoteBrowser.load(nil, model: model, tab: tab) } }
@@ -289,16 +290,25 @@ struct FileTransferView: View {
         return tab.flatMap { $0.connected && !$0.isLocal ? $0 : nil }
     }
 
+    /// Shows the folder on this Mac that the session was saved with. Returns false when it has none.
+    @discardableResult private func openSessionFolder() -> Bool {
+        guard let path = currentTab?.localFolder else { return false }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return false }
+        local.load(URL(fileURLWithPath: path, isDirectory: true))
+        return true
+    }
+
     /// The transfer window's top row. That window has no tab bar, so the server is chosen here.
     private var titleBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.arrow.right").foregroundStyle(model.theme.accent.color)
             Text(T("File Transfer")).appFont(.system(size: 13, weight: .semibold))
             AppPicker(T("Server"), selection: Binding(get: { target.tabID }, set: { target.tabID = $0 }),
-                      current: currentTab.map { "\($0.username)@\($0.host)" } ?? T("No connected server")) {
+                      current: currentTab.map(\.account) ?? T("No connected server")) {
                 if currentTab == nil { Text(T("No connected server")).tag(UUID?.none) }
                 ForEach(model.remoteTabs, id: \.id) { tab in
-                    Text("\(tab.username)@\(tab.host)" + (tab.title != tab.host && tab.title != "New connection" ? "  ·  \(tab.title)" : ""))
+                    Text(tab.account + (tab.title != tab.host && tab.title != "New connection" ? "  ·  \(tab.title)" : ""))
                         .tag(Optional(tab.id))
                 }
             }
@@ -570,7 +580,7 @@ private struct RemoteFilePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                PaneTitle(symbol: "server.rack", title: "\(tab.username)@\(tab.host)")
+                PaneTitle(symbol: "server.rack", title: tab.account)
                 Spacer()
                 Toggle(T("Hidden files"), isOn: $remote.showsHidden).toggleStyle(.checkbox).controlSize(.small)
             }
@@ -651,7 +661,7 @@ private struct RemoteFilePane: View {
         .padding(10)
         .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         .task(id: tab.connected) {
-            if tab.connected, remote.folder == nil { await remote.load(".", model: model, tab: tab) }
+            if tab.connected, remote.folder == nil { await remote.load(nil, model: model, tab: tab) }
         }
         .onChange(of: remote.folder) { _, folder in pathDraft = folder ?? ""; selection = [] }
         .onAppear { pathDraft = remote.folder ?? "" }

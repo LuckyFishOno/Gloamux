@@ -71,6 +71,7 @@ enum ProductCLI {
                 guard rest.isEmpty else { throw CLIUsageError("Usage: gloamux --version") }
                 print(version)
             case "files": try await FilesCommand.run(rest)
+            case "sftp": return try await SFTPShell.run(rest)
             case "ssh": return try await SSHCommand.run(rest)
             case "mcp": try await MCPServer.run(rest)
             case _ where ManagementCommands.handles(command): try await ManagementCommands.run(command, rest)

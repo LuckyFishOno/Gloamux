@@ -28,7 +28,8 @@ enum FilesCommand {
         let hostKeys = try verifiedHostKeys(args)
 
         // Read the catalog, saved sign-ins, and known hosts as local snapshots. The file-command
-        // connection never saves credentials, accepts keys into the catalog, or updates recents.
+        // connection never saves credentials, accepts keys into the catalog, or updates recents. Only the connection
+        // history is written, by appending.
         // Keep the app's writer lock independent of transfers, which may take a long time.
         let model = try WorkspaceModel(storage: args.workspace)
         let item = try WorkspaceCommand.item(selector, in: model.sessionTree)
@@ -52,16 +53,24 @@ enum FilesCommand {
                 guard let entry = try await fs.entry(at: paths[0]) else { throw WorkspaceError.invalid("Remote item does not exist.") }
                 result["entry"] = entryJSON(entry)
             case "get" where recursive:
-                result["files"] = try await getFolder(fs, paths[0], URL(fileURLWithPath: paths[1]), overwrite: overwrite, resume: resume)
+                result["files"] = try await noting(model, download: true, paths[0]) {
+                    try await getFolder(fs, paths[0], URL(fileURLWithPath: paths[1]), overwrite: overwrite, resume: resume)
+                }
             case "put" where recursive:
-                result["files"] = try await putFolder(fs, URL(fileURLWithPath: paths[0]), paths[1], overwrite: overwrite, resume: resume)
+                result["files"] = try await noting(model, download: false, paths[1]) {
+                    try await putFolder(fs, URL(fileURLWithPath: paths[0]), paths[1], overwrite: overwrite, resume: resume)
+                }
             case "rm" where recursive:
                 guard let entry = try await fs.entry(at: paths[0]) else { throw WorkspaceError.invalid("Remote item does not exist.") }
                 try await RemoteDelete.remove(paths[0], isDirectory: entry.isDirectory, with: fs)
             case "get":
-                try await get(fs, paths[0], URL(fileURLWithPath: paths[1]), overwrite: overwrite, resume: resume)
+                try await noting(model, download: true, paths[0]) {
+                    try await get(fs, paths[0], URL(fileURLWithPath: paths[1]), overwrite: overwrite, resume: resume)
+                }
             case "put":
-                try await put(fs, URL(fileURLWithPath: paths[0]), paths[1], overwrite: overwrite, resume: resume)
+                try await noting(model, download: false, paths[1]) {
+                    try await put(fs, URL(fileURLWithPath: paths[0]), paths[1], overwrite: overwrite, resume: resume)
+                }
             case "mkdir": try await fs.makeDirectory(paths[0])
             case "mv": try await fs.rename(from: paths[0], to: paths[1])
             case "rm": try await fs.removeFile(paths[0])
@@ -76,6 +85,19 @@ enum FilesCommand {
             for entry in entries { print(ProductCLI.safe(entry["name"] as? String ?? "")) }
         } else if let path = result["path"] as? String { print(ProductCLI.safe(path)) }
         else if let entry = result["entry"] { try ProductCLI.json(entry) }
+    }
+
+    /// Runs one copy and writes how it went to the connection history.
+    @MainActor private static func noting<Result>(_ model: WorkspaceModel, download: Bool, _ path: String,
+                                                  _ copy: () async throws -> Result) async throws -> Result {
+        do {
+            let result = try await copy()
+            model.noteCommandCopy(download: download, path: path)
+            return result
+        } catch {
+            model.noteCommandCopy(download: download, path: path, error: error.localizedDescription)
+            throw error
+        }
     }
 
     static func verifiedHostKeys(_ args: CLIArguments) throws -> Set<String> {
@@ -105,7 +127,7 @@ enum FilesCommand {
         }
     }
 
-    private static func entryJSON(_ entry: RemoteEntry) -> [String: Any] {
+    static func entryJSON(_ entry: RemoteEntry) -> [String: Any] {
         var object: [String: Any] = ["name": entry.name, "directory": entry.isDirectory]
         if let size = entry.size { object["size"] = size }
         if let permissions = entry.permissions { object["permissions"] = String(permissions & 0o7777, radix: 8) }
@@ -123,7 +145,7 @@ enum FilesCommand {
         return size.uint64Value
     }
 
-    private static func get(_ fs: any RemoteFileSystem, _ remote: String, _ local: URL, overwrite: Bool, resume: Bool) async throws {
+    static func get(_ fs: any RemoteFileSystem, _ remote: String, _ local: URL, overwrite: Bool, resume: Bool) async throws {
         let existing = try localSize(local)
         if resume, let offset = existing, offset > 0 {
             guard await fs.canResume(), let size = try await fs.entry(at: remote)?.size, offset <= size else {
@@ -150,7 +172,7 @@ enum FilesCommand {
 
     /// Downloads a remote folder to `local`, which becomes that folder. Each file goes through `get`, so
     /// `--overwrite` and `--resume` apply file by file. Returns the number of files.
-    private static func getFolder(_ fs: any RemoteFileSystem, _ remote: String, _ local: URL, overwrite: Bool, resume: Bool) async throws -> Int {
+    static func getFolder(_ fs: any RemoteFileSystem, _ remote: String, _ local: URL, overwrite: Bool, resume: Bool) async throws -> Int {
         guard try await fs.entry(at: remote)?.isDirectory == true else { throw WorkspaceError.invalid("Remote folder does not exist.") }
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: local.path, isDirectory: &isDirectory) {
@@ -173,7 +195,7 @@ enum FilesCommand {
     }
 
     /// Uploads a folder on this Mac to `remote`, which becomes that folder. Returns the number of files.
-    private static func putFolder(_ fs: any RemoteFileSystem, _ local: URL, _ remote: String, overwrite: Bool, resume: Bool) async throws -> Int {
+    static func putFolder(_ fs: any RemoteFileSystem, _ local: URL, _ remote: String, overwrite: Bool, resume: Bool) async throws -> Int {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: local.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw WorkspaceError.invalid("Local source folder does not exist.")
@@ -219,7 +241,7 @@ enum FilesCommand {
         return items
     }
 
-    private static func put(_ fs: any RemoteFileSystem, _ local: URL, _ remote: String, overwrite: Bool, resume: Bool) async throws {
+    static func put(_ fs: any RemoteFileSystem, _ local: URL, _ remote: String, overwrite: Bool, resume: Bool) async throws {
         guard let size = try localSize(local) else { throw WorkspaceError.invalid("Local source file does not exist.") }
         guard !remote.hasSuffix("/"), !["", ".", ".."].contains((remote as NSString).lastPathComponent) else {
             throw CLIUsageError("Specify the destination file path.")

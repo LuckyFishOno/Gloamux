@@ -29,6 +29,7 @@ public enum WorkspaceCommand {
             result = ["list", "history", "trust", "replace"].contains(action) ? try hosts(action, args, model)
                 : try await hostTools(action, args, model)
         case "recordings": result = try recordings(action, args, model)
+        case "history": result = try history(action, args, model)
         case "commands":
             if ["send", "run"].contains(action) {
                 try requireLive(live, model)
@@ -163,6 +164,15 @@ public enum WorkspaceCommand {
             profile.fileProtocol = FileProtocolChoice(rawValue: scheme)
             profile.ftpSecurity = security
             return ["id": try tree.add(name: name, parent: parent, connection: profile).uuidString]
+        case "from-sftp":
+            try count(args, 2...3)
+            let command = try SFTPCommand.parse(args[1])
+            let asksKey = command.connection.identityPath == nil
+                && (command.connection.username.isEmpty || SessionKey.looksLikeKey(command.connection.username))
+            let id = try model.saveSFTPSession(command, name: args[0], parent: args.count > 2 ? folder(args[2]) : nil, asksKey: asksKey,
+                                               localFolder: WorkspaceModel.copyFolder(command.localFolder), connects: false, copies: false, replaces: false)
+            return ["id": id.uuidString, "auth": asksKey ? SignInMode.sessionKey.rawValue : command.connection.signIn?.rawValue ?? "password",
+                    "ignored": command.ignored]
         case "options":
             return try await sessionOptions(args, model, live: live)
         case "add-other", "edit-other", "serial-ports":
@@ -221,6 +231,10 @@ public enum WorkspaceCommand {
                 connection.ftpFingerprint = args[1]
             } else {
                 guard !connection.isFTP else { throw Usage("This authentication setting applies to SSH.") }
+                guard args[1] == SignInMode.sessionKey.rawValue || !connection.username.isEmpty else {
+                    throw Usage("Give the session a user name first, with sessions edit.")
+                }
+                connection.signIn = SignInMode(rawValue: args[1])
                 switch args[1] {
                 case "password", "agent":
                     try count(args, 2...2)
@@ -233,7 +247,11 @@ public enum WorkspaceCommand {
                     connection.identityPath = args[2]
                     connection.usesAgent = nil
                     connection.agentSocket = nil
-                default: throw Usage("Choose password, agent, or key PATH.")
+                case SignInMode.questions.rawValue, SignInMode.sessionKey.rawValue:
+                    try count(args, 2...2)
+                    connection.identityPath = nil; connection.usesAgent = nil; connection.agentSocket = nil
+                    if connection.usesSessionKey { connection.username = "" }
+                default: throw Usage("Choose password, agent, key PATH, questions, or session-key.")
                 }
             }
             try tree.updateConnection(node.id, name: node.name, connection: connection)

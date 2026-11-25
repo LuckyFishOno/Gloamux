@@ -5,7 +5,7 @@ import Terminal
 /// `gloamux sessions options`: the rest of the SSH and FTP connection form, beyond `edit` and `auth`.
 extension WorkspaceCommand {
     static let sshOptions = ["jump", "proxy", "proxy-host", "proxy-port", "startup", "forward-agent", "x11", "open-files",
-                             "files", "encoding", "confirm"]
+                             "files", "encoding", "confirm", "remote-folder", "local-folder"]
 
     @MainActor static func sessionOptions(_ args: [String], _ model: WorkspaceModel, live: Bool) async throws -> Any {
         guard args.count >= 2 else { throw Usage("Wrong number of arguments. Run gloamux sessions --help.") }
@@ -66,6 +66,11 @@ extension WorkspaceCommand {
                 }
                 let encoding = clear ? nil : TerminalEncoding(rawValue: value)
                 connection.encoding = encoding == .utf8 ? nil : encoding
+            case "remote-folder": connection.remoteFolder = clear ? nil : value
+            case "local-folder":
+                let path = (value as NSString).expandingTildeInPath
+                guard clear || path.hasPrefix("/") else { throw Usage("Use an absolute path for local-folder.") }
+                connection.localFolder = clear ? nil : path
             case "confirm": asks = try clear ? false : switchValue(value)
             default: break
             }
@@ -92,7 +97,9 @@ extension WorkspaceCommand {
     @MainActor static func describeOptions(_ connection: SavedConnection, _ tree: SessionTreeStore) -> [String: Any] {
         var info: [String: Any] = ["confirm": connection.asksEachConnection]
         guard !connection.isFTP else { return info }
-        info["auth"] = connection.identityPath != nil ? "key" : connection.usesAgent == true ? "agent" : "password"
+        info["auth"] = connection.signIn?.rawValue ?? (connection.identityPath != nil ? "key" : connection.usesAgent == true ? "agent" : "password")
+        if let folder = connection.remoteFolder { info["remote-folder"] = folder }
+        if let folder = connection.localFolder { info["local-folder"] = folder }
         if let key = connection.identityPath { info["key"] = key }
         if !connection.jumpPath.isEmpty {
             info["jump"] = connection.jumpPath.map { tree.node($0)?.name ?? $0.uuidString }.joined(separator: ",")

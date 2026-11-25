@@ -53,6 +53,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Confirm before closing a tab that would end something, make a terminal read-only, and lock the workspace manually or after an idle time, unlocking with Touch ID or the Mac password.
 - [x] Mark new output on a tab you are not looking at, and a dropped connection on any tab.
 - [x] Save session logs as plain text or with escape sequences, for every session or one terminal at a time, with likely secrets masked.
+- [x] Keep one record of every connection and its copied files, to view, search, export, or download.
 - [x] Save what a terminal shows to a text file or open it in the default text editor.
 
 ## Commands, macros, and automation
@@ -71,6 +72,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Browse directories and upload, download, rename, and delete files from an SSH/SFTP session in the GUI. Preserve local files on failed downloads.
 - [x] Show the remote file list alongside the terminal in the Workbench layout.
 - [x] Show a local file list beside the remote one, follow the shell's current folder, sort columns, and open a saved SSH profile directly in the file browser.
+- [x] Save a session from a pasted `sftp` command, copy its files, and ask only for a new session key each time, with `gloamux sftp` in the CLI.
 - [x] Show or hide hidden files on both sides of File Transfer.
 - [x] Create folders, show permissions and modification times, drag files in from Finder, and upload and download folders recursively with progress.
 - [x] Select several files at once in File Transfer, and remove remote folders with their contents.

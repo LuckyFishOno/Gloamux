@@ -10,6 +10,14 @@ enum FileProtocolChoice: String, Codable, CaseIterable, Sendable {
 }
 
 /// Native, credential-free catalog. This format is not an original profile-folder format.
+/// How an SSH session signs in when it uses neither a saved password nor a key.
+public enum SignInMode: String, Codable, Sendable, CaseIterable {
+    /// The server asks, such as for a code, and nothing is saved.
+    case questions
+    /// Like `questions`, with a key asked for on connecting that takes the place of the user name.
+    case sessionKey = "session-key"
+}
+
 public struct SavedConnection: Codable, Equatable, Sendable {
     public var host: String
     public var port: Int
@@ -53,6 +61,16 @@ public struct SavedConnection: Codable, Equatable, Sendable {
     var ftpSecurity: FTPSecurity?
     /// The SHA-256 fingerprint of a self-signed FTPS certificate the user checked.
     var ftpFingerprint: String?
+    /// Set when the user answers the server each time instead of using a saved password or key.
+    public var signIn: SignInMode?
+    /// Where Remote files and the file transfer view open: a folder on the server, and one on this Mac.
+    public var remoteFolder: String?
+    public var localFolder: String?
+    /// An FTP or FTPS server rather than an SSH one.
+    public var isFileServer: Bool { isFTP }
+    var usesSessionKey: Bool { signIn == .sessionKey }
+    /// `user@`, or nothing for a session without a saved user name.
+    var accountPrefix: String { username.isEmpty ? "" : SessionKey.masked(username) + "@" }
     var asksEachConnection: Bool { confirmsEachConnection == true }
     var isFTP: Bool { ftpSecurity != nil }
     public init(host: String, port: Int = 22, username: String, proxyHost: String? = nil, proxyPort: Int? = nil, identityPath: String? = nil, opensFiles: Bool = false, jumpSessionID: UUID? = nil,
@@ -93,12 +111,14 @@ public struct SavedConnection: Codable, Equatable, Sendable {
                 throw WorkspaceError.invalid("Jump hosts must not loop and can chain at most 8 hosts.")
             }
         }
-        guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !username.isEmpty,
+        guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !username.isEmpty || usesSessionKey,
               (1...65535).contains(port), (proxyHost == nil) == (proxyPort == nil),
               proxyPort.map({ (1...65535).contains($0) }) ?? true,
               proxyHost.map({ !$0.isEmpty }) ?? true,
               identityPath.map({ $0.hasPrefix("/") && !$0.contains("\0") }) ?? true,
-              agentSocket.map({ $0.hasPrefix("/") && !$0.contains("\0") }) ?? true else { throw WorkspaceError.invalid("Invalid saved connection settings.") }
+              agentSocket.map({ $0.hasPrefix("/") && !$0.contains("\0") }) ?? true,
+              signIn == nil || !usesKeys, localFolder.map({ $0.hasPrefix("/") && !$0.contains("\0") }) ?? true,
+              remoteFolder.map({ !$0.isEmpty && !$0.contains("\0") }) ?? true else { throw WorkspaceError.invalid("Invalid saved connection settings.") }
     }
 }
 
@@ -147,6 +167,9 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
 }
 
 @MainActor public final class SessionTreeStore: ObservableObject {
+    /// Session keys typed since Gloamux opened, by saved session. Kept in memory only.
+    var sessionKeys: [UUID: String] = [:]
+
     private struct Document: Codable {
         var version = 1
         var nodes: [SessionTreeNode]
@@ -180,7 +203,7 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
     func jumpCandidates(excluding id: UUID?) -> [SessionTreeNode] {
         let indexed = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         return nodes.filter { node in
-            guard node.id != id, node.connection != nil, let chain = Self.jumpChain(from: node.id, in: indexed) else { return false }
+            guard node.id != id, let connection = node.connection, !connection.usesSessionKey, let chain = Self.jumpChain(from: node.id, in: indexed) else { return false }
             return !chain.contains { $0.id == id } && chain.count < Self.maximumJumpHops
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }

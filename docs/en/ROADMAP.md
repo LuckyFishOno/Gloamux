@@ -6,7 +6,9 @@ The [verification record](VERIFICATION.md) includes the November 25, 2026 local 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.3.2 (build 8)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.4 (build 9)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.4 (build 9): sessions saved from a pasted `sftp` command, sign-in with a session key, connection history, `gloamux sftp` and `gloamux history`, and a sign-in fix for names whose first address refuses the connection.
 
 Included in 1.3.2 (build 8): the serial form discovers devices on opening and refreshes while visible, fills a blank new target for one USB adapter, and preserves saved or typed paths. Terminal resets now keep the current grid size after resizing, preventing an out-of-bounds redraw. See the [verification record](VERIFICATION.md).
 
@@ -30,6 +32,7 @@ Included in 1.3.2 (build 8): the serial form discovers devices on opening and re
 - [x] **SFTP layout.** Show remote files beside the terminal in the Workbench side rail, optionally following the shell's folder.
 - [x] **Remote file tree and File Transfer window.** The Default layout's right sidebar shows the focused pane's files as a folder tree: the server's login folder, or this Mac's home folder for the local terminal. A two-pane view (this Mac and a server, like WinSCP or FileZilla) takes the Default layout's main window and opens in its own window from the Classic and Workbench layouts. It provides Finder drag and drop, recursive folder transfers, a queue with cancellation, replace-or-skip conflict handling, and pipelined SFTP reads and writes.
 - [x] **SFTP workspace and CLI.** Directory following, hidden files, multiple selection, multi-file upload and download from the file sidebar, per-transfer progress, Quick Look, removing folders with their contents, permissions, dragging to Finder, transfer resume, and remote editing with explicit upload and conflict handling are done. `gloamux files` provides the same file operations: listing, details, upload and download of files and whole folders with resume, folders, renaming, removal of files and folders with their contents, and permissions.
+- [x] **SFTP gateways.** Paste an `sftp` command once to save it as a session that asks only for a session key, and keep a history of every connection.
 - [x] **FTP and FTPS GUI.** Connect with saved profiles and use the file browser and queue. Passive FTP, explicit and implicit FTPS, certificate verification, and protected data connections have loopback tests.
 - [x] **SCP GUI.** Upload and download using legacy SCP and the saved SSH authentication. Choose SCP, SFTP, or SCP fallback. The fallback and both transfer directions are tested against OpenSSH with SFTP disabled.
 - [x] **File CLI across protocols.** Use saved profiles to list, inspect, upload, download, resume supported transfers, rename, create and remove directories, remove files, and set permissions through SFTP, SCP, FTP, and FTPS.

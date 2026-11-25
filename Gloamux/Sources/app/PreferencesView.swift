@@ -218,6 +218,7 @@ private struct TerminalSettings: View {
     @AppStorage(TerminalPreferences.pasteKey) private var confirmPaste = true
     @AppStorage(TerminalPreferences.mouseKey) private var mouse = true
     @AppStorage(TerminalPreferences.clipboardKey) private var clipboard = false
+    @AppStorage(ConnectionHistory.enabledKey) private var keepsHistory = true
     @AppStorage(TerminalPreferences.logKey) private var logEverySession = false
     @AppStorage(TerminalPreferences.logFormatKey) private var logFormat = TerminalLogFormat.text.rawValue
     @AppStorage(TerminalPreferences.confirmCloseKey) private var confirmClose = true
@@ -318,6 +319,12 @@ private struct TerminalSettings: View {
                     Text(T("With escape sequences")).tag(TerminalLogFormat.raw.rawValue)
                 } label: {
                     label(T("Log format"), T("Plain text is easy to read and search. With escape sequences keeps colors for replaying with cat."))
+                }
+                Toggle(isOn: $keepsHistory) {
+                    label(T("Keep connection history"), T("Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000."))
+                }
+                LabeledContent(T("Connection history")) {
+                    Button(T("Show")) { model.showConnectionHistory() }
                 }
                 LabeledContent(T("Session logs")) {
                     Button(T("Show in Finder")) { model.logs.revealFolder() }

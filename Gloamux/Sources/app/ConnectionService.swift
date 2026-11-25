@@ -47,6 +47,7 @@ struct JumpHostFailure: Error {
                                      usesAgent: settings.usesAgent == true, agentSocket: settings.agentSocket,
                                      proxyKind: settings.proxyKind ?? .socks5, confirmsEachConnection: settings.asksEachConnection)
         target.setJumpPath(settings.jumpPath)
+        target.signIn = settings.signIn
         return target
     }
 
@@ -182,6 +183,10 @@ struct JumpHostFailure: Error {
             }.value
             keySecret = configuration.identityPath.map { (WorkspaceModel.passphraseID($0), passphrase) }
             password = nil
+        } else if configuration.signIn != nil {
+            // Nothing saved is used and nothing is kept; a password typed now answers the server's password question.
+            credential = secret.isEmpty ? .interactive : .password(secret)
+            password = nil
         } else {
             let value = secret.isEmpty ? try await vault.password(id: id) : secret
             credential = .password(value)
@@ -217,6 +222,7 @@ struct JumpHostFailure: Error {
         } catch SSHError.authenticationFailed {
             // Answers the user typed were refused, not the saved password or key, so nothing is forgotten.
             if asked.value { throw WorkspaceError.invalid("Sign-in failed. Check your answers and try again.") }
+            if configuration.signIn != nil { throw SignInRefused() }
             guard let password else {
                 throw WorkspaceError.invalid("SSH authentication failed. Check the username and private key.")
             }
@@ -285,6 +291,11 @@ struct JumpHostFailure: Error {
 }
 
 /// Set once the server's sign-in questions went to the user.
+/// The server refused a session key or user name before asking anything.
+struct SignInRefused: LocalizedError {
+    var errorDescription: String? { "The server refused this session key or user name. Check it and try again." }
+}
+
 private final class LoginAsked: @unchecked Sendable {
     var value = false
 }
@@ -331,6 +342,8 @@ private final class LoginAsked: @unchecked Sendable {
     func confirmHostKey(endpoint: String, key: String) async throws {
         if try knownHosts.isTrusted(endpoint: endpoint, key: key) { return }
         let fingerprint = try KnownHosts.fingerprint(key)
+        if !access.hostKeys.contains(fingerprint), let confirm = access.confirmHostKey, knownHosts.trustedKey(for: endpoint) == nil,
+           try await confirm(endpoint, fingerprint) { return }
         guard access.hostKeys.contains(fingerprint) else {
             throw WorkspaceError.invalid("Unrecognized SSH host key for \(endpoint): \(fingerprint). Verify it before using --host-key.")
         }

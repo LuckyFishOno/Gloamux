@@ -82,6 +82,7 @@ public struct TerminalCommands: Commands {
             Button(T(menu.logging ? "Stop session log" : "Start session log")) { model.toggleLogging() }
                 .keyboardShortcut("l", modifiers: [.command, .option])
                 .disabled(!live && !menu.logging)
+            Button(T("Connection history")) { model.showConnectionHistory() }
             Button(T("Show session logs")) { model.logs.revealFolder() }
             Button(T("Save output…")) { model.saveOutput() }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
@@ -220,7 +221,8 @@ struct LogIndicator: View {
         if logs.isLogging(tab) {
             Menu {
                 Button(T("Stop session log")) { model.toggleLogging(tab) }
-                Button(T("Show session logs")) { logs.revealFolder() }
+                Button(T("Connection history")) { model.showConnectionHistory() }
+            Button(T("Show session logs")) { logs.revealFolder() }
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "doc.text").appFont(.system(size: 9, weight: .semibold))

@@ -44,10 +44,12 @@ private final class UppercasingExec: ExecDelegate, @unchecked Sendable {
 }
 
 // In-memory SFTP server: a path -> bytes store, enough for upload, download and one directory listing.
-private final class MemorySFTP: SFTPDelegate, @unchecked Sendable {
+final class MemorySFTP: SFTPDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var files: [String: [UInt8]] = [:]
     private var dirs: Set<String> = []
+    func put(_ path: String, _ bytes: [UInt8]) { lock.withLock { files[path] = bytes } }
+    func bytes(_ path: String) -> [UInt8]? { lock.withLock { files[path] } }
 
     private final class Handle: SFTPFileHandle, @unchecked Sendable {
         let owner: MemorySFTP; let path: String; let writable: Bool
@@ -171,6 +173,18 @@ final class LoopbackTests: XCTestCase {
             let s = try await self.session(port)
             let out = try await s.runCommand("hello world")
             XCTAssertEqual(out, "HELLO WORLD")
+            try await s.close()
+        }
+    }
+
+    // "localhost" names ::1 and 127.0.0.1, and only 127.0.0.1 answers: the refused address must not end the sign-in.
+    func testNameWithOneUnreachableAddress() async throws {
+        try await withServer { port, _ in
+            let s = try await SSHSession.connect(
+                settings: SSHConnectionSettings(host: "localhost", port: port, username: "tester"),
+                credential: .password("secret"), hostKey: .acceptAny, connectTimeoutSeconds: 5)
+            let out = try await s.runCommand("second address")
+            XCTAssertEqual(out, "SECOND ADDRESS")
             try await s.close()
         }
     }

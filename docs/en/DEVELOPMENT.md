@@ -75,6 +75,7 @@ Gloamux stores its working files under `~/Library/Application Support/Gloamux`. 
 | `quick-commands.json` | Quick commands, as plain text. Keep secrets out of saved commands. |
 | `layout.json`, `appearance.json`, `settings.json` | The workspace layout, the theme, and workspace settings. |
 | `triggers.json` | Output triggers. |
+| `connection-history.jsonl` | One event per line for each connection (see `ConnectionHistory`). |
 | `open-tabs.json`, `recent-sessions.json` | Tabs to reopen at launch, and recently opened sessions. |
 | `agent-access.json`, `agent-activity.json` | Agent access, allowed sessions, and the activity history. |
 | `ssh-key-secure-enclave` | The Gloamux Secure Enclave SSH key (see `AppSSHKey`). |
@@ -203,6 +204,8 @@ Naming:
 - File transfers go through `TransferQueue`, which `WorkspaceModel.transfers` shares between the file sidebar (`RemoteFileSidebar`, which shows `LocalTreeState` for a local terminal), the two-pane `FileTransferView`, and every layout. The Default layout shows `FileTransferView` in the main window when `workspaceMode` is `.files`, following the selected tab. Classic and Workbench show it in `FileTransferWindow` with a server menu.
 - The queue runs one item at a time on the tab's SFTP channel. Uploads write a temporary `.name.gloamux-….partial` file and move it into place with `RemoteFileSystem.commitUpload`, which uses `replace` over an existing file and never deletes it first; downloads write a hidden partial file beside the destination. CLI uploads and **Edit on this Mac** stage content at a temporary remote name and commit it the same way.
 - `SFTPTransfer` keeps 16 reads or writes of 32 KiB in flight and stops at task cancellation.
+- `SFTPCommand` parses a pasted `sftp` command and refuses options that change the route or run programs. `SavedConnection.signIn` is `questions` or `session-key`; session keys live only in `SessionTreeStore.sessionKeys`.
+- `AuthWatcher` follows only the channel that connected. A name with several addresses makes one channel for each, and one that is refused must not end the sign-in.
 - Remote Quick Look copies one file of at most 100 MB into a private temporary folder and deletes it with the next preview and at quit.
 - Saved forwarding rules are stored with the connection in `sessions.json`. Local and dynamic forwards listen on this Mac's loopback interface; reverse forwards ask the server to listen on its loopback interface. A blank listening port is assigned automatically.
 

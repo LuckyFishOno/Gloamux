@@ -23,6 +23,8 @@ public struct LoginChallengePrompt: Identifiable {
     public let id = UUID()
     public let endpoint: String
     public let challenge: SSHLoginChallenge
+    /// Gloamux asks for the session key before connecting; the server has not asked anything yet.
+    var asksSessionKey = false
 }
 
 struct HostKeyChange: Identifiable {
@@ -152,6 +154,18 @@ struct HostKeyChange: Identifiable {
     var ftpFingerprint: String?
     /// SFTP only, SCP only, or SFTP with SCP when the server has no SFTP (nil).
     var fileProtocol: FileProtocolChoice?
+    var signIn: SignInMode?
+    /// Where this session's files open, from the saved session.
+    var remoteFolder: String?
+    var localFolder: String?
+    /// The session key this tab signed in with, kept while it is open and never saved or shown.
+    var sessionKey: String?
+    /// Copies from a pasted sftp command, started once the tab is connected.
+    var pendingCopies: SFTPCopies?
+    /// This connection's record in the history.
+    var historyID: UUID?
+    /// `user@host` as the interface shows it.
+    var account: String { (username.isEmpty ? "" : SessionKey.masked(username) + "@") + host }
     /// Folders shown in the remote file sidebar for this session.
     let remoteTree = RemoteTreeState()
     /// The folder the file transfer view shows for this session.
@@ -203,6 +217,8 @@ struct HostKeyChange: Identifiable {
                                      usesAgent: useAgent, agentSocket: agentSocket,
                                      proxyKind: proxyKind, confirmsEachConnection: confirmsEachConnection)
         target.setJumpPath(jumpPath)
+        target.signIn = signIn
+        if let sessionKey, target.usesSessionKey { target.username = sessionKey }
         return target
     }
     public var credentialID: String {
@@ -382,6 +398,7 @@ enum ConnectionState: Equatable {
     var transferWindow: FileTransferWindow?
     /// Set when a saved session that opens to its files has connected, so the layout can show them.
     @Published var filesRequest: FilesRequest?
+    @Published var sftpCommandRequest: SFTPCommandRequest?
     /// Saved sessions opened most recently, for the menu bar and the command palette.
     let recents: RecentSessions
     /// Called with each command a tab's shell reports as finished, for runbooks waiting on a result.
@@ -400,6 +417,9 @@ enum ConnectionState: Equatable {
     lazy var reachability = Reachability()
     /// Terminal recordings in progress and saved.
     lazy var recordings = TerminalRecordings(folder: storage.appendingPathComponent("recordings", isDirectory: true))
+    let history: ConnectionHistory
+    /// The record of a command's connection.
+    var commandHistoryID: UUID?
     lazy var logs = TerminalLogs(folder: storage.appendingPathComponent("logs", isDirectory: true))
     /// What the menu bar's workspace commands show, so the menus rebuild only when that changes.
     lazy var commandState = WorkspaceCommandState(model: self)
@@ -426,6 +446,7 @@ enum ConnectionState: Equatable {
         triggers = source?.triggers ?? OutputTriggerStore(url: storage.appendingPathComponent("triggers.json"))
         vault = try source?.vault ?? CredentialVault(url: storage.appendingPathComponent("password-vault.json"),
                                                    deviceSecrets: storage.appendingPathComponent("saved-sign-ins.json"))
+        history = source?.history ?? ConnectionHistory(url: storage.appendingPathComponent("connection-history.jsonl"))
         recents = source?.recents ?? RecentSessions(url: storage.appendingPathComponent("recent-sessions.json"))
         runbooks = source?.runbooks ?? RunbookLibrary(folder: storage.appendingPathComponent("runbooks", isDirectory: true))
         selection = tabs[0].id
@@ -648,6 +669,7 @@ enum ConnectionState: Equatable {
                 tab.status = tab.container?.tool.runsCommand == false ? "Connection closed" : "Shell closed"
                 self?.recordings.stop(tab)
                 self?.logs.stop(tab)
+                self?.endHistory(tab, .closed)
             }
         }
         let output: @Sendable ([UInt8]) -> Void = { bytes in pump.push(bytes) }
@@ -656,6 +678,7 @@ enum ConnectionState: Equatable {
             guard let container = tab.container else { return }
             tab.connected = false; tab.terminalReady = false; tab.status = "Connecting…"; tab.error = nil
             let rows = tab.screen.rows, columns = tab.screen.cols
+            beginHistory(tab)
             Task { @MainActor [weak self, weak tab] in
                 do {
                     let connection = try await TelnetConnection.connect(host: container.target, port: container.effectivePort,
@@ -667,14 +690,19 @@ enum ConnectionState: Equatable {
                 } catch {
                     guard let tab, tab.epoch == epoch else { return }
                     tab.status = "Connection failed"; tab.error = message(for: error)
+                    self?.endHistory(tab, .failed, detail: tab.error)
                 }
             }
         case .serial?:
             guard let container = tab.container else { return }
+            beginHistory(tab)
             do {
                 tab.localShell = try SerialPort(path: container.target, settings: container.serialSettings) { output(Array($0)) }
                 localTerminalStarted(tab)
-            } catch { tab.status = "Connection failed"; tab.error = message(for: error) }
+            } catch {
+                tab.status = "Connection failed"; tab.error = message(for: error)
+                endHistory(tab, .failed, detail: tab.error)
+            }
         default:
             let launch = tab.localLaunch ?? .loginShell(integration: ShellIntegration.local)
             tab.localLaunch = launch
@@ -690,6 +718,10 @@ enum ConnectionState: Equatable {
     private func localTerminalStarted(_ tab: SessionTab) {
         tab.terminalID = UUID()
         tab.connected = true; tab.terminalReady = true; tab.status = "Connected"; tab.error = nil
+        if tab.container != nil {
+            if tab.historyID == nil { beginHistory(tab) }
+            noteHistory(tab, .connected)
+        }
         startAutomaticLog(tab)
     }
     public func closeTab(_ tab: SessionTab) async {
@@ -734,6 +766,9 @@ enum ConnectionState: Equatable {
         tab.disconnectWatcher = nil
         tab.keepAliveTask?.cancel(); tab.keepAliveTask = nil
         if !lost { tab.reconnectTask?.cancel(); tab.reconnectTask = nil; tab.reconnectAttempts = 0 }
+        endHistory(tab, lost ? .lost : .closed)
+        tab.sessionKey = nil
+        tab.pendingCopies = nil
         let forwards = tab.forwards
         tab.forwards = []
         tab.forwardStarts.removeAll()
@@ -798,10 +833,16 @@ enum ConnectionState: Equatable {
             await connectFTP(tab, host: host, port: port, security: security)
             return
         }
-        guard Int(tab.port).map({ (1...65535).contains($0) }) == true, !host.isEmpty, !tab.username.isEmpty,
+        guard Int(tab.port).map({ (1...65535).contains($0) }) == true, !host.isEmpty, !tab.username.isEmpty || tab.signIn == .sessionKey,
               !tab.useProxy || (!tab.proxyHost.isEmpty && Int(tab.proxyPort).map { (1...65535).contains($0) } == true) else {
             tab.error = "Enter a host, username and valid TCP ports."
             return
+        }
+        tab.host = host
+        let epoch = UUID()
+        tab.epoch = epoch
+        if tab.signIn == .sessionKey {
+            guard await askSessionKey(tab, epoch: epoch) else { return }
         }
         let target = tab.sshTarget
         let service = connections
@@ -811,10 +852,7 @@ enum ConnectionState: Equatable {
             return
         }
 
-        tab.host = host
-        if !tab.opensAutomatically && !tab.renamed { tab.title = "\(tab.username)@\(host)" }
-        let epoch = UUID()
-        tab.epoch = epoch
+        if !tab.opensAutomatically && !tab.renamed { tab.title = tab.account }
         tab.busy = true
         tab.status = "Connecting…"
         let secret = tab.identityPath == nil ? (tab.useAgent ? "" : tab.password) : tab.keyPassphrase
@@ -824,6 +862,7 @@ enum ConnectionState: Equatable {
         let jumpSecrets = Array(repeating: "", count: max(0, hops.count - listed.count)) + listed.suffix(hops.count)
         tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecrets = [:]
         defer { if tab.epoch == epoch { tab.busy = false } }
+        beginHistory(tab, key: tab.signIn == .sessionKey ? tab.sessionKey : nil)
         do {
             let signIn = TabSignIn(model: self, tab: tab, epoch: epoch)
             let ssh = try await service.openSSH(target, hops: hops, secret: secret, jumpSecrets: jumpSecrets, handler: signIn) { server in
@@ -837,6 +876,8 @@ enum ConnectionState: Equatable {
             tab.connected = true
             tab.transportLost = false
             tab.status = "Connected"
+            noteHistory(tab, .connected)
+            if let id = tab.savedSessionID, let key = tab.sessionKey { sessionTree.sessionKeys[id] = key }
             tab.feed(T("Connected to") + " \(KnownHosts.endpoint(host: target.host, port: target.port))\n")
             tab.disconnectWatcher = Task { @MainActor [weak self, weak tab] in
                 await ssh.waitForDisconnect()
@@ -856,6 +897,10 @@ enum ConnectionState: Equatable {
             answerLogin(tab, answers: nil)
             tab.status = "Connection failed"
             tab.error = ConnectionService.failureText(error, reported: tab.error)
+            endHistory(tab, .failed, detail: tab.error)
+            // A key that did not work is asked for again next time.
+            if let id = tab.savedSessionID, tab.signIn == .sessionKey { sessionTree.sessionKeys[id] = nil }
+            tab.sessionKey = nil
             try? await server?.close()
         }
     }
@@ -879,9 +924,9 @@ enum ConnectionState: Equatable {
         try await withCheckedThrowingContinuation { continuation in tab.trustContinuation = continuation; tab.hostKeyPrompt = prompt }
         guard tab.epoch == epoch else { throw WorkspaceError.rejectedHostKey }
     }
-    func askLogin(_ tab: SessionTab, endpoint: String, challenge: SSHLoginChallenge, epoch: UUID) async throws -> [String] {
+    func askLogin(_ tab: SessionTab, endpoint: String, challenge: SSHLoginChallenge, epoch: UUID, asksSessionKey: Bool = false) async throws -> [String] {
         guard tab.epoch == epoch, tab.loginContinuation == nil else { throw SSHError.signInCancelled }
-        let prompt = LoginChallengePrompt(endpoint: endpoint, challenge: challenge)
+        let prompt = LoginChallengePrompt(endpoint: endpoint, challenge: challenge, asksSessionKey: asksSessionKey)
         let answers = try await withCheckedThrowingContinuation { continuation in
             tab.loginContinuation = continuation
             tab.loginChallenge = prompt
@@ -1048,12 +1093,16 @@ enum ConnectionState: Equatable {
     /// Starts or stops the session log for a tab.
     func toggleLogging(_ tab: SessionTab? = nil) {
         guard let tab = tab ?? selected else { return }
-        if logs.isLogging(tab) { logs.stop(tab) } else { logs.start(tab) }
+        if logs.isLogging(tab) { logs.stop(tab) } else { startLog(tab) }
     }
 
     /// Starts a log for a terminal that just opened, when Settings logs every session.
     func startAutomaticLog(_ tab: SessionTab) {
-        if TerminalPreferences.logsEverySession { logs.start(tab) }
+        if TerminalPreferences.logsEverySession { startLog(tab) }
+    }
+
+    private func startLog(_ tab: SessionTab) {
+        if let url = logs.start(tab) { noteHistory(tab, .log, detail: url.path) }
     }
 
     /// Changes a tab's encoding, and the saved session's, so it opens the same way next time.
@@ -1329,8 +1378,10 @@ enum ConnectionState: Equatable {
             if tab.connected {
                 // A session saved to open its files (an Xftp profile, say) browses without asking for a terminal.
                 if tab.showsFiles {
+                    // Copies start before the folder is listed: some gateways allow copying but not listing.
+                    if let copies = tab.pendingCopies { tab.pendingCopies = nil; await self.startCopies(copies, via: tab) }
                     await self.refreshFiles(tab)
-                    if inNewWindow { self.openFileTransfer(for: tab) } else { self.filesRequest = FilesRequest(tab: tab.id) }
+                    if inNewWindow || tab.signIn != nil || tab.localFolder != nil { self.openFileTransfer(for: tab) } else { self.filesRequest = FilesRequest(tab: tab.id) }
                 } else { await self.startTerminal(tab) }
             }
             tab.savedConnectionTask = nil
@@ -1356,6 +1407,9 @@ enum ConnectionState: Equatable {
         tab.showsFiles = settings.opensFiles == true
         tab.forwardingRules = settings.forwardingRules ?? []
         tab.fileProtocol = settings.fileProtocol
+        tab.signIn = settings.signIn
+        tab.remoteFolder = settings.remoteFolder; tab.localFolder = settings.localFolder
+        if let folder = settings.remoteFolder { tab.remotePath = folder }
         tab.ftpSecurity = settings.ftpSecurity; tab.ftpFingerprint = settings.ftpFingerprint
         if settings.isFTP { tab.showsFiles = true }
     }
@@ -1410,6 +1464,14 @@ enum ConnectionState: Equatable {
         }
         tab.desktop = desktop
         tab.container = profile
+        desktop.historyEvent = { [weak self, weak tab] event, detail in
+            guard let self, let tab else { return }
+            switch event {
+            case .opened: self.beginHistory(tab)
+            case .failed, .closed, .lost: self.endHistory(tab, event, detail: detail)
+            default: self.noteHistory(tab, event)
+            }
+        }
         tab.savedSessionID = sessionTree.node(item.id)?.id
         tab.environment = sessionTree.effectiveEnvironment(item.id) ?? item.environment
     }
@@ -1436,6 +1498,9 @@ enum ConnectionState: Equatable {
         settings.setJumpPath(tab.jumpPath)
         settings.forwardingRules = tab.forwardingRules.isEmpty ? nil : tab.forwardingRules
         settings.forwardsX11 = tab.forwardsX11 ? true : nil
+        settings.fileProtocol = tab.fileProtocol
+        settings.signIn = tab.signIn
+        settings.remoteFolder = tab.remoteFolder; settings.localFolder = tab.localFolder
         try settings.validate()
         let id = try sessionTree.add(name: name, parent: parent, connection: settings)
         if tab.savedSessionID == nil { tab.savedSessionID = id }
@@ -1475,7 +1540,7 @@ enum ConnectionState: Equatable {
         await refreshVault()
         vaultBusy = false
     }
-    public func lockVault() async { await vault.lock(); await refreshVault() }
+    public func lockVault() async { sessionTree.sessionKeys = [:]; await vault.lock(); await refreshVault() }
     /// Stops using the tab's key: the saved session forgets it, and so does the saved passphrase unless another
     /// saved session still uses the same key. The key file stays.
     func removeKey(from tab: SessionTab) async {

@@ -32,6 +32,9 @@ struct ConnectionEditor: View {
     @State private var ftpSecurity: FTPSecurity?
     @State private var ftpFingerprint: String
     @State private var fileProtocol: FileProtocolChoice?
+    @State private var signIn: SignInMode?
+    @State private var remoteFolder: String
+    @State private var localFolder: String
     /// Saved value of the ask setting. Changing it needs the master password (or the owner without a vault).
     private let savedAsks: Bool?
     @State private var askChangeAuthorized = false
@@ -69,6 +72,17 @@ struct ConnectionEditor: View {
         _ftpSecurity = State(initialValue: settings?.ftpSecurity)
         _ftpFingerprint = State(initialValue: settings?.ftpFingerprint ?? "")
         _fileProtocol = State(initialValue: settings?.fileProtocol)
+        _signIn = State(initialValue: settings?.signIn)
+        _remoteFolder = State(initialValue: settings?.remoteFolder ?? "")
+        _localFolder = State(initialValue: settings?.localFolder ?? "")
+    }
+
+    private var signInTitle: String {
+        switch signIn {
+        case nil: return "Password or key"
+        case .questions?: return "Answer the server each time"
+        case .sessionKey?: return "Session key each time"
+        }
     }
 
     private static func defaultPort(_ security: FTPSecurity?) -> Int { security?.defaultPort ?? 22 }
@@ -179,11 +193,19 @@ struct ConnectionEditor: View {
     }
 
     @ViewBuilder private var sshFields: some View {
-                TextField(T("Username"), text: $username)
-                IdentityFilePicker(path: $identityPath)
+                HStack(spacing: 6) {
+                    AppPicker(T("Sign-in"), selection: $signIn, current: T(signInTitle)) {
+                        Text(T("Password or key")).tag(SignInMode?.none)
+                        Text(T("Answer the server each time")).tag(Optional(SignInMode.questions))
+                        Text(T("Session key each time")).tag(Optional(SignInMode.sessionKey))
+                    }
+                    InfoButton(T("Choose a session key when an access gateway gives you a new key in place of the user name. Gloamux asks for it when you connect, keeps it until you quit, and never saves it."))
+                }
+                if signIn != .sessionKey { TextField(T("Username"), text: $username) }
+                if signIn == nil { IdentityFilePicker(path: $identityPath) }
                 // One row with fixed spacing: the form spaces a checkbox next to a button differently from a plain one.
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle(T("SSH agent"), isOn: $usesAgent)
+                    if signIn == nil { Toggle(T("SSH agent"), isOn: $usesAgent) }
                     HStack(spacing: 6) {
                         Toggle(T("Forward SSH agent"), isOn: $forwardsAgent)
                         InfoButton(T("Programs on the server can then sign in elsewhere with the keys in this Mac's SSH agent, as with ssh -A. Anyone with root on the server can use them while you are connected, so turn this on only for servers you trust."))
@@ -239,6 +261,8 @@ struct ConnectionEditor: View {
                     }
                     InfoButton(T("Remote files use SFTP. Some servers turn SFTP off and keep only scp: Gloamux then copies with scp and lists, renames, and deletes with shell commands, which needs a POSIX shell on the server."))
                 }
+                TextField(T("Remote folder"), text: $remoteFolder, prompt: Text(T("Home folder")))
+                TextField(T("Folder on this Mac"), text: $localFolder, prompt: Text(T("Home folder")))
     }
 
     private var masterPasswordSheet: some View {
@@ -329,6 +353,13 @@ struct ConnectionEditor: View {
         connection.forwardsAgent = forwardsAgent ? true : nil
         connection.forwardsX11 = forwardsX11 ? true : nil
         connection.fileProtocol = fileProtocol
+        connection.signIn = signIn
+        if signIn == .sessionKey { connection.username = "" }
+        if signIn != nil { connection.identityPath = nil; connection.usesAgent = nil; connection.agentSocket = nil }
+        let remote = remoteFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        let local = (localFolder.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        connection.remoteFolder = remote.isEmpty ? nil : remote
+        connection.localFolder = local.isEmpty ? nil : local
         do {
             if let item {
                 let previous = store.node(item.id)?.connection

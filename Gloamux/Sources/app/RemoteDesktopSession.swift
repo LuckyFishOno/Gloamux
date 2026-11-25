@@ -139,6 +139,8 @@ private final class DesktopWorker: @unchecked Sendable {
     private var worker: DesktopWorker?
     private var id = UUID()
     private weak var tab: SessionTab?
+    /// Called as the connection opens, signs in, and ends, for the connection history.
+    var historyEvent: ((ConnectionRecord.Event.Kind, String?) -> Void)?
     /// The view's size in points: the desktop size an RDP server is asked for.
     private var viewSize: CGSize = .zero
     private var resizeTask: Task<Void, Never>?
@@ -180,6 +182,7 @@ private final class DesktopWorker: @unchecked Sendable {
         lastSignIn = (username, password)
         let runID = id
         phase = .connecting
+        historyEvent?(.opened, nil)
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -194,6 +197,7 @@ private final class DesktopWorker: @unchecked Sendable {
                 try self.start(address: address, viaPort: viaPort, username: username, password: password)
             } catch {
                 guard self.id == runID else { return }
+                self.historyEvent?(.failed, message(for: error))
                 self.stop()
                 self.error = message(for: error)
                 self.lastSignIn = nil
@@ -315,6 +319,7 @@ private final class DesktopWorker: @unchecked Sendable {
         worker = nil
         image = nil
         phase = .idle
+        historyEvent?(.closed, nil)
     }
 
     private func closeGateway() {
@@ -347,12 +352,14 @@ private final class DesktopWorker: @unchecked Sendable {
         switch message {
         case .connected:
             phase = .connected
+            historyEvent?(.connected, nil)
             reconnectAttempts = 0
         case .frame(let frame): image = frame
         case .clipboard(let text): receiveClipboard(text)
         case .lost(let reason):
             // Only a session that was signed in reconnects; a failure while connecting is reported.
             let wasConnected = phase == .connected || reconnectAttempts > 0
+            historyEvent?(phase == .connected ? .lost : .failed, reason)
             stop()
             if wasConnected { scheduleReconnect(reason) } else { self.error = reason; lastSignIn = nil }
             return false
@@ -362,6 +369,7 @@ private final class DesktopWorker: @unchecked Sendable {
             return false
         case .failed(let error):
             // A reconnect that is refused (a changed password, say) stops trying.
+            historyEvent?(.failed, error)
             disconnect()
             self.error = error
             return false

@@ -130,6 +130,18 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 
 - A password, an Ed25519, ECDSA, or RSA key, keys from `ssh-agent`, or the Gloamux key in this Mac's Secure Enclave.
 - Servers that ask their own questions (keyboard-interactive), such as a verification code after the password, show them in a sheet. The session's password answers the first password question. Answers are never saved.
+- **Sign-in** in a saved session's settings chooses **Password or key**, **Answer the server each time** (no saved password; every question is shown), or **Session key each time**.
+
+### SFTP gateways and session keys
+
+Some access gateways allow only `sftp` and give a new session key in place of the user name.
+
+- Choose **New session from sftp command** in the session tree's **+** menu or the command palette, or paste the command into the palette. The command can span lines and include `lcd`, `cd`, `get`, and `put`.
+- Gloamux reads the host, port, sign-in, and folders, and shows options it leaves out under **Not included**. A command whose options change the route or run programs, such as `-J` or `ProxyCommand`, is refused.
+- **Save and connect** saves the session and copies the files in the command. **Replace existing files** is off unless you turn it on.
+- Later, open that session and enter the new key. You can paste the key alone, `key@host`, or a whole new command; a command for another host or port is refused.
+- The key stays in memory until Gloamux quits, the vault is locked, or the server refuses it. It is never saved. These sessions do not reconnect on their own and cannot be jump hosts.
+- **Remote folder** and **Folder on this Mac** in the session's settings choose what File Transfer opens first.
 
 ### Host keys
 
@@ -213,6 +225,12 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 ### Find
 
 ⌘F searches the terminal and its scrollback as plain text or a regular expression and highlights every match. ⌘G and ⇧⌘G step through them.
+
+### Connection history
+
+- **Terminal › Connection history** lists every connection: when, where, how it ended, and which files were copied. Select one for its details, search the list, or choose **Download log** to save one record as text, with its terminal log when there is one.
+- The options menu exports the list as CSV or JSON, clears it, or turns it off. Right-click a record to delete it.
+- Passwords, session keys, answers, and terminal output are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
 
 ### Session logs
 
@@ -355,7 +373,7 @@ If `triggers.json` in the workspace folder cannot be read or is damaged, **Setti
 
 ### Command palette
 
-⇧⌘P finds a saved session, an open tab, or any workspace action, such as splits, layouts, themes, recordings, and runbooks. Type `user@host` to connect directly.
+⇧⌘P finds a saved session, an open tab, or any workspace action, such as splits, layouts, themes, recordings, and runbooks. Type `user@host` to connect directly, or paste an `sftp` command to save it as a session.
 
 ## 11. Safety
 
@@ -476,6 +494,7 @@ What an agent can do:
 | | **Start recording** / **Stop recording** | ⌥⌘R |
 | | **Recordings** | |
 | | **Start session log** / **Stop session log** | ⌥⌘L |
+| | **Connection history** | |
 | | **Show session logs** | |
 | | **Save output** | ⇧⌘S |
 | | **Open output in text editor** | |
@@ -556,6 +575,7 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 | **Log every session** (`terminal.log-every-session`) | Logs every terminal from when it opens until it closes. |
 | **Log format** (`terminal.log-format`) | **Plain text**, or **With escape sequences** to keep colors. |
 | **Session logs** · **Show in Finder** | Opens the log folder. |
+| **Keep connection history** (`history.enabled`) | Saves one record for each connection. On by default. |
 
 ### Text
 
@@ -612,7 +632,9 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 |---|---|
 | `gloamux ssh SESSION` | Opens a saved SSH session's shell in this terminal and exits with the remote shell's status. Options: `--password-stdin`, `--vault-password-stdin`, `--host-key FINGERPRINT`, `--interactive`. |
 | `gloamux files OP --session S` | `ls`, `pwd`, `stat`, `get`, `put`, `mkdir`, `mv`, `rm`, `rmdir`, `chmod`. Options: `--protocol sftp\|scp\|ftp\|ftps`, `--recursive`, `--overwrite`, `--resume`, `--allow-plain-ftp`, `--json`, and the sign-in options of `ssh`. Ctrl-C removes the partial file. |
-| `gloamux sessions` | `list`, `show`, `mkdir`, `add`, `edit`, `options`, `add-other`, `edit-other`, `serial-ports`, `rename`, `move`, `remove`, `env`, `auth`, `cert`, `import`, `export`. |
+| `gloamux sftp SESSION` | Signs in once and reads `sftp` commands (`ls`, `cd`, `get`, `put`, `mkdir`, `rename`, `rm`, `chmod`, and more) from the terminal or standard input. Also takes `sftp` options with a host, or a whole pasted command with `--command FILE\|-`. Options: `--password-stdin` (the password or session key), `--vault-password-stdin`, `--host-key FINGERPRINT`, `--overwrite`. |
+| `gloamux history` | `list`, `show`, `log ID PATH`, `export PATH.csv\|PATH.json`, `remove`, `clear`. |
+| `gloamux sessions` | `list`, `show`, `mkdir`, `add`, `edit`, `options`, `add-other`, `edit-other`, `serial-ports`, `rename`, `move`, `remove`, `env`, `auth`, `cert`, `from-sftp`, `import`, `export`. |
 | `gloamux hosts` | `list`, `history`, `clear-history`, `trust`, `replace`, `remove`, `export` (as `known_hosts`), `discover bonjour\|tailscale\|aws`. |
 | `gloamux tabs` | `list`, `show`, `open`, `open-window`, `connect`, `local`, `select`, `rename`, `duplicate`, `close`, `disconnect`, `reconnect`, `split`, `unsplit`, `broadcast`, `multiexec`, `window`, `attach`, `read`, `send`, `run`, `readonly`, `log`, `record`, `encoding`, `integration`, `view`, `colors`, `highlights`. Needs the running app. |
 | `gloamux forwards` | `list`, `add`, `remove` (saved rules); `live-list`, `start`, `stop` (running forwards). Kinds: `local`, `remote`, `dynamic`. |

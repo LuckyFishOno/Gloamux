@@ -27,6 +27,8 @@ extension WorkspaceModel {
         guard TerminalPreferences.reconnects, !tab.isLocal, tab.transportLost, tab.savedSessionID != nil,
               tabs.contains(where: { $0.id == tab.id }) || sessionWindows[tab.id] != nil else { return }
         if let id = tab.savedSessionID, sessionTree.node(id)?.connection?.asksEachConnection == true { return }
+        // A session that asks every time would interrupt with its questions.
+        if tab.signIn != nil { return }
         let delays = Self.reconnectDelays
         guard tab.reconnectAttempts < delays.count else {
             tab.feed(T("Stopped reconnecting. Use Reconnect to try again.") + "\n")

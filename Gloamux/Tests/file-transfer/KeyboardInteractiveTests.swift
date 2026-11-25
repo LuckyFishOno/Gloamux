@@ -19,15 +19,22 @@ private final class QuestionsAuth: NIOSSHServerUserAuthenticationDelegate, @unch
     private var step = 0
     private var allRight = true
 
-    init(rounds: [Round], afterKey: Bool = false) {
+    /// Password and key sign-ins the server saw.
+    var refused: Int { lock.withLock { refusals } }
+    private var refusals = 0
+    private let keyIsStep: Bool
+
+    init(rounds: [Round], afterKey: Bool = false, also: NIOSSHAvailableUserAuthenticationMethods = []) {
         self.rounds = rounds
-        supportedAuthenticationMethods = afterKey ? [.publicKey, .keyboardInteractive] : .keyboardInteractive
+        keyIsStep = afterKey
+        supportedAuthenticationMethods = afterKey ? [.publicKey, .keyboardInteractive] : also.union(.keyboardInteractive)
     }
 
     func requestReceived(request: NIOSSHUserAuthenticationRequest, responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>) {
-        if case .publicKey = request.request, supportedAuthenticationMethods.contains(.publicKey) {
+        if case .publicKey = request.request, keyIsStep {
             responsePromise.succeed(.partialSuccess(remainingMethods: .keyboardInteractive))
         } else {
+            lock.withLock { refusals += 1 }
             responsePromise.succeed(.failure)
         }
     }
@@ -146,7 +153,62 @@ final class KeyboardInteractiveTests: XCTestCase {
         XCTAssertEqual(answerer.questions.count, 1)
     }
 
+    private static let passwordThenCode: [QuestionsAuth.Round] = [
+        .init(prompts: [("Password: ", false)], expected: ["secret"]), .init(prompts: [("Verification code: ", true)], expected: ["123456"])]
+
+    /// A PAM server with a verification code often lists password sign-in too, and refuses it.
+    func testQuestionsComeBeforeAPasswordTheServerWouldRefuse() async throws {
+        let auth = QuestionsAuth(rounds: Self.passwordThenCode, also: .password)
+        let answerer = Answerer(["123456"])
+        try await withServer(auth) { port in
+            let session = try await SSHSession.connect(settings: settings(port), credential: .password("secret"),
+                                                       answer: answerer.handler, connectTimeoutSeconds: 5)
+            try await session.close()
+        }
+        XCTAssertEqual(answerer.questions.count, 1)
+        XCTAssertEqual(auth.refused, 0)
+    }
+
+    func testQuestionsFollowAKeyTheServerRefuses() async throws {
+        let auth = QuestionsAuth(rounds: [.init(prompts: [("Verification code: ", true)], expected: ["123456"])], also: .publicKey)
+        let answerer = Answerer(["123456"])
+        try await withServer(auth) { port in
+            let session = try await SSHSession.connect(settings: settings(port), credential: .privateKey(NIOSSHPrivateKey(ed25519Key: .init())),
+                                                       answer: answerer.handler, connectTimeoutSeconds: 5)
+            try await session.close()
+        }
+        XCTAssertEqual(answerer.questions.count, 1)
+    }
+
+    /// A wrong password answered to the server's question is not sent again as a password sign-in.
+    func testAWrongPasswordIsSentOnce() async throws {
+        let auth = QuestionsAuth(rounds: [.init(prompts: [("Password: ", false)], expected: ["other"])], also: .password)
+        let answerer = Answerer([])
+        try await withServer(auth) { port in
+            do {
+                _ = try await SSHSession.connect(settings: settings(port), credential: .password("secret"), answer: answerer.handler, connectTimeoutSeconds: 5)
+                XCTFail("a wrong password signed in")
+            } catch { XCTAssertEqual(error as? SSHError, .authenticationFailed) }
+        }
+        XCTAssertEqual(auth.refused, 0)
+        XCTAssertEqual(answerer.questions, [])
+    }
+
+    func testNothingSavedOnlyAnswersQuestions() async throws {
+        let auth = QuestionsAuth(rounds: [.init(prompts: [("Code", false)], expected: ["42"])], also: [.password, .publicKey])
+        let answerer = Answerer(["42"])
+        try await withServer(auth) { port in
+            let session = try await SSHSession.connect(settings: settings(port), credential: .interactive, answer: answerer.handler, connectTimeoutSeconds: 5)
+            try await session.close()
+        }
+        XCTAssertEqual(answerer.questions.map(\.prompts), [[.init(text: "Code", hidden: true)]])
+        XCTAssertEqual(auth.refused, 0)
+    }
+
     func testPasswordQuestionsAndLabels() {
+        XCTAssertFalse(PasswordAuthDelegate.asksForPassword("One-time password: "))
+        XCTAssertFalse(PasswordAuthDelegate.asksForPassword("Password + OTP: "))
+        XCTAssertTrue(PasswordAuthDelegate.asksForPassword("Password for root@robotpc: "))
         XCTAssertTrue(PasswordAuthDelegate.asksForPassword("Password for tester@host: "))
         XCTAssertTrue(PasswordAuthDelegate.asksForPassword("密碼："))
         XCTAssertFalse(PasswordAuthDelegate.asksForPassword("Verification code: "))

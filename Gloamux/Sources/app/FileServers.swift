@@ -12,6 +12,7 @@ extension WorkspaceModel {
         let typed = tab.password
         tab.password = ""
         defer { if tab.epoch == epoch { tab.busy = false } }
+        beginHistory(tab)
         do {
             let transfer = try await connections.openFTP(
                 host: host, port: port, username: tab.username, typedPassword: typed, security: security,
@@ -20,6 +21,7 @@ extension WorkspaceModel {
             tab.transfer = transfer
             tab.connected = true; tab.transportLost = false; tab.showsFiles = true
             tab.status = "Connected"
+            noteHistory(tab, .connected)
             tab.feed(T("Connected to") + " \(KnownHosts.endpoint(host: host, port: port)) (\(transfer.protocolName))\n")
             tab.feed(T(security == .none
                        ? "Plain FTP: the password and files are not encrypted. Browse the files in Remote files or the File Transfer window."
@@ -28,6 +30,7 @@ extension WorkspaceModel {
             guard tab.epoch == epoch else { return }
             tab.status = "Connection failed"
             tab.error = message(for: error)
+            endHistory(tab, .failed, detail: tab.error)
         }
     }
 }

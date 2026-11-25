@@ -103,4 +103,52 @@ extension WorkspaceCommand {
         default: throw Usage("Unknown recordings operation.")
         }
     }
+
+    /// `history list [COUNT]|show ID|log ID PATH|export PATH|remove ID|clear`: the Connection history window.
+    @MainActor static func history(_ action: String, _ args: [String], _ model: WorkspaceModel) throws -> Any {
+        let history = model.history
+        history.reload()
+        func record(_ text: String) throws -> ConnectionRecord {
+            guard let id = UUID(uuidString: text), let found = history.records.first(where: { $0.id == id }) else {
+                throw WorkspaceError.invalid("No connection with that ID. Run gloamux history list.")
+            }
+            return found
+        }
+        func newFile(_ path: String) throws -> URL {
+            guard path.hasPrefix("/") else { throw Usage("Use an absolute path.") }
+            guard !FileManager.default.fileExists(atPath: path) else { throw WorkspaceError.invalid("\(path) already exists.") }
+            return URL(fileURLWithPath: path)
+        }
+        switch action {
+        case "list":
+            try count(args, 0...1)
+            guard let limit = args.first.map({ Int($0) }) ?? 50, limit > 0 else { throw Usage("Enter how many connections to list.") }
+            return history.records.prefix(limit).map { history.json($0) }
+        case "show":
+            try count(args, 1...1)
+            return history.json(try record(args[0]), events: true)
+        case "log":
+            try count(args, 2...2)
+            let url = try newFile(args[1])
+            try writePrivate(Data(history.report(record(args[0])).utf8), to: url)
+            return ["path": url.path]
+        case "export":
+            try count(args, 1...1)
+            let url = try newFile(args[0])
+            guard ["csv", "json"].contains(url.pathExtension.lowercased()) else { throw Usage("Use a path that ends in .csv or .json.") }
+            try writePrivate(url.pathExtension.lowercased() == "csv" ? Data(history.csv(history.records).utf8) : history.exportJSON(history.records), to: url)
+            return ["path": url.path, "count": history.records.count]
+        case "remove":
+            try count(args, 1...1)
+            let found = try record(args[0])
+            guard !history.open.contains(found.id) else { throw WorkspaceError.invalid("This connection is open.") }
+            try history.remove([found.id])
+            return ["removed": found.id.uuidString]
+        case "clear":
+            try count(args, 0...0)
+            try history.clear()
+            return ["remaining": history.records.count]
+        default: throw Usage("Unknown history operation.")
+        }
+    }
 }

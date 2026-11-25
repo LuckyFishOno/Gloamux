@@ -62,6 +62,7 @@ public struct DesktopView: View {
             }
         }
         .overlay { WorkspaceLockCover(model: model) }
+        .sheet(item: $model.sftpCommandRequest) { SFTPCommandSheet(model: model, text: $0.text).tint(model.theme.accent.color) }
         .animation(.easeOut(duration: 0.15), value: model.workspaceLocked)
         .animation(.easeOut(duration: 0.12), value: model.commandPaletteShown)
         .task {
@@ -1298,7 +1299,7 @@ struct SessionPane: View {
         if !tab.connected && !tab.busy { return T(tab.status) }
         if let container = tab.container { return container.tool.title }
         if tab.isLocal { return "local, \(tab.username)" }
-        return "ssh, \(tab.username)"
+        return "ssh, \(SessionKey.masked(tab.username))"
     }
 
     private var isNewConnection: Bool { tab.newConnectionType != nil && tab.savedSessionID == nil && !tab.transportLost }

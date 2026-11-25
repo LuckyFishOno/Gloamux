@@ -4,7 +4,7 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.3.2 (build 8)**。
+目前版本：**Gloamux 1.4 (build 9)**。
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
@@ -55,6 +55,24 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 ## 畫面
 
 <p align="center">
+  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="在終端機輸入指令、把第二台伺服器並排、切換主題，再到雙欄畫面下載檔案" />
+</p>
+
+把伺服器並排、切換主題，再到雙欄傳輸畫面用可續傳的佇列搬檔案。
+
+<p align="center">
+  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="貼上一次 sftp 指令、存成連線、回答伺服器的問題，檔案隨即下載" />
+</p>
+
+遇到只允許 `sftp` 加 session key 的閘道，指令只要貼一次。Gloamux 會存成連線並傳完指令裡的檔案，之後只問新的 key，而且不會儲存它。
+
+<p align="center">
+  <img src="docs/assets/gloamux-history.png" width="1000" alt="連線歷史列出三筆連線，選取的一筆顯示登入與下載的檔案，並有下載紀錄按鈕" />
+</p>
+
+每次連線都會留下一筆紀錄：時間、對象、怎麼結束、傳了哪些檔案。可以直接看，也可以下載成紀錄檔。
+
+<p align="center">
   <img src="docs/assets/gloamux-new-connection.png" width="1320" alt="新連線分頁展開 RDP 區段，顯示解析度、Retina、連線品質和剪貼簿選項" />
 </p>
 
@@ -63,10 +81,11 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 ## 功能
 
 - **終端** · 分頁、拖曳分割窗格、本機 shell、Shell 整合（提示字元標記、指令狀態、通知）、搜尋、記錄檔、會遮住密碼的錄影，以及 73 組配色。
-- **SSH** · 密碼，Ed25519、ECDSA、RSA 金鑰，`ssh-agent`、Secure Enclave 金鑰、鍵盤互動式登入、依序列出最多八層跳板並顯示每一跳的連線路徑、SOCKS 和 HTTP 代理、連接埠轉發、代理轉發，以及透過 XQuartz 的 X11。
-- **檔案** · 跟著目前窗格的檔案側欄、可續傳佇列的雙欄傳輸畫面、快速查看，以及用 Mac App 編輯遠端檔案，支援 SFTP、SCP、FTP 和 FTPS。
+- **SSH** · 密碼，Ed25519、ECDSA、RSA 金鑰，`ssh-agent`、Secure Enclave 金鑰、鍵盤互動式（PAM）登入、以 session key 取代使用者名稱的閘道、依序列出最多八層跳板並顯示每一跳的連線路徑、SOCKS 和 HTTP 代理、連接埠轉發、代理轉發，以及透過 XQuartz 的 X11。
+- **檔案** · 跟著目前窗格的檔案側欄、可續傳佇列的雙欄傳輸畫面、快速查看，以及用 Mac App 編輯遠端檔案，支援 SFTP、SCP、FTP 和 FTPS。貼上一次 `sftp` 指令就能存成連線。
 - **遠端桌面** · 在 Gloamux 分頁裡使用 RDP（含網路層級驗證）和 VNC（含 macOS 螢幕共享），可走 SSH 通道並共用剪貼簿。
 - **其他連線** · 序列埠、Telnet、Mosh、Docker 容器、Kubernetes Pod 和 AWS Systems Manager 工作階段。
+- **連線歷史** · 每次連線與傳過的檔案都有一筆紀錄，可檢視、搜尋或下載。
 - **安全** · Production、Staging、Test、Development 標籤，高風險指令確認，主機金鑰檢視與紀錄，以及鎖定工作區。
 - **帶著連線過來** · 可從 Xshell、MobaXterm、PuTTY 或 KiTTY、OpenSSH 和 CSV 匯入，匯出時不含密碼。也能用 Bonjour、Tailscale 和 AWS 找主機。
 - **自動化** · 快速指令、輸出觸發、Markdown 操作手冊、指令面板、Spotlight、捷徑和 `gloamux://` 連結。
@@ -131,6 +150,9 @@ gloamux sessions options "Work server" jump=Bastion x11=on
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite
+gloamux sessions from-sftp "Report gateway" 'sftp -P 4997 KEY@gateway.example.com'
+gloamux sftp "Report gateway"
+gloamux history list
 gloamux tabs list
 gloamux tabs run TAB_ID "uptime"
 gloamux tabs read TAB_ID 50
@@ -141,6 +163,8 @@ gloamux config export ~/Gloamux.gloamuxconfig
 ```
 
 `gloamux files` 支援 SFTP、SCP、FTP，以及明確和隱含 FTPS，並沿用已存連線的登入方式、代理、跳板和主機信任。一次性的密碼用 `--password-stdin`，只為這次指令解鎖密碼庫用 `--vault-password-stdin`，第一次連的伺服器可用 `--host-key` 帶入你核對過的指紋。這些臨時提供的憑證都不會被儲存。
+
+`gloamux sftp` 登入一次後就能下 `sftp` 指令，可用已存連線、一般的 `sftp` 選項，或用 `--command` 讀入整段貼上的指令。`gloamux history` 可列出、匯出和移除連線歷史。
 
 `gloamux tabs` 和 `gloamux commands send|run` 會操作正在執行的 App；`gloamux tabs list` 列出的分頁 ID 在每個視窗都能用。管理指令回傳 JSON，檔案指令可加 `--json`。結束代碼：0 成功、1 操作失敗、2 用法錯誤、130 表示被 Ctrl-C 中止。執行 `gloamux --help`，或用 `gloamux <指令> --help` 看各指令說明。
 
@@ -184,7 +208,7 @@ swift test --package-path Gloamux
 cd Gloamux/RDP && cargo test --release
 ```
 
-Swift 測試約有 400 項，包含本機回送的 SSH、SFTP、FTP 和轉發伺服器。少數需要指定遠端主機或 Xshell 範例檔的測試，在沒有這些條件時會略過。
+Swift 測試約有 500 項，包含本機回送的 SSH、SFTP、FTP 和轉發伺服器。少數需要指定遠端主機或 Xshell 範例檔的測試，在沒有這些條件時會略過。
 
 ## 本機資料與隱私
 

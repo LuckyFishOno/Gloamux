@@ -404,7 +404,7 @@ private struct ClassicStatusBar: View {
         private var address: String {
             if tab.isLocal { return T("Local shell") + "  \(tab.username)" }
             guard !tab.host.isEmpty else { return T("Not connected.") }
-            let endpoint = "ssh://\(tab.username.isEmpty ? "" : tab.username + "@")\(tab.host):\(tab.port)"
+            let endpoint = "ssh://\(tab.account):\(tab.port)"
             return tab.connected ? endpoint : endpoint + "  ·  " + T(tab.status)
         }
     }

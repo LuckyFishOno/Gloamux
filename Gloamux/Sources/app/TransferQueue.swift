@@ -44,6 +44,8 @@ enum TransferDirection: Sendable {
     let isFolder: Bool
     let host: String
     let policy: TransferConflictPolicy
+    /// The name a single file is copied to, when it is not its own.
+    let newName: String?
     weak var tab: SessionTab?
     @Published var state: State = .waiting
     @Published var bytes: UInt64 = 0
@@ -64,7 +66,8 @@ enum TransferDirection: Sendable {
     var tag: String { String(id.uuidString.prefix(8)).lowercased() }
 
     init(direction: TransferDirection, name: String, source: String, destinationFolder: String, isFolder: Bool,
-         tab: SessionTab, policy: TransferConflictPolicy, expectedSize: UInt64? = nil) {
+         tab: SessionTab, policy: TransferConflictPolicy, expectedSize: UInt64? = nil, newName: String? = nil) {
+        self.newName = newName
         self.direction = direction; self.name = name; self.source = source; self.destinationFolder = destinationFolder
         self.isFolder = isFolder; self.tab = tab; self.host = tab.host; self.policy = policy; self.expectedSize = expectedSize
     }
@@ -123,6 +126,12 @@ enum TransferDirection: Sendable {
 
     private func enqueue(_ item: TransferItem) {
         items.append(item)
+    }
+
+    /// Queues one copy, such as a line of an sftp command.
+    func add(_ item: TransferItem) {
+        enqueue(item)
+        start()
     }
 
     /// Names among `names` that already exist in the remote folder, so the caller can ask before queueing.
@@ -194,6 +203,7 @@ enum TransferDirection: Sendable {
     private func run(_ item: TransferItem) async {
         item.started = Date()
         item.state = .running
+        let record = item.tab?.historyID
         let task = Task { try await self.attempt(item) }
         current = (item.id, task)
         do {
@@ -209,7 +219,18 @@ enum TransferDirection: Sendable {
         }
         current = nil
         item.finished = Date()
+        note(item, in: record)
         revision += 1
+    }
+
+    private func note(_ item: TransferItem, in record: UUID?) {
+        let path = item.direction == .download ? item.source : Self.remoteChild(item.destinationFolder, item.newName ?? item.name)
+        switch item.state {
+        case .done: model?.history.add(item.direction == .download ? .downloaded : .uploaded, to: record, detail: path, bytes: item.bytes)
+        case .skipped: model?.history.add(.skipped, to: record, detail: path)
+        case .failed(let reason): model?.history.add(.transferFailed, to: record, detail: path + ": " + reason)
+        default: break
+        }
     }
 
     /// Seconds to wait before each new attempt after the connection breaks.
@@ -280,7 +301,7 @@ enum TransferDirection: Sendable {
 
     /// Uploads one file into `folder`. Returns true when it was skipped because the name was taken.
     private func uploadFile(_ url: URL, into folder: String, _ transfer: any RemoteFileSystem, _ item: TransferItem, base: UInt64) async throws -> Bool {
-        let destination = Self.remoteChild(folder, url.lastPathComponent)
+        let destination = Self.remoteChild(folder, item.isFolder ? url.lastPathComponent : item.newName ?? url.lastPathComponent)
         if item.completed.contains(destination) { return false }
         let existing = try await transfer.entry(at: destination)
         if existing != nil, item.policy == .skip { return true }
@@ -357,7 +378,7 @@ enum TransferDirection: Sendable {
     /// Downloads one remote file into `folder`. Returns true when it was skipped because the name was taken.
     private func downloadFile(_ path: String, entry: RemoteEntry?, into folder: URL, _ transfer: any RemoteFileSystem, _ item: TransferItem,
                               base: UInt64) async throws -> Bool {
-        let name = (path as NSString).lastPathComponent
+        let name = item.isFolder ? (path as NSString).lastPathComponent : item.newName ?? (path as NSString).lastPathComponent
         let destination = folder.appendingPathComponent(name)
         if item.completed.contains(destination.path) { return false }
         var isDirectory: ObjCBool = false

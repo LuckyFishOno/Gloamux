@@ -315,7 +315,7 @@ private struct RemoteTreePanel: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(tab.username)@\(tab.host)").appFont(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+            Text(tab.account).appFont(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 4) {
                 Button { openParent() } label: { Image(systemName: "arrow.up").iconHitArea() }
                     .help(T("Parent folder")).disabled(tree.root == nil || tree.root == "/")

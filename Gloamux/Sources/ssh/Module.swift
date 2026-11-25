@@ -18,6 +18,8 @@ public enum SSHCredential: Sendable {
     case privateKey(NIOSSHPrivateKey)
     /// Offers each key in turn, as OpenSSH does with agent keys followed by an identity file.
     case privateKeys([NIOSSHPrivateKey])
+    /// Nothing to offer: the user answers the server's questions, or types a password when it only accepts one.
+    case interactive
 }
 
 /// Questions a server asks while signing in (keyboard-interactive, RFC 4256), such as a password and a one-time code.
@@ -76,17 +78,21 @@ public enum SSHError: Error, Equatable {
 
 // MARK: - Auth and host-key delegates
 
-/// Offers the credential's password or keys one at a time. NIOSSH asks again after each rejection. Keyboard-interactive
-/// sign-in comes last, as in OpenSSH: for a server that accepts only that, or for the second step a server asks for once
-/// a method succeeded partially, such as a key followed by a verification code.
+/// Offers the credential's keys one at a time, then answers the server's questions (keyboard-interactive), then offers the
+/// password, as OpenSSH does: a server that asks for a password and a verification code often lists both methods, and
+/// refuses the password on its own. NIOSSH asks again after each rejection. Without anyone to answer, the password goes
+/// first, since a verification code could not be answered.
 final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     private var offers: [NIOSSHUserAuthenticationOffer]
     private let username: String
     private let password: String?
     private let answer: SSHLoginAnswerer?
+    private let interactive: Bool
+    private var questionsTried = false
+    /// The password was sent to the server, as an answer or as a password sign-in.
+    private var passwordSent = false
     /// The methods offered so far. A server that stops listing all of them accepted one as a partial success.
     private var offered: NIOSSHAvailableUserAuthenticationMethods = []
-    private var passwordFilled = false
     /// Its timeout stops while the user answers.
     weak var watcher: AuthWatcher?
 
@@ -94,24 +100,51 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         self.username = username
         self.answer = answer
         if case .password(let p) = credential { password = p } else { password = nil }
+        if case .interactive = credential { interactive = true } else { interactive = false }
         func key(_ k: NIOSSHPrivateKey) -> NIOSSHUserAuthenticationOffer {
             NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .privateKey(.init(privateKey: k)))
         }
         switch credential {
-        case .password(let p): offers = [NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .password(.init(password: p)))]
+        case .password, .interactive: offers = []
         case .privateKey(let k): offers = [key(k)]
         case .privateKeys(let keys): offers = keys.map(key)
         }
     }
+
     func nextAuthenticationType(availableMethods: NIOSSHAvailableUserAuthenticationMethods, nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>) {
-        while !offers.isEmpty {
-            let offer = offers.removeFirst()
-            let wanted: NIOSSHAvailableUserAuthenticationMethods = { if case .password = offer.offer { return .password } else { return .publicKey } }()
-            if availableMethods.contains(wanted) { offered.insert(wanted); nextChallengePromise.succeed(offer); return }
-        }
-        if availableMethods.contains(.keyboardInteractive), availableMethods.isDisjoint(with: offered), password != nil || answer != nil {
+        // A method that is no longer listed was accepted and another step follows.
+        let nextStep = !offered.isEmpty && availableMethods.isDisjoint(with: offered)
+        func offerQuestions() {
+            questionsTried = true
             offered.insert(.keyboardInteractive)
             nextChallengePromise.succeed(.keyboardInteractive(username: username))
+        }
+        func offerPassword(_ value: String) {
+            passwordSent = true
+            offered.insert(.password)
+            nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .password(.init(password: value))))
+        }
+        while !offers.isEmpty {
+            let offer = offers.removeFirst()
+            if availableMethods.contains(.publicKey) { offered.insert(.publicKey); nextChallengePromise.succeed(offer); return }
+        }
+        let asksQuestions = availableMethods.contains(.keyboardInteractive) && !questionsTried
+        if asksQuestions, answer != nil { offerQuestions(); return }
+        // The same password is not sent twice: a server may lock the account after a few wrong ones.
+        if availableMethods.contains(.password), let password, !passwordSent || nextStep { offerPassword(password); return }
+        if asksQuestions, password != nil, offered.isEmpty || nextStep { offerQuestions(); return }
+        if interactive, let answer, availableMethods.contains(.password), !passwordSent, !questionsTried || nextStep {
+            let loop = nextChallengePromise.futureResult.eventLoop
+            let watcher = self.watcher
+            watcher?.pauseTimeout()
+            Task {
+                do {
+                    let typed = try await answer(SSHLoginChallenge(name: "", instruction: "", prompts: [.init(text: "Password:", hidden: true)]))
+                    loop.execute { watcher?.resumeTimeout(); offerPassword(typed.first ?? "") }
+                } catch {
+                    nextChallengePromise.fail(SSHError.signInCancelled)
+                }
+            }
             return
         }
         nextChallengePromise.fail(SSHError.authenticationFailed)
@@ -121,9 +154,9 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         // Some servers only send a message, with nothing to answer.
         if challenge.prompts.isEmpty { responsePromise.succeed([]); return }
         // The session's password answers the server's first password question, once: a second one means it was wrong.
-        if let password, !passwordFilled, challenge.prompts.count == 1, !challenge.prompts[0].echo,
+        if let password, !passwordSent, challenge.prompts.count == 1, !challenge.prompts[0].echo,
            Self.asksForPassword(challenge.prompts[0].text) {
-            passwordFilled = true
+            passwordSent = true
             responsePromise.succeed([password])
             return
         }
@@ -144,9 +177,14 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         }
     }
 
+    private static let passwordWords = ["password", "passwort", "passwd", "mot de passe", "contraseña", "senha", "пароль",
+                                        "パスワード", "비밀번호", "암호", "密碼", "密码"]
+
     static func asksForPassword(_ prompt: String) -> Bool {
         let text = prompt.lowercased()
-        return text.contains("password") || text.contains("密碼") || text.contains("密码")
+        // A one-time password is a code, not the saved password.
+        if text.range(of: #"one[- ]?time|\botp\b"#, options: .regularExpression) != nil { return false }
+        return passwordWords.contains(where: text.contains)
     }
 }
 
@@ -183,24 +221,36 @@ final class AuthWatcher: ChannelInboundHandler, @unchecked Sendable {
     private var timeout: Scheduled<Void>?
     private let timeoutSeconds: Int64
     private var context: ChannelHandlerContext?
-    init(_ promise: EventLoopPromise<Void>, timeoutSeconds: Int64) { self.promise = promise; self.timeoutSeconds = timeoutSeconds }
+    /// A name with IPv6 and IPv4 addresses makes one channel for each address tried. Only the one that connected counts.
+    private let adopts: Bool
+    private var adopted: ObjectIdentifier?
+    init(_ promise: EventLoopPromise<Void>, timeoutSeconds: Int64, adopts: Bool = false) {
+        self.promise = promise; self.timeoutSeconds = timeoutSeconds; self.adopts = adopts
+    }
+    /// The channel that connected, when several addresses were tried. On the event loop.
+    func adopt(_ channel: Channel) {
+        adopted = ObjectIdentifier(channel)
+        context = try? channel.pipeline.syncOperations.context(handler: self)
+        if !channel.isActive { failIfPending(SSHError.connectFailed("SSH connection closed during authentication")) }
+    }
+    private func concerns(_ context: ChannelHandlerContext) -> Bool { !adopts || adopted == ObjectIdentifier(context.channel) }
     func handlerAdded(context: ChannelHandlerContext) {
-        self.context = context
-        startTimeout(context)
+        if !adopts { self.context = context }
+        if timeout == nil { startTimeout(context.eventLoop) }
     }
     /// Stops the clock while the user answers a sign-in question. On the event loop.
     func pauseTimeout() { timeout?.cancel(); timeout = nil }
     /// Starts the full time again after an answer. On the event loop.
     func resumeTimeout() {
         guard !settled, timeout == nil, let context else { return }
-        startTimeout(context)
+        startTimeout(context.eventLoop)
     }
-    private func startTimeout(_ context: ChannelHandlerContext) {
-        timeout = context.eventLoop.scheduleTask(in: .seconds(timeoutSeconds)) {
+    private func startTimeout(_ eventLoop: EventLoop) {
+        timeout = eventLoop.scheduleTask(in: .seconds(timeoutSeconds)) {
             guard !self.settled else { return }
             self.settled = true
             self.promise.fail(SSHError.connectFailed("SSH handshake/authentication timed out"))
-            context.close(promise: nil)
+            self.context?.close(promise: nil)
         }
     }
     func failIfPending(_ error: Error) {
@@ -210,6 +260,7 @@ final class AuthWatcher: ChannelInboundHandler, @unchecked Sendable {
         promise.fail(error)
     }
     func handlerRemoved(context: ChannelHandlerContext) {
+        guard concerns(context) else { return }
         self.context = nil
         failIfPending(SSHError.connectFailed("SSH connection closed during authentication"))
     }
@@ -218,11 +269,13 @@ final class AuthWatcher: ChannelInboundHandler, @unchecked Sendable {
         context.fireUserInboundEventTriggered(event)
     }
     func channelInactive(context: ChannelHandlerContext) {
-        failIfPending(SSHError.connectFailed("SSH connection closed during authentication"))
+        if concerns(context) { failIfPending(SSHError.connectFailed("SSH connection closed during authentication")) }
         context.fireChannelInactive()
     }
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        failIfPending((error as? SSHError) ?? SSHError.connectFailed((error as? LocalizedError)?.errorDescription ?? String(describing: error)))
+        if concerns(context) {
+            failIfPending((error as? SSHError) ?? SSHError.connectFailed((error as? LocalizedError)?.errorDescription ?? String(describing: error)))
+        }
         context.close(promise: nil)
     }
 }
@@ -342,7 +395,7 @@ public actor SSHSession {
         let loop = MultiThreadedEventLoopGroup.singleton.next()
         let router = InboundChannelRouter()
         let authPromise = loop.makePromise(of: Void.self)
-        let watcher = AuthWatcher(authPromise, timeoutSeconds: connectTimeoutSeconds)
+        let watcher = AuthWatcher(authPromise, timeoutSeconds: connectTimeoutSeconds, adopts: true)
         let config = clientConfiguration(settings: settings, credential: credential, hostKey: hostKey, answer: answer, watcher: watcher)
 
         let bootstrap = ClientBootstrap(group: loop)
@@ -357,7 +410,12 @@ public actor SSHSession {
             }
 
         let channel: Channel
-        do { channel = try await bootstrap.connect(host: connectHost, port: connectPort).get() }
+        do {
+            channel = try await bootstrap.connect(host: connectHost, port: connectPort).map { channel in
+                watcher.adopt(channel)
+                return channel
+            }.get()
+        }
         catch {
             let failure = SSHError.connectFailed(String(describing: error))
             loop.execute { watcher.failIfPending(failure) }
