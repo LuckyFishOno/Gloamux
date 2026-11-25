@@ -1230,3 +1230,5 @@
 "A quote is not closed." = "Falta cerrar una comilla.";
 "Choose" = "Elegir";
 "Ended" = "Finalizada";
+"SSH connected" = "Conexión SSH correcta";
+"SSH connection failed" = "Error de conexión SSH";

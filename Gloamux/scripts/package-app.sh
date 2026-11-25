@@ -5,8 +5,8 @@ build_path=${1:-/tmp/gloamux-build}
 output_dir=${2:-"$project_dir/../build"}
 # The latest release's version and build. Local builds use the same numbers, and the release commit raises them
 # (docs/en/RELEASING.md). GLOAMUX_VERSION and GLOAMUX_BUILD override them for one build.
-version=${GLOAMUX_VERSION:-1.4.2}
-build_number=${GLOAMUX_BUILD:-11}
+version=${GLOAMUX_VERSION:-1.4.3}
+build_number=${GLOAMUX_BUILD:-12}
 # Sparkle reads the update feed from here and installs only downloads signed with the matching private key, which
 # stays in the release maintainer's login Keychain (docs/en/RELEASING.md). GLOAMUX_FEED_URL points a test build elsewhere.
 feed_url=${GLOAMUX_FEED_URL:-https://github.com/LuckyFishOno/Gloamux/releases/latest/download/appcast.xml}

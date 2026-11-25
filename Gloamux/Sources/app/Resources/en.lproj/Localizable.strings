@@ -1230,3 +1230,5 @@
 "A quote is not closed." = "A quote is not closed.";
 "Choose" = "Choose";
 "Ended" = "Ended";
+"SSH connected" = "SSH connected";
+"SSH connection failed" = "SSH connection failed";

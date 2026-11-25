@@ -10,7 +10,7 @@ struct ConnectionRecord: Identifiable, Equatable {
 
     struct Event: Equatable {
         enum Kind: String, Codable { case opened, connected, failed, closed, lost, log, downloaded, uploaded, transferFailed, skipped
-            case direct, jump, proxy, command, folderCreated, renamed, deleted, permissions, forwardStarted, forwardStopped, forwardFailed }
+            case direct, jump, proxy, command, folderCreated, renamed, deleted, permissions, forwardStarted, forwardStopped, forwardFailed, sshConnected, sshFailed }
         let time: Date
         let kind: Kind
         var detail: String?
@@ -135,6 +135,19 @@ struct ConnectionRecord: Identifiable, Equatable {
             steps.append((.jump, name == hop.host ? address : "\(name) (\(address))"))
         }
         return steps.isEmpty ? [(.direct, nil)] : steps
+    }
+
+    /// Reads the commands run in a connection, and how each `ssh` among them went, into its record.
+    func commandCapture(for id: UUID?) -> CommandCapture {
+        CommandCapture { [weak self] command in
+            if Self.keepsCommands { self?.add(.command, to: id, detail: command) }
+        } ssh: { [weak self] ssh, outcome in
+            guard Self.keepsCommands else { return }
+            switch outcome {
+            case .connected: self?.add(.sshConnected, to: id, detail: ssh.destination)
+            case .failed(let reason): self?.add(.sshFailed, to: id, detail: ssh.destination + (reason.map { ": " + $0 } ?? ""))
+            }
+        }
     }
 
     private func clean(_ text: String, _ id: UUID) -> String {
@@ -349,9 +362,7 @@ extension WorkspaceModel {
         endHistory(tab, .closed)
         defer {
             let id = tab.historyID
-            tab.commands = id == nil ? nil : CommandCapture { [weak self] command in
-                if ConnectionHistory.keepsCommands { self?.history.add(.command, to: id, detail: command) }
-            }
+            tab.commands = id == nil ? nil : history.commandCapture(for: id)
         }
         let name = UIStrings.text(tab.title, language: UIStrings.language)
         if let container = tab.container {

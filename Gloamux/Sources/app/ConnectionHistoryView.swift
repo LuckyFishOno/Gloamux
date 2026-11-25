@@ -200,6 +200,8 @@ extension ConnectionRecord.Event.Kind {
         case .forwardStarted: return "Port forwarding started"
         case .forwardStopped: return "Port forwarding stopped"
         case .forwardFailed: return "Port forwarding failed"
+        case .sshConnected: return "SSH connected"
+        case .sshFailed: return "SSH connection failed"
         }
     }
 }
@@ -260,6 +262,7 @@ private struct ConnectionRecordView: View {
                     if shows.includes(.opened) { event(record.started, "Connection started", nil, nil) }
                     ForEach(Array(record.events.enumerated()).filter { shows.includes($0.element.kind) }, id: \.offset) { _, entry in
                         if entry.kind == .command, let command = entry.detail { commandRow(entry.time, command) }
+                        else if entry.kind == .sshConnected || entry.kind == .sshFailed { sshRow(entry) }
                         else {
                             event(entry.time, entry.kind.title, entry.kind == .log ? entry.detail.map { ($0 as NSString).lastPathComponent } : entry.detail, entry.bytes)
                         }
@@ -286,6 +289,25 @@ private struct ConnectionRecordView: View {
                     .accessibilityLabel(T("Command"))
                 Text(verbatim: command).appFont(.callout.monospaced()).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// How an `ssh` run in the terminal went, under its command.
+    private func sshRow(_ entry: ConnectionRecord.Event) -> some View {
+        let connected = entry.kind == .sshConnected
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            stamp(entry.time)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: connected ? "checkmark.circle.fill" : "xmark.circle.fill").appFont(.caption)
+                    .foregroundStyle(connected ? .green : .red).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(T(entry.kind.title))
+                    if let detail = entry.detail {
+                        Text(verbatim: detail).appFont(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
     }

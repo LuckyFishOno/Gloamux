@@ -1230,3 +1230,5 @@
 "A quote is not closed." = "引号没有成对。";
 "Choose" = "选择";
 "Ended" = "已结束";
+"SSH connected" = "SSH 连接成功";
+"SSH connection failed" = "SSH 连接失败";

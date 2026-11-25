@@ -233,11 +233,12 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 - It lists every connection: when, where, through which jump hosts or proxy, and how it ended. Select one to see what happened in it, in order:
   - **Commands**: each command run in the terminal, however it was entered: typed, recalled, pasted, broadcast, or sent by a quick command, runbook, agent, or `gloamux tabs`.
   - **Files**: downloads, uploads, new folders, renames, deletions, and permission changes.
-  - **Connection**: the jump hosts and proxy it went through, sign-in, port forwarding, and how it ended.
+  - **Connection**: the jump hosts and proxy it went through, sign-in, port forwarding, whether each `ssh` run in the terminal connected, and how it ended.
 - Search finds commands, paths, hosts, and names. **Download log** saves one record as text, with its terminal log when there is one.
 - A command is read from the line the terminal shows when you press Return, so a password the server does not show is never recorded, and likely secrets in a command are masked. Text typed into editors and other full-screen programs is left out. Inside tmux, screen, or Mosh a command is recorded when its prompt shows `user@host`. A terminal that opens on this Mac is not a connection and has no record.
+- When you run `ssh` in the terminal to go on to another server, the record says **SSH connected** or **SSH connection failed** with the reason `ssh` showed. Answers to its questions, such as `yes` for a new host key, are not commands. It is left out when `ssh` hides its errors (`-q`, `-E`, or redirected), holds a tunnel open without a session (`-N`), or runs from an alias or script.
 - The options menu exports the list as CSV or JSON, clears it, or turns it or **Record commands** off. Right-click a record to delete it.
-- Passwords, session keys, and command output are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
+- Passwords, session keys, and command output, other than the reason an `ssh` failed, are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
 
 ### Session logs
 

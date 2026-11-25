@@ -1230,3 +1230,5 @@
 "A quote is not closed." = "引用符が閉じられていません。";
 "Choose" = "選択";
 "Ended" = "終了";
+"SSH connected" = "SSH 接続に成功";
+"SSH connection failed" = "SSH 接続に失敗";

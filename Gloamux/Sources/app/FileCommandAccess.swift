@@ -127,7 +127,7 @@ extension WorkspaceModel {
     /// Reads the commands typed in `gloamux ssh` into the history of its connection, or nil when they are not kept.
     public func commandCapture() -> CommandCapture? {
         guard let id = commandHistoryID, ConnectionHistory.keepsCommands else { return nil }
-        return CommandCapture { [weak self] command in self?.history.add(.command, to: id, detail: command) }
+        return history.commandCapture(for: id)
     }
 
     /// Writes one change a command made on the server to the history of its connection.

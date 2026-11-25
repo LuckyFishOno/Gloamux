@@ -4,6 +4,16 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.3 (build 12): how each `ssh` run in a terminal went (November 25, 2026)
+
+Built on `5421375` (1.4.2 build 11). After an `ssh` run in a connection's terminal, the Session Log records **SSH connected** or **SSH connection failed** with the reason `ssh` showed. `TypedSSH` reads the command and its messages; `CommandCapture` decides when a prompt waits below it, or when the next command runs.
+
+- **Unit tests.** `CommandCaptureTests` covers a new host key, a refused and then accepted password, refused ports, refused keys, unknown hosts, Ctrl-C, prompts without a user or host, unknown prompts, cleared, wrapped, long, and tmux-style screens, and which commands count.
+- **Packaged CLI.** `gloamux ssh` signed in to a throwaway loopback `sshd` with a run-only key, then the system's `ssh` went on to a second one: one connection after answering `yes` to a new host key, a refused port, a refused key, and an unknown name. Each result was recorded under its command and `yes` was not a command.
+- **App.** A renamed copy of the packaged app with an isolated workspace showed both results in the Session Log.
+- `swift test` passed before the release commit. `release.sh build` reruns the suites on it.
+- Not checked live: Windows and network-equipment servers, and tmux outside the unit tests. The result comes from what the terminal shows, so an `ssh` that hides its errors or runs from an alias or script has none.
+
 ## Gloamux 1.4.2 (build 11): commands, routes, and file changes in the Session Log (November 25, 2026)
 
 Built on `7e91e50` (1.4.1 build 10). A record of the Session Log now holds the commands run in the connection, the jump hosts and proxy it went through, port forwarding, and file changes. Commands come from `CommandCapture`, which reads the line the terminal shows when Return is sent.

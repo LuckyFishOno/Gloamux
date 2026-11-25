@@ -4,13 +4,20 @@ import Terminal
 
 @MainActor final class CommandCaptureTests: XCTestCase {
     private var commands: [String] = []
+    private var results: [String] = []
     private var screen = TerminalScreen()
     private var capture: CommandCapture!
 
     override func setUp() async throws {
         commands = []
         screen = TerminalScreen()
-        capture = CommandCapture { [unowned self] in commands.append($0) }
+        results = []
+        capture = CommandCapture { [unowned self] in commands.append($0) } ssh: { [unowned self] ssh, outcome in
+            switch outcome {
+            case .connected: results.append(ssh.destination + " ok")
+            case .failed(let reason): results.append(ssh.destination + " " + (reason ?? "interrupted"))
+            }
+        }
     }
 
     private func type(_ text: String) { capture.sent(Array(text.utf8), on: screen) }
@@ -107,5 +114,68 @@ import Terminal
         // Focus reports are not keys.
         show("\u{1b}[?1049l\r\n$ "); type("\u{1b}[I\r"); show("\r\n$ ")
         XCTAssertEqual(commands.count, 3)
+    }
+
+    func testHopsConnectOrFail() {
+        func run(_ command: String, _ output: String) {
+            type(command); show(command); type("\r"); show("\r\n" + output); capture.settle(screen)
+        }
+        show("cipher@h50:~$ ")
+        // A new host key and a password, which are answers and not commands.
+        run("ssh cipher@10.0.6.52", "The authenticity of host '10.0.6.52' can't be established.\r\nAre you sure you want to continue connecting (yes/no/[fingerprint])? ")
+        XCTAssertEqual(results, [])
+        run("yes", "Warning: Permanently added '10.0.6.52' (ED25519) to the list of known hosts.\r\ncipher@10.0.6.52's password: ")
+        type("wrong\r"); show("\r\nPermission denied, please try again.\r\ncipher@10.0.6.52's password: "); capture.settle(screen)
+        XCTAssertEqual(results, [])
+        type("right\r"); show("\r\nWelcome to Ubuntu\r\n * ssh: see the manual\r\n\r\nLast login: Wed Nov 25 from 10.0.6.50\r\ncipher@h52:~$ "); capture.settle(screen)
+        XCTAssertEqual(results, ["cipher@10.0.6.52 ok"])
+        XCTAssertEqual(commands, ["ssh cipher@10.0.6.52"])
+        run("ssh -p 2222 10.0.7.52", "ssh: connect to host 10.0.7.52 port 2222: Connection refused\r\ncipher@h52:~$ ")
+        run("ssh -l ops 10.0.7.53", "ops@10.0.7.53: Permission denied (publickey).\r\ncipher@h52:~$ ")
+        run("ssh nowhere", "ssh: Could not resolve hostname nowhere: Name or service not known\r\ncipher@h52:~$ ")
+        // Interrupted while it waits.
+        run("ssh 10.0.7.54", ""); type("\u{3}"); show("^C\r\ncipher@h52:~$ "); capture.settle(screen)
+        // No greeting, and a prompt with no user or host in it.
+        run("cd / && sudo ssh -i key root@10.0.7.55", "# ")
+        // A prompt of a form that is not known: told when the next command runs.
+        run("ssh 10.0.7.56", "[10.0.7.56] @@ ")
+        XCTAssertEqual(results.count, 6)
+        run("uptime", "up\r\n[10.0.7.56] @@ ")
+        XCTAssertEqual(Array(results.dropFirst()), ["10.0.7.52:2222 Connection refused", "ops@10.0.7.53 Permission denied (publickey).",
+            "nowhere Could not resolve hostname nowhere: Name or service not known", "10.0.7.54 interrupted", "root@10.0.7.55 ok", "10.0.7.56 ok"])
+        XCTAssertEqual(commands.last, "uptime")
+    }
+
+    func testHopsInClearedWrappedAndFullScreens() {
+        screen.resize(rows: 8, cols: 30)
+        func run(_ command: String, _ output: String) {
+            type(command); show(command); type("\r"); show("\r\n" + output); capture.settle(screen)
+        }
+        show("$ ")
+        run("ssh a.example", "\u{1b}[H\u{1b}[2J$ ")
+        XCTAssertEqual(results, ["a.example ok"])
+        run("ssh long-host-name.example.com", "ssh: Could not resolve hostname long-host-name.example.com: Name or service not known\r\n$ ")
+        XCTAssertEqual(results.last, "long-host-name.example.com Could not resolve hostname long-host-name.example.com: Name or service not known")
+        // A long greeting scrolls the command off the screen.
+        run("ssh b.example", String(repeating: "line\r\n", count: 60) + "$ ")
+        XCTAssertEqual(results.last, "b.example ok")
+        // tmux
+        show("\u{1b}[?1049h\u{1b}[H\u{1b}[2Jops@a:~$ ")
+        run("ssh c", "ssh: connect to host c port 22: No route to host\r\nops@a:~$ ")
+        XCTAssertEqual(results.last, "c No route to host")
+        run("ssh d", "ops@d:~$ ")
+        XCTAssertEqual(results.last, "d ok")
+        XCTAssertEqual(results.count, 5)
+    }
+
+    func testWhichCommandsAreHops() {
+        XCTAssertEqual(TypedSSH("ssh -o Port=2200 -tt ops@h uptime")?.destination, "ops@h:2200")
+        XCTAssertEqual(TypedSSH("sshpass -p x /usr/bin/ssh -p22 h")?.destination, "h")
+        XCTAssertEqual(TypedSSH("A=1 ssh ssh://ops@h")?.destination, "ops@h")
+        XCTAssertEqual(TypedSSH("ssh -q h")?.quiet, true)
+        for other in ["ssh", "ssh -V", "ssh -N -L 1:h:2 h", "ssh h | tee x", "ssh h 2>/dev/null", "sshd h", "echo ssh h", "ssh-keygen -t rsa", "ssh-copy-id h"] {
+            XCTAssertNil(TypedSSH(other), other)
+        }
+        XCTAssertNil(TypedSSH("ssh -q h")?.outcome([], interrupted: false))
     }
 }

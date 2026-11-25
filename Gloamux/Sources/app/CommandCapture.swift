@@ -18,19 +18,36 @@ import Terminal
         var lines = 0
     }
 
+    /// An `ssh` that was run and has not been seen to connect or fail.
+    private struct Attempt {
+        let ssh: TypedSSH
+        let command: String
+        /// Where its command is; nil inside a full-screen program, whose lines move.
+        let line: Int?
+        var interrupted = false
+    }
+
     private let record: (String) -> Void
+    private let ended: (TypedSSH, TypedSSH.Outcome) -> Void
+    private var attempt: Attempt?
+    private var settling: Task<Void, Never>?
     private var typed = ""
     private var plain = true
     private var started: (prompt: String?, right: String)?
     private var pasting = false
     private var pending: [Line] = []
 
-    public init(_ record: @escaping (String) -> Void) { self.record = record }
+    /// `ssh` is told how each `ssh` run in the terminal went.
+    init(_ record: @escaping (String) -> Void, ssh: @escaping (TypedSSH, TypedSSH.Outcome) -> Void) {
+        self.record = record
+        ended = ssh
+    }
 
     // MARK: Input
 
     /// Notes input before it is sent. `screen` is what the terminal shows now.
     public func sent(_ bytes: [UInt8], on screen: TerminalScreen) {
+        settle(screen)
         var scalars = Substring(String(decoding: bytes, as: UTF8.self)).unicodeScalars
         while let scalar = scalars.popFirst() {
             switch scalar.value {
@@ -46,7 +63,7 @@ import Terminal
                 }
             case 0x0D, 0x0A:
                 if pasting { typed.append("\n") } else { finish(screen) }
-            case 0x03, 0x1A: reset(); pending = []
+            case 0x03, 0x1A: reset(); pending = []; attempt?.interrupted = true
             case 0x08, 0x7F:
                 begin(screen)
                 if !typed.isEmpty { typed.removeLast() }
@@ -103,7 +120,7 @@ import Terminal
         let body = String(found.1).trimmingCharacters(in: .whitespaces)
         let typed = line.typed.trimmingCharacters(in: .whitespaces)
         if line.plain, typed.contains("\n") { return }
-        if !body.isEmpty { record(line.plain && typed.hasPrefix(body) ? typed : body) }
+        if !body.isEmpty { note(line.plain && typed.hasPrefix(body) ? typed : body, screen) }
     }
 
     // MARK: Output
@@ -112,7 +129,10 @@ import Terminal
     public func feed(_ bytes: [UInt8], to screen: TerminalScreen) {
         let fullScreen = screen.usingAlternate
         // What was typed into a full-screen program is not the start of the next command.
-        defer { if screen.usingAlternate != fullScreen { reset() } }
+        defer {
+            if screen.usingAlternate != fullScreen { reset() }
+            if attempt != nil { settleSoon(screen) }
+        }
         guard !pending.isEmpty, bytes.contains(0x0A) else { screen.feed(bytes); return }
         var start = 0
         while !pending.isEmpty, let end = bytes[start...].firstIndex(of: 0x0A) {
@@ -132,7 +152,71 @@ import Terminal
         let count = (pending.indices.first { matches(pending[$0], screen) } ?? 0) + 1
         guard let commands = read(pending[count - 1], screen) else { return }
         pending.removeFirst(count)
-        for command in commands { record(command) }
+        if !commands.isEmpty, attempt != nil {
+            let whole = Self.line(screen).whole.trimmingCharacters(in: .whitespaces)
+            let before = whole.hasSuffix(commands[0]) ? String(whole.dropLast(commands[0].count)) : ""
+            // An answer to what ssh asks, such as whether to trust a host key, is not a command.
+            if TypedSSH.isQuestion(before) { return }
+            // A command after a prompt of a form that is not known.
+            if !before.allSatisfy(\.isWhitespace) { conclude(screen) }
+        }
+        for command in commands { note(command, screen) }
+    }
+
+    private func note(_ command: String, _ screen: TerminalScreen) {
+        record(command)
+        guard let ssh = TypedSSH(command) else { return }
+        attempt = Attempt(ssh: ssh, command: command, line: screen.usingAlternate ? nil : screen.absoluteLine(ofRow: screen.cursorRow))
+    }
+
+    // MARK: ssh
+
+    /// Output comes in pieces, and a part of a line can look like a prompt, so it is read once there is no more for a moment.
+    private func settleSoon(_ screen: TerminalScreen) {
+        settling?.cancel()
+        settling = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            if !Task.isCancelled { self?.settle(screen) }
+        }
+    }
+
+    /// Ends the `ssh` that was run when a prompt waits below it.
+    func settle(_ screen: TerminalScreen) {
+        guard attempt != nil, TypedSSH.isPrompt(Self.line(screen).before) else { return }
+        conclude(screen)
+    }
+
+    private func conclude(_ screen: TerminalScreen) {
+        guard let attempt else { return }
+        let shown = Self.line(screen), end = shown.lines.lowerBound
+        // Not moved on yet.
+        if Self.ends(shown.whole.trimmingCharacters(in: .whitespaces), with: attempt.command) { return }
+        let top = screen.absoluteLine(ofRow: 0)
+        var lines: [String]
+        if let line = attempt.line {
+            // A screen that was cleared starts again from its top.
+            lines = Self.texts(screen, end > line ? max(line, end - 1000)..<end : top..<max(top, end))
+            if end > line, !lines.isEmpty { lines.removeFirst() }
+        } else {
+            lines = Self.texts(screen, top..<max(top, end))
+            if let start = lines.lastIndex(where: { Self.ends($0.trimmingCharacters(in: .whitespaces), with: attempt.command) }) {
+                lines.removeSubrange(...start)
+            }
+        }
+        self.attempt = nil
+        settling?.cancel()
+        if let outcome = attempt.ssh.outcome(lines, interrupted: attempt.interrupted) { ended(attempt.ssh, outcome) }
+    }
+
+    /// The lines of a range of rows, with rows that ran past the edge joined.
+    private static func texts(_ screen: TerminalScreen, _ range: Range<Int>) -> [String] {
+        var lines: [String] = [], joins = false
+        for number in range {
+            guard let row = screen.row(absolute: number) else { continue }
+            if joins { lines[lines.count - 1] += text(row) } else { lines.append(text(row)) }
+            joins = row.last?.wraps == true
+        }
+        return lines
     }
 
     /// Whether the cursor's line ends with what was typed for `line`.
