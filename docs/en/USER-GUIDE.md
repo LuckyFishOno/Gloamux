@@ -230,9 +230,14 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 ### Session Log page
 
 - Open it with **Session Log** in the Default toolbar, the Classic toolbar, or the Workbench ribbon, from the **Terminal** menu or the command palette, or by right-clicking a saved session, which shows only records that match its name.
-- It lists every connection: when, where, how it ended, and which files were copied. Select one for its details, search the list, or choose **Download log** to save one record as text, with its terminal log when there is one.
-- The options menu exports the list as CSV or JSON, clears it, or turns it off. Right-click a record to delete it.
-- Passwords, session keys, answers, and terminal output are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
+- It lists every connection: when, where, through which jump hosts or proxy, and how it ended. Select one to see what happened in it, in order:
+  - **Commands**: each command run in the terminal, however it was entered: typed, recalled, pasted, broadcast, or sent by a quick command, runbook, agent, or `gloamux tabs`.
+  - **Files**: downloads, uploads, new folders, renames, deletions, and permission changes.
+  - **Connection**: the jump hosts and proxy it went through, sign-in, port forwarding, and how it ended.
+- Search finds commands, paths, hosts, and names. **Download log** saves one record as text, with its terminal log when there is one.
+- A command is read from the line the terminal shows when you press Return, so a password the server does not show is never recorded, and likely secrets in a command are masked. Text typed into editors and other full-screen programs is left out. Inside tmux, screen, or Mosh a command is recorded when its prompt shows `user@host`. A terminal that opens on this Mac is not a connection and has no record.
+- The options menu exports the list as CSV or JSON, clears it, or turns it or **Record commands** off. Right-click a record to delete it.
+- Passwords, session keys, and command output are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
 
 ### Session logs
 
@@ -578,6 +583,7 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 | **Log format** (`terminal.log-format`) | **Plain text**, or **With escape sequences** to keep colors. |
 | **Session logs** · **Show in Finder** | Opens the log folder. |
 | **Keep connection history** (`history.enabled`) | Saves one record for each connection. On by default. |
+| **Record commands** (`history.commands`) | Adds the commands run in a connection to its record. On by default. |
 
 ### Text
 

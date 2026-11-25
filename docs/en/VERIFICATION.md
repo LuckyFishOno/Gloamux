@@ -4,6 +4,17 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.2 (build 11): commands, routes, and file changes in the Session Log (November 25, 2026)
+
+Built on `7e91e50` (1.4.1 build 10). A record of the Session Log now holds the commands run in the connection, the jump hosts and proxy it went through, port forwarding, and file changes. Commands come from `CommandCapture`, which reads the line the terminal shows when Return is sent.
+
+- **Unit tests.** `CommandCaptureTests` covers typed, recalled, completed, pasted, typed-ahead, wrapped, and continuation lines, right and changing prompts, shell integration, tmux-style screens, and passwords that are not echoed, are masked, or have no line end of their own. `ConnectionHistoryTests` covers routes, search, exports, and masking of secrets in arguments.
+- **Real server.** The packaged CLI signed in to an Ubuntu 24.04 OpenSSH server with a key from `ssh-agent`, through a jump host, on a pseudo-terminal. The record held the jump host and every command, including history recall, Tab completion, Ctrl-R, a `for` loop on two lines, and a command typed while another ran. Text given to `read -s` was not in the file, and `-p` of `mysql` was masked.
+- **Local zsh.** The same reader on a login zsh, with and without shell integration, returned every command.
+- **App.** A renamed copy of the packaged app with an isolated workspace, against loopback demo servers: commands and downloads appeared in the Session Log, the filters and the jump-host route were shown, and turning `history.commands` off left a command out.
+- `swift test`: **521 cases, 513 passed, 8 skipped, 0 failed** before the last fixes to `CommandCapture`, whose tests passed after them. `release.sh build` reruns the suites on the release commit.
+- Not checked: Mosh, serial devices, network equipment, fish, a desktop through an SSH gateway, and a real proxy. A terminal whose size differs from the one the server was told, so that the shell draws over its own line, can lose a command.
+
 ## Gloamux 1.4.1 (build 10): Session Log in the window (November 25, 2026)
 
 Built on `8bef52f` (1.4 build 9). The Default toolbar has a third segment, **Session Log**; the Classic toolbar and Workbench ribbon open it in its own window. **Connection history** is now named **Session Log** in English; the stored file is unchanged.

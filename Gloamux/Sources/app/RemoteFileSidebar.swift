@@ -530,6 +530,7 @@ private struct RemoteTreePanel: View {
         Task {
             do {
                 try await RemoteDelete.remove(row.path, isDirectory: row.entry.isDirectory, with: model.sftp(for: tab))
+                model.noteHistory(tab, .deleted, detail: row.path)
                 if tree.selection == row.path { tree.selection = nil }
                 tree.expanded.remove(row.path)
             } catch { tree.error = message(for: error) }
@@ -547,12 +548,14 @@ private struct RemoteTreePanel: View {
                 switch request.kind {
                 case .folder(let parent):
                     try await transfer.makeDirectory(RemoteTreeState.child(parent, name))
+                    model.noteHistory(tab, .folderCreated, detail: RemoteTreeState.child(parent, name))
                     if parent != tree.root { tree.expanded.insert(parent) }
                 case .rename(let path):
                     guard let chosen = FileNameCheck.confirm(original: (path as NSString).lastPathComponent, chosen: name) else { return }
                     let destination = RemoteTreeState.child((path as NSString).deletingLastPathComponent, chosen)
                     if try await transfer.entry(at: destination) != nil { throw WorkspaceError.alreadyExists(chosen) }
                     try await transfer.rename(from: path, to: destination)
+                    model.noteHistory(tab, .renamed, detail: path + " → " + destination)
                 }
             } catch { tree.error = message(for: error) }
             await tree.refresh(model: model, tab: tab)

@@ -89,16 +89,22 @@ extension WorkspaceModel {
         let epoch = tab.epoch
         defer { if tab.epoch == epoch { tab.forwardStarts.remove(rule.id) } }
 
+        let record = tab.historyID
         let tunnel: any SSHForward
-        switch (rule.kind, rule.host, rule.port) {
-        case (.local, let host?, let port?):
-            tunnel = try await ssh.startLocalForward(localPort: rule.listenPort, targetHost: host, targetPort: port)
-        case (.remote, let host?, let port?):
-            tunnel = try await ssh.startRemoteForward(remotePort: rule.listenPort, targetHost: host, targetPort: port)
-        case (.dynamic, nil, nil):
-            tunnel = try await ssh.startDynamicForward(localPort: rule.listenPort)
-        default:
-            throw WorkspaceError.invalid("Enter a forwarding host and valid TCP ports.")
+        do {
+            switch (rule.kind, rule.host, rule.port) {
+            case (.local, let host?, let port?):
+                tunnel = try await ssh.startLocalForward(localPort: rule.listenPort, targetHost: host, targetPort: port)
+            case (.remote, let host?, let port?):
+                tunnel = try await ssh.startRemoteForward(remotePort: rule.listenPort, targetHost: host, targetPort: port)
+            case (.dynamic, nil, nil):
+                tunnel = try await ssh.startDynamicForward(localPort: rule.listenPort)
+            default:
+                throw WorkspaceError.invalid("Enter a forwarding host and valid TCP ports.")
+            }
+        } catch {
+            history.add(.forwardFailed, to: record, detail: T(rule.kind.title) + " · " + rule.address() + ": " + message(for: error))
+            throw error
         }
 
         guard tab.epoch == epoch, !Task.isCancelled else {
@@ -108,8 +114,11 @@ extension WorkspaceModel {
         let forward = SessionForward(rule: rule, handle: tunnel)
         tab.forwards.append(forward)
         let id = forward.id
-        Task { @MainActor [weak tab] in
+        let shown = T(rule.kind.title) + " · " + rule.address(boundPort: tunnel.port)
+        history.add(.forwardStarted, to: record, detail: shown)
+        Task { @MainActor [weak self, weak tab] in
             await tunnel.waitForClose()
+            self?.history.add(.forwardStopped, to: record, detail: shown)
             tab?.forwards.removeAll { $0.id == id }
         }
         return forward

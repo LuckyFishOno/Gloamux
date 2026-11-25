@@ -63,6 +63,7 @@ enum FilesCommand {
             case "rm" where recursive:
                 guard let entry = try await fs.entry(at: paths[0]) else { throw WorkspaceError.invalid("Remote item does not exist.") }
                 try await RemoteDelete.remove(paths[0], isDirectory: entry.isDirectory, with: fs)
+                model.noteCommandChange("rm", paths)
             case "get":
                 try await noting(model, download: true, paths[0]) {
                     try await get(fs, paths[0], URL(fileURLWithPath: paths[1]), overwrite: overwrite, resume: resume)
@@ -71,11 +72,15 @@ enum FilesCommand {
                 try await noting(model, download: false, paths[1]) {
                     try await put(fs, URL(fileURLWithPath: paths[0]), paths[1], overwrite: overwrite, resume: resume)
                 }
-            case "mkdir": try await fs.makeDirectory(paths[0])
-            case "mv": try await fs.rename(from: paths[0], to: paths[1])
-            case "rm": try await fs.removeFile(paths[0])
-            case "rmdir": try await fs.removeDirectory(paths[0])
-            case "chmod": if let mode { try await fs.setPermissions(paths[1], mode: mode) }
+            case "mkdir": try await fs.makeDirectory(paths[0]); model.noteCommandChange(op, paths)
+            case "mv": try await fs.rename(from: paths[0], to: paths[1]); model.noteCommandChange(op, paths)
+            case "rm": try await fs.removeFile(paths[0]); model.noteCommandChange(op, paths)
+            case "rmdir": try await fs.removeDirectory(paths[0]); model.noteCommandChange(op, paths)
+            case "chmod":
+                if let mode {
+                    try await fs.setPermissions(paths[1], mode: mode)
+                    model.noteCommandChange(op, [paths[1]], mode: mode)
+                }
             default: throw CLIUsageError("Unknown file operation.")
             }
             return result

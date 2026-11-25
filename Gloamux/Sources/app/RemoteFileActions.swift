@@ -42,6 +42,7 @@ extension RemoteFileDrag {
         let name = (path as NSString).lastPathComponent
         let target = folder.appendingPathComponent(name.isEmpty ? "file" : name, isDirectory: isDirectory)
         try await copy(path, isDirectory: isDirectory, to: target, transfer, depth: 0)
+        model.noteHistory(tab, .downloaded, detail: path)
         return target
     }
 
@@ -147,7 +148,9 @@ extension WorkspaceModel {
     func setPermissions(_ items: [(path: String, mode: UInt32?)], to bits: UInt32, in tab: SessionTab) async throws {
         let transfer = try await sftp(for: tab)
         for item in items {
-            try await transfer.setPermissions(item.path, mode: PermissionsSheet.mode(bits, keeping: item.mode))
+            let mode = PermissionsSheet.mode(bits, keeping: item.mode)
+            try await transfer.setPermissions(item.path, mode: mode)
+            noteHistory(tab, .permissions, detail: String(mode, radix: 8) + " " + item.path)
         }
     }
 }
@@ -216,6 +219,7 @@ extension WorkspaceModel {
             let name = (path as NSString).lastPathComponent
             let local = folder.appendingPathComponent(name.isEmpty ? "file" : name)
             try await transfer.download(remotePath: path, to: local)
+            model.noteHistory(tab, .downloaded, detail: path, bytes: entry?.size)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
             let edit = RemoteEdit(remotePath: path, localURL: local, tab: tab, entry: entry)
             edits.append(edit)
@@ -270,6 +274,7 @@ extension WorkspaceModel {
                 try? await transfer.removeFile(partial)
                 throw error
             }
+            model.noteHistory(tab, .uploaded, detail: edit.remotePath)
             let after = try? await transfer.entry(at: edit.remotePath)
             edit.remoteSize = after?.size; edit.remoteModified = after?.modified; edit.permissions = after?.permissions ?? edit.permissions
             edit.syncedAt = stamp

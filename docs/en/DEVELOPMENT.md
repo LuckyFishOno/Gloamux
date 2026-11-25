@@ -75,7 +75,7 @@ Gloamux stores its working files under `~/Library/Application Support/Gloamux`. 
 | `quick-commands.json` | Quick commands, as plain text. Keep secrets out of saved commands. |
 | `layout.json`, `appearance.json`, `settings.json` | The workspace layout, the theme, and workspace settings. |
 | `triggers.json` | Output triggers. |
-| `connection-history.jsonl` | One event per line for each connection (see `ConnectionHistory`). |
+| `connection-history.jsonl` | One event per line for each connection (see `ConnectionHistory`; commands come from `CommandCapture`). |
 | `open-tabs.json`, `recent-sessions.json` | Tabs to reopen at launch, and recently opened sessions. |
 | `agent-access.json`, `agent-activity.json` | Agent access, allowed sessions, and the activity history. |
 | `ssh-key-secure-enclave` | The Gloamux Secure Enclave SSH key (see `AppSSHKey`). |

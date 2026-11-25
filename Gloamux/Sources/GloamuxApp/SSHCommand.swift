@@ -2,6 +2,7 @@ import App
 import Darwin
 import Foundation
 import Ssh
+import Terminal
 
 /// `gloamux ssh`: a saved SSH session's shell in the terminal the command runs in, signed in like `gloamux files`.
 enum SSHCommand {
@@ -40,10 +41,14 @@ enum SSHCommand {
         return try await model.withTerminalConnection(
             item, secret: secret, access: FileCommandAccess(hostKeys: hostKeys, answer: answer),
             rows: size.rows, columns: size.columns, term: ProcessInfo.processInfo.environment["TERM"]
-        ) { shell in try await session(shell) }
+        ) { shell in try await session(shell, commands: model.commandCapture(), size: size) }
     }
 
-    @MainActor private static func session(_ shell: SSHInteractiveShell) async throws -> Int32 {
+    /// `commands` reads what is run into the session log, from a screen that follows the one in this terminal.
+    @MainActor private static func session(_ shell: SSHInteractiveShell, commands: CommandCapture?,
+                                           size: (rows: Int, columns: Int)) async throws -> Int32 {
+        let screen = TerminalScreen()
+        screen.resize(rows: size.rows, cols: size.columns)
         let terminal = RawTerminal()
         defer { terminal.restore() }
         var sources: [DispatchSourceSignal] = []
@@ -52,6 +57,7 @@ enum SSHCommand {
         let resize = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
         resize.setEventHandler {
             let size = windowSize()
+            screen.resize(rows: size.rows, cols: size.columns)
             Task { try? await shell.resize(rows: size.rows, columns: size.columns) }
         }
         sources.append(resize)
@@ -66,10 +72,17 @@ enum SSHCommand {
 
         let input = standardInput()
         let sending = Task.detached {
-            for await chunk in input { try? await shell.send(chunk) }
+            for await chunk in input {
+                await commands?.sent(chunk, on: screen)
+                try? await shell.send(chunk)
+            }
         }
         defer { sending.cancel() }
-        for try await bytes in shell.output { writeAll(bytes) }
+        for try await bytes in shell.output {
+            writeAll(bytes)
+            commands?.feed(bytes, to: screen)
+            _ = screen.takeEvents()
+        }
         return Int32(clamping: shell.exitStatus ?? 255)
     }
 

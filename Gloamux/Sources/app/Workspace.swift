@@ -164,6 +164,8 @@ struct HostKeyChange: Identifiable {
     var pendingCopies: SFTPCopies?
     /// This connection's record in the history.
     var historyID: UUID?
+    /// Reads the commands run in this connection, for its record.
+    var commands: CommandCapture?
     /// `user@host` as the interface shows it.
     var account: String { (username.isEmpty ? "" : SessionKey.masked(username) + "@") + host }
     /// Folders shown in the remote file sidebar for this session.
@@ -862,6 +864,7 @@ enum ConnectionState: Equatable {
         tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecrets = [:]
         defer { if tab.epoch == epoch { tab.busy = false } }
         beginHistory(tab, key: tab.signIn == .sessionKey ? tab.sessionKey : nil)
+        history.addRoute(to: tab.historyID, target: target, hops: hops, names: hopNames)
         do {
             let signIn = TabSignIn(model: self, tab: tab, epoch: epoch)
             let ssh = try await service.openSSH(target, hops: hops, secret: secret, jumpSecrets: jumpSecrets, handler: signIn) { server in
@@ -1041,7 +1044,7 @@ enum ConnectionState: Equatable {
         } catch { if tab.epoch == epoch { tab.error = message(for: error) } }
     }
     public func sendTerminal(_ tab: SessionTab, bytes: [UInt8]) {
-        enqueueTerminalInput(tab, bytes: bytes)
+        enqueueTerminalInput(tab, bytes: bytes, records: false)
     }
 
     /// Output from a shell: draws it, answers terminal queries, records it, and notes finished commands.
@@ -1051,7 +1054,7 @@ enum ConnectionState: Equatable {
         if !tab.outputPending, tab.id != selection, !isVisible(tab) { tab.outputPending = true }
         let scrollback = TerminalPreferences.scrollback
         if tab.screen.options.scrollbackSize != scrollback { tab.screen.setScrollbackSize(scrollback) }
-        tab.screen.feed(bytes)
+        if let commands = tab.commands { commands.feed(bytes, to: tab.screen) } else { tab.screen.feed(bytes) }
         tab.screenRevision += 1
         recordings.output(tab, bytes: bytes)
         logs.output(tab, bytes: bytes)
@@ -1150,7 +1153,7 @@ enum ConnectionState: Equatable {
     func installShellIntegration(_ tab: SessionTab) {
         guard tab.terminalReady, tab.integratedTerminal != tab.terminalID else { return }
         tab.integratedTerminal = tab.terminalID
-        enqueueTerminalInput(tab, bytes: Array(ShellIntegration.hook.utf8) + [0x0D])
+        enqueueTerminalInput(tab, bytes: Array(ShellIntegration.hook.utf8) + [0x0D], records: false)
     }
 
     /// Whether the shell in a tab reports its prompts.
@@ -1161,17 +1164,20 @@ enum ConnectionState: Equatable {
         tab.navigation = TerminalNavigationRequest(action: action)
     }
 
-    @discardableResult func enqueueTerminalInput(_ tab: SessionTab, bytes utf8: [UInt8]) -> Bool {
+    /// `records` is false for what a user or command did not type, such as a terminal's replies.
+    @discardableResult func enqueueTerminalInput(_ tab: SessionTab, bytes utf8: [UInt8], records: Bool = true) -> Bool {
         let bytes = tab.encoding.encode(utf8)
         guard tab.terminalReady, !bytes.isEmpty, bytes.count <= 262144 else { return false }
         tab.bytesSent += bytes.count
         if tab.isLocal {
             guard let shell = tab.localShell else { return false }
+            if records { captureCommands(tab, utf8) }
             shell.send(bytes)
             return true
         }
         guard let shell = tab.shell else { return false }
         guard tab.pendingInputBytes + bytes.count <= 262144 else { tab.error = "Terminal input queue exceeds 256 KiB."; return false }
+        if records { captureCommands(tab, utf8) }
         tab.pendingInput.append(bytes); tab.pendingInputBytes += bytes.count
         guard tab.inputTask == nil else { return true }
         let epoch = tab.epoch
@@ -1343,17 +1349,24 @@ enum ConnectionState: Equatable {
             try await transfer.download(remotePath: path, to: partial) { progress in Task { @MainActor in if tab.busy && tab.epoch == epoch && tab.fileOperationID == operation { tab.progress = progress.fraction } } }
             if FileManager.default.fileExists(atPath: local.path) { _ = try FileManager.default.replaceItemAt(local, withItemAt: partial) }
             else { try FileManager.default.moveItem(at: partial, to: local) }
+            self.noteHistory(tab, .downloaded, detail: path)
         }
     }
     public func rename(_ tab: SessionTab, from: String, to: String) async {
         await fileOperation(tab, title: "Renaming…") { transfer in
             let destination = try self.remoteFile(to, in: tab)
             if try await transfer.listDirectory(tab.remotePath).contains(where: { $0.name == to }) { throw WorkspaceError.alreadyExists(to) }
-            try await transfer.rename(from: self.remoteFile(from, in: tab), to: destination)
+            let path = try self.remoteFile(from, in: tab)
+            try await transfer.rename(from: path, to: destination)
+            self.noteHistory(tab, .renamed, detail: path + " → " + destination)
         }
     }
     public func remove(_ tab: SessionTab, name: String) async {
-        await fileOperation(tab, title: "Deleting…") { transfer in try await transfer.removeFile(self.remoteFile(name, in: tab)) }
+        await fileOperation(tab, title: "Deleting…") { transfer in
+            let path = try self.remoteFile(name, in: tab)
+            try await transfer.removeFile(path)
+            self.noteHistory(tab, .deleted, detail: path)
+        }
     }
     private func fileOperation(_ tab: SessionTab, title: String, _ action: (any RemoteFileSystem) async throws -> Void) async {
         guard !tab.busy, tab.connected else { return }
@@ -1479,7 +1492,7 @@ enum ConnectionState: Equatable {
             switch event {
             case .opened: self.beginHistory(tab)
             case .failed, .closed, .lost: self.endHistory(tab, event, detail: detail)
-            default: self.noteHistory(tab, event)
+            default: self.noteHistory(tab, event, detail: detail)
             }
         }
         tab.savedSessionID = sessionTree.node(item.id)?.id

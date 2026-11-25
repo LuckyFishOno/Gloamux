@@ -226,8 +226,10 @@ public enum CLICatalog {
                    help: """
             list [COUNT [SEARCH]] | show ID | log ID PATH | export PATH.csv|PATH.json | remove ID | clear
 
-            Each connection is one record: when, where, how it ended, and which files were copied. log writes one record as
-            text, with its terminal log when there is one. Turn history off with gloamux settings set history.enabled off.
+            Each connection is one record: when, where, through which jump hosts or proxy, how it ended, the commands run in
+            it, and the files copied or changed and ports forwarded. log writes one record as text, with its terminal log
+            when there is one. Turn history off with gloamux settings set history.enabled off, or only the commands with
+            gloamux settings set history.commands off.
             """),
         CLICommand("appearance",
                    summary: "Manage the workspace theme",

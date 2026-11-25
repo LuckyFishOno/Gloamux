@@ -165,14 +165,15 @@ enum SFTPShell {
                 for item in try FileManager.default.contentsOfDirectory(atPath: localPath(paths.first ?? ".")).sorted() { print(ProductCLI.safe(item)) }
             case "get": try count(1...2); try await get(paths[0], paths.count > 1 ? paths[1] : nil, recursive: recursive, replaces: replaces)
             case "put": try count(1...2); try await put(paths[0], paths.count > 1 ? paths[1] : nil, recursive: recursive, replaces: replaces)
-            case "mkdir": try count(1...1); try await fs.makeDirectory(absolute(paths[0]))
-            case "rename", "mv": try count(2...2); try await fs.rename(from: absolute(paths[0]), to: absolute(paths[1]))
-            case "rm": try count(1...1); try await fs.removeFile(absolute(paths[0]))
-            case "rmdir": try count(1...1); try await fs.removeDirectory(absolute(paths[0]))
+            case "mkdir": try count(1...1); try await fs.makeDirectory(absolute(paths[0])); model.noteCommandChange(name, [absolute(paths[0])])
+            case "rename", "mv": try count(2...2); try await fs.rename(from: absolute(paths[0]), to: absolute(paths[1])); model.noteCommandChange("mv", paths.map(absolute))
+            case "rm": try count(1...1); try await fs.removeFile(absolute(paths[0])); model.noteCommandChange(name, [absolute(paths[0])])
+            case "rmdir": try count(1...1); try await fs.removeDirectory(absolute(paths[0])); model.noteCommandChange(name, [absolute(paths[0])])
             case "chmod":
                 try count(2...2)
                 guard let mode = UInt32(paths[0], radix: 8), mode <= 0o7777 else { throw CLIUsageError("Mode must be an octal number from 0000 to 7777.") }
                 try await fs.setPermissions(absolute(paths[1]), mode: mode)
+                model.noteCommandChange(name, [absolute(paths[1])], mode: mode)
             case "stat":
                 try count(1...1)
                 guard let entry = try await fs.entry(at: absolute(paths[0])) else { throw WorkspaceError.invalid("Remote item does not exist.") }

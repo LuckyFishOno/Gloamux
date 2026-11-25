@@ -4,7 +4,7 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.4.1 (build 10)**。
+目前版本：**Gloamux 1.4.2 (build 11)**。
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
@@ -55,22 +55,22 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 ## 畫面
 
 <p align="center">
-  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="在終端機輸入指令、把第二台伺服器並排、切換主題，再到雙欄畫面下載檔案" />
+  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="在終端機輸入指令、把第二台伺服器並排、切換主題，再到雙欄畫面下載檔案，並打開連線歷史" />
 </p>
 
 把伺服器並排、切換主題，再到雙欄傳輸畫面用可續傳的佇列搬檔案。
 
 <p align="center">
-  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="貼上一次 sftp 指令、存成連線、回答伺服器的問題，檔案隨即下載" />
+  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="貼上一次 sftp 指令、存成連線，以及伺服器登入時的提問" />
 </p>
 
 遇到只允許 `sftp` 加 session key 的閘道，指令只要貼一次。Gloamux 會存成連線並傳完指令裡的檔案，之後只問新的 key，而且不會儲存它。
 
 <p align="center">
-  <img src="docs/assets/gloamux-history.png" width="1000" alt="連線歷史列出兩筆連線，選取的一筆顯示登入與下載的檔案，並有下載紀錄按鈕" />
+  <img src="docs/assets/gloamux-history.png" width="1000" alt="連線歷史列出每次連線，選取的一筆依序顯示跳板、連接埠轉送、指令與檔案" />
 </p>
 
-每次連線都會留下一筆紀錄：時間、對象、怎麼結束、傳了哪些檔案。可以直接看，也可以下載成紀錄檔。
+每次連線都會留下一筆紀錄：時間、對象、經過哪些跳板、執行過的指令、傳輸或變更的檔案，以及怎麼結束。可以搜尋、直接看，也可以下載成紀錄檔。
 
 <p align="center">
   <img src="docs/assets/gloamux-new-connection.png" width="1320" alt="新連線分頁展開 RDP 區段，顯示解析度、Retina、連線品質和剪貼簿選項" />
@@ -85,7 +85,7 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 - **檔案** · 跟著目前窗格的檔案側欄、可續傳佇列的雙欄傳輸畫面、快速查看，以及用 Mac App 編輯遠端檔案，支援 SFTP、SCP、FTP 和 FTPS。貼上一次 `sftp` 指令就能存成連線。
 - **遠端桌面** · 在 Gloamux 分頁裡使用 RDP（含網路層級驗證）和 VNC（含 macOS 螢幕共享），可走 SSH 通道並共用剪貼簿。
 - **其他連線** · 序列埠、Telnet、Mosh、Docker 容器、Kubernetes Pod 和 AWS Systems Manager 工作階段。
-- **連線歷史** · 每次連線與傳過的檔案都有一筆紀錄，可檢視、搜尋或下載。
+- **連線歷史** · 每次連線都有一筆紀錄，包含執行的指令、跳板、連接埠轉送和檔案，可檢視、搜尋或下載。
 - **安全** · Production、Staging、Test、Development 標籤，高風險指令確認，主機金鑰檢視與紀錄，以及鎖定工作區。
 - **帶著連線過來** · 可從 Xshell、MobaXterm、PuTTY 或 KiTTY、OpenSSH 和 CSV 匯入，匯出時不含密碼。也能用 Bonjour、Tailscale 和 AWS 找主機。
 - **自動化** · 快速指令、輸出觸發、Markdown 操作手冊、指令面板、Spotlight、捷徑和 `gloamux://` 連結。

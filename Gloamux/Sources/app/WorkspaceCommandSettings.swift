@@ -41,6 +41,7 @@ extension WorkspaceCommand {
         Setting(name: "terminal.log-every-session", key: TerminalPreferences.logKey, kind: .bool(false)),
         Setting(name: "terminal.log-format", key: TerminalPreferences.logFormatKey, kind: .choice(TerminalLogFormat.allCases.map(\.rawValue), TerminalLogFormat.text.rawValue)),
         Setting(name: "history.enabled", key: ConnectionHistory.enabledKey, kind: .bool(true)),
+        Setting(name: "history.commands", key: ConnectionHistory.commandsKey, kind: .bool(true)),
         Setting(name: "terminal.confirm-close", key: TerminalPreferences.confirmCloseKey, kind: .bool(true)),
         Setting(name: "terminal.right-click-paste", key: TerminalPreferences.rightClickPasteKey, kind: .bool(false)),
         Setting(name: "terminal.option-as-meta", key: TerminalPreferences.optionMetaKey, kind: .bool(false)),

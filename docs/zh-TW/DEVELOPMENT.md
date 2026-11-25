@@ -75,7 +75,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 | `quick-commands.json` | 常用指令，以純文字儲存。請不要把機密放進已存指令。 |
 | `layout.json`、`appearance.json`、`settings.json` | 工作區版面、主題和工作區設定。 |
 | `triggers.json` | 輸出觸發規則。 |
-| `connection-history.jsonl` | 每次連線的事件，一行一個（見 `ConnectionHistory`）。 |
+| `connection-history.jsonl` | 每次連線的事件，一行一個（見 `ConnectionHistory`；指令來自 `CommandCapture`）。 |
 | `open-tabs.json`、`recent-sessions.json` | 啟動時要重新打開的分頁，以及最近開啟的連線。 |
 | `agent-access.json`、`agent-activity.json` | AI 代理存取、允許的連線和活動紀錄。 |
 | `ssh-key-secure-enclave` | Gloamux 的 Secure Enclave SSH 金鑰（見 `AppSSHKey`）。 |

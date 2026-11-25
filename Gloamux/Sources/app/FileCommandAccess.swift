@@ -112,6 +112,8 @@ extension WorkspaceModel {
         do {
             let target = ConnectionService.sshTarget(settings)
             let hops = try connections.jumpHosts(for: target, excluding: item.id)
+            history.addRoute(to: commandHistoryID, target: target, hops: hops,
+                             names: sessionTree.jumpRoute(for: target, excluding: item.id)?.map(\.name) ?? [])
             let ssh = try await connections.openSSH(target, hops: hops, secret: secret ?? "", handler: signIn)
             history.add(.connected, to: commandHistoryID)
             return ssh
@@ -119,6 +121,23 @@ extension WorkspaceModel {
             let text = ConnectionService.failureText(error, reported: nil)
             endCommandHistory(.failed, detail: text)
             throw WorkspaceError.invalid(text)
+        }
+    }
+
+    /// Reads the commands typed in `gloamux ssh` into the history of its connection, or nil when they are not kept.
+    public func commandCapture() -> CommandCapture? {
+        guard let id = commandHistoryID, ConnectionHistory.keepsCommands else { return nil }
+        return CommandCapture { [weak self] command in self?.history.add(.command, to: id, detail: command) }
+    }
+
+    /// Writes one change a command made on the server to the history of its connection.
+    public func noteCommandChange(_ operation: String, _ paths: [String], mode: UInt32? = nil) {
+        switch operation {
+        case "mkdir": history.add(.folderCreated, to: commandHistoryID, detail: paths[0])
+        case "mv", "rename": history.add(.renamed, to: commandHistoryID, detail: paths[0] + " → " + paths[1])
+        case "rm", "rmdir": history.add(.deleted, to: commandHistoryID, detail: paths[0])
+        case "chmod": history.add(.permissions, to: commandHistoryID, detail: String(mode ?? 0, radix: 8) + " " + paths[0])
+        default: break
         }
     }
 

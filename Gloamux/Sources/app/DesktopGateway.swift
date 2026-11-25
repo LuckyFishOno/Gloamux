@@ -110,6 +110,10 @@ extension WorkspaceModel {
         let target = ConnectionService.sshTarget(settings)
         do {
             let hops = try service.jumpHosts(for: target, excluding: id)
+            let names = sessionTree.jumpRoute(for: target, excluding: id)?.map(\.name) ?? hops.map(\.host)
+            for step in ConnectionHistory.route(target: target, hops: hops + [target], names: names + [item.name]) {
+                desktop.historyEvent?(step.kind, step.detail)
+            }
             let signIn = GatewaySignIn(gateway: gateway, knownHosts: knownHosts)
             let ssh = try await service.openSSH(target, hops: hops, secret: "", handler: signIn)
             let forward: SSHLocalForward

@@ -721,7 +721,10 @@ private struct RemoteFilePane: View {
         Task {
             do {
                 let transfer = try await model.sftp(for: tab)
-                for item in items { try await RemoteDelete.remove(item.path, isDirectory: item.isDirectory, with: transfer) }
+                for item in items {
+                    try await RemoteDelete.remove(item.path, isDirectory: item.isDirectory, with: transfer)
+                    model.noteHistory(tab, .deleted, detail: item.path)
+                }
             } catch { remote.error = message(for: error) }
             await remote.load(nil, model: model, tab: tab)
         }
@@ -739,8 +742,10 @@ private struct RemoteFilePane: View {
                     let destination = RemoteTreeState.child(folder, chosen)
                     if try await transfer.entry(at: destination) != nil { throw WorkspaceError.alreadyExists(chosen) }
                     try await transfer.rename(from: item.path, to: destination)
+                    model.noteHistory(tab, .renamed, detail: item.path + " → " + destination)
                 } else {
                     try await transfer.makeDirectory(RemoteTreeState.child(folder, name))
+                    model.noteHistory(tab, .folderCreated, detail: RemoteTreeState.child(folder, name))
                 }
             } catch { remote.error = message(for: error) }
             await remote.load(nil, model: model, tab: tab)

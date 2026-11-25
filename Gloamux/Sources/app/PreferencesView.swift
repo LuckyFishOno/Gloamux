@@ -219,6 +219,7 @@ private struct TerminalSettings: View {
     @AppStorage(TerminalPreferences.mouseKey) private var mouse = true
     @AppStorage(TerminalPreferences.clipboardKey) private var clipboard = false
     @AppStorage(ConnectionHistory.enabledKey) private var keepsHistory = true
+    @AppStorage(ConnectionHistory.commandsKey) private var keepsCommands = true
     @AppStorage(TerminalPreferences.logKey) private var logEverySession = false
     @AppStorage(TerminalPreferences.logFormatKey) private var logFormat = TerminalLogFormat.text.rawValue
     @AppStorage(TerminalPreferences.confirmCloseKey) private var confirmClose = true
@@ -321,8 +322,12 @@ private struct TerminalSettings: View {
                     label(T("Log format"), T("Plain text is easy to read and search. With escape sequences keeps colors for replaying with cat."))
                 }
                 Toggle(isOn: $keepsHistory) {
-                    label(T("Keep connection history"), T("Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000."))
+                    label(T("Keep connection history"), T("Each connection is saved as one record: when, where, through which jump hosts or proxy, how it ended, the commands run in it, and the files copied or changed and ports forwarded. Passwords, session keys, and command output are not part of it. Records are kept for a year, up to 2,000."))
                 }
+                Toggle(isOn: $keepsCommands) {
+                    label(T("Record commands"), T("Adds each command to the record as the terminal showed it when you pressed Return. Passwords the server does not show are never part of it, and likely secrets are masked. Text typed into editors and other full-screen programs is left out."))
+                }
+                .disabled(!keepsHistory)
                 LabeledContent(T("Session Log")) {
                     Button(T("Show")) { model.showConnectionHistory() }
                 }

@@ -244,6 +244,22 @@ enum SecretRedaction {
         (#"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)(\s*[:=]\s*)[^\s'"]{3,}"#, "$1$2" + mask),
     ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 
+    /// Secrets given to commands as arguments: `--password x`, `-u user:x`, `sshpass -p x`, `mysql -px`, `https://user:x@host`.
+    private static let arguments: [(NSRegularExpression, String)] = [
+        (#"(?i)(--?[a-z-]*(?:password|passwd|passphrase|secret|token|api-?key|access-?key)[ =])('[^']*'|"[^"]*"|\S+)"#, "$1" + mask),
+        (#"(?i)\b([a-z_]*(?:password|passwd|secret|token|api_?key|access_?key)=)('[^']*'|"[^"]*"|[^\s;&|]+)"#, "$1" + mask),
+        (#"(\bsshpass\s+-p\s*)('[^']*'|"[^"]*"|\S+)"#, "$1" + mask),
+        (#"(\b(?:mysql|mysqldump|mysqladmin|mariadb)\b[^|;&]*?\s-p)('[^']*'|"[^"]*"|[^\s]+)"#, "$1" + mask),
+        (#"(\bcurl\b[^|;&]*?\s(?:-u|--user)[ =]?['"]?[^\s:'"]+:)[^\s'"]+"#, "$1" + mask),
+        (#"(://[^\s/:@]+:)[^\s/@]+(?=@)"#, "$1" + mask),
+    ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
+
+    static func redactArguments(_ text: String) -> String {
+        arguments.reduce(text) { text, rule in
+            rule.0.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: rule.1)
+        }
+    }
+
     static func redact(_ text: String) -> String {
         redact([(0, text)]).first?.1 ?? text
     }

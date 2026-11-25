@@ -56,6 +56,43 @@ import XCTest
         XCTAssertEqual(app.records, [])
     }
 
+    func testCommandsRouteAndChanges() throws {
+        let history = ConnectionHistory(url: try scratch().appendingPathComponent("history.jsonl"))
+        let target = SavedConnection(host: "web", port: 22, username: "deploy")
+        let hop = SavedConnection(host: "bastion", port: 2222, username: "ops", proxyHost: "127.0.0.1", proxyPort: 1080)
+        let id = try XCTUnwrap(history.begin(name: "Web", kind: "ssh", host: "web", port: 22, user: "deploy"))
+        history.addRoute(to: id, target: target, hops: [hop], names: ["Bastion"])
+        history.add(.connected, to: id)
+        history.add(.command, to: id, detail: "df -h")
+        for secret in ["mysql -u root -phunter22 app", "deploy --password hunter22", "curl -u me:hunter22 https://x", "git clone https://me:hunter22@x/r",
+                       "sshpass -p hunter22 ssh x", "export DB_PASSWORD='hunter22'", "tool --api-key=hunter22"] {
+            history.add(.command, to: id, detail: secret)
+        }
+        history.add(.renamed, to: id, detail: "/a → /b")
+        history.add(.forwardStarted, to: id, detail: "127.0.0.1:8080 → db:5432")
+        history.add(.closed, to: id)
+        XCTAssertFalse(try String(contentsOf: history.url, encoding: .utf8).contains("hunter22"))
+
+        history.reload()
+        let record = try XCTUnwrap(history.records.first)
+        XCTAssertEqual(record.route, ["SOCKS5 127.0.0.1:1080", "Bastion (ops@bastion:2222)"])
+        XCTAssertEqual(record.commands.count, 8)
+        XCTAssertEqual(record.state(open: false), .closed)
+        XCTAssertEqual(history.matching("df -h").count, 1)
+        XCTAssertEqual(history.matching("bastion").count, 1)
+        XCTAssertEqual(history.json(record)["commands"] as? Int, 8)
+        XCTAssertEqual(history.json(record)["route"] as? [String], record.route)
+        XCTAssertTrue(history.csv([record]).contains("Bastion (ops@bastion:2222)"))
+        XCTAssertTrue(history.report(record).contains("command  df -h"))
+
+        let direct = try XCTUnwrap(history.begin(name: "Web", kind: "ssh", host: "web", port: 22, user: "deploy"))
+        history.addRoute(to: direct, target: target, hops: [], names: [])
+        XCTAssertEqual(history.records.first?.route, [])
+        // Records made before routes were kept say nothing about them.
+        _ = history.begin(name: "Old", kind: "ssh", host: "web", port: 22, user: "deploy")
+        XCTAssertNil(history.records.first?.route)
+    }
+
     func testSearchAndTheSessionLogView() throws {
         let model = try WorkspaceModel(storage: scratch())
         let id = try XCTUnwrap(model.history.begin(name: "Gateway", kind: "sftp", host: "192.0.2.10", port: 4997, user: "u"))

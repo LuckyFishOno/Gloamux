@@ -6,7 +6,9 @@ The [verification record](VERIFICATION.md) includes the November 25, 2026 local 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.4.1 (build 10)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.4.2 (build 11)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.4.2 (build 11): the **Session Log** records the commands run in each connection, the jump hosts and proxy it went through, port forwarding, and file changes.
 
 Included in 1.4.1 (build 10): the connection history is a third view in the Default toolbar, **Session Log**, with buttons in Classic and Workbench.
 

@@ -4,7 +4,7 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.4.1 (build 10)**.
+Current release: **Gloamux 1.4.2 (build 11)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
@@ -55,22 +55,22 @@ Gloamux is for people who look after servers from a Mac and would rather not jug
 ## See it
 
 <p align="center">
-  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="Typing in one terminal, splitting a second server beside it, changing the theme, and downloading files in the two-pane view" />
+  <img src="docs/assets/gloamux-workspace.gif" width="1000" alt="Typing in one terminal, splitting a second server beside it, changing the theme, downloading files in the two-pane view, and the Session Log" />
 </p>
 
 Split servers side by side, change the theme, and switch to the two-pane view to copy files with a resumable queue.
 
 <p align="center">
-  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="Pasting an sftp command once, saving it as a session, answering the server's question, and the file being downloaded" />
+  <img src="docs/assets/gloamux-sftp.gif" width="1000" alt="Pasting an sftp command once, saving it as a session, and the question the server asks at sign-in" />
 </p>
 
 For a gateway that only allows `sftp` with a session key, paste the command once. Gloamux saves it as a session, copies its files, and later asks only for a new key, which it never stores.
 
 <p align="center">
-  <img src="docs/assets/gloamux-history.png" width="1000" alt="Session Log listing two connections, with the selected one's sign-in and downloaded file, and a Download log button" />
+  <img src="docs/assets/gloamux-history.png" width="1000" alt="Session Log listing connections, with the selected one's jump host, port forwarding, commands, and files in order" />
 </p>
 
-Every connection leaves a record: when, where, how it ended, and which files were copied. Read it or download it as a log.
+Every connection leaves a record: when, where, through which jump hosts, the commands run in it, the files copied or changed, and how it ended. Search it, read it, or download it as a log.
 
 <p align="center">
   <img src="docs/assets/gloamux-new-connection.png" width="1320" alt="The New connection tab with the RDP section open, showing resolution, Retina, connection quality, and clipboard options" />
@@ -85,7 +85,7 @@ New connection lists Local, SSH, RDP, VNC, and Other connection. A remote deskto
 - **Files** · A file sidebar that follows the focused pane, a two-pane transfer view with a resumable queue, Quick Look, and editing remote files in Mac apps, over SFTP, SCP, FTP, and FTPS. Paste an `sftp` command once to keep it as a session.
 - **Remote desktop** · RDP with Network Level Authentication and VNC, including macOS Screen Sharing, in a Gloamux tab, with an optional SSH tunnel and a shared clipboard.
 - **Other connections** · Serial ports, Telnet, Mosh, Docker containers, Kubernetes pods, and AWS Systems Manager sessions.
-- **Session Log** · A record of every connection with its files, to view, search, or download.
+- **Session Log** · A record of every connection with its commands, jump hosts, port forwarding, and files, to view, search, or download.
 - **Safety** · Production, Staging, Test, and Development tags, confirmation of risky commands, host key review and history, and a workspace lock.
 - **Bring your sessions** · Import from Xshell, MobaXterm, PuTTY or KiTTY, OpenSSH, and CSV, and export without passwords. Find hosts with Bonjour, Tailscale, and AWS.
 - **Automation** · Quick commands, output triggers, Markdown runbooks, the command palette, Spotlight, Shortcuts, and `gloamux://` links.

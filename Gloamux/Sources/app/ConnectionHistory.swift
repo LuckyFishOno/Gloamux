@@ -2,13 +2,15 @@ import Darwin
 import Foundation
 import Terminal
 
-/// One connection: when it opened and ended, where to, how it went, and what was copied. Never passwords, answers,
-/// session keys, or what the terminal showed; a terminal log, when one was written, is only named.
+/// One connection: when it opened and ended, where to and through which hosts, how it went, the commands run in it, and
+/// what was copied, changed, or forwarded. Never passwords, session keys, or command output; a terminal log, when one was
+/// written, is only named.
 struct ConnectionRecord: Identifiable, Equatable {
     enum State: String { case connecting, connected, failed, closed, lost, unknown }
 
     struct Event: Equatable {
-        enum Kind: String, Codable { case opened, connected, failed, closed, lost, log, downloaded, uploaded, transferFailed, skipped }
+        enum Kind: String, Codable { case opened, connected, failed, closed, lost, log, downloaded, uploaded, transferFailed, skipped
+            case direct, jump, proxy, command, folderCreated, renamed, deleted, permissions, forwardStarted, forwardStopped, forwardFailed }
         let time: Date
         let kind: Kind
         var detail: String?
@@ -30,6 +32,12 @@ struct ConnectionRecord: Identifiable, Equatable {
     var ended: Date? { events.last { [.failed, .closed, .lost].contains($0.kind) }?.time }
     var logPath: String? { events.last { $0.kind == .log }?.detail }
     var transfers: [Event] { events.filter { [.downloaded, .uploaded, .transferFailed, .skipped].contains($0.kind) } }
+    var commands: [Event] { events.filter { $0.kind == .command } }
+    /// The hosts this connection went through, first to last: empty when direct, or nil when that was not recorded.
+    var route: [String]? {
+        let through = events.filter { $0.kind == .proxy || $0.kind == .jump }.compactMap(\.detail)
+        return through.isEmpty && !events.contains { $0.kind == .direct } ? nil : through
+    }
     var address: String { (user.isEmpty ? "" : user + "@") + host + (port.map { ":\($0)" } ?? "") }
 
     /// A connection without an end was open when Gloamux or the Mac stopped, unless it is open now.
@@ -51,6 +59,7 @@ struct ConnectionRecord: Identifiable, Equatable {
 /// the app and commands can write at the same time and an unexpected stop loses nothing that was written.
 @MainActor final class ConnectionHistory: ObservableObject {
     nonisolated static let enabledKey = "Gloamux.history.enabled"
+    nonisolated static let commandsKey = "Gloamux.history.commands"
     static let recordLimit = 2000
     static let maximumAge: TimeInterval = 365 * 24 * 3600
     private static let fileLimit = 64 * 1024 * 1024
@@ -86,6 +95,10 @@ struct ConnectionRecord: Identifiable, Equatable {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
 
+    nonisolated static var keepsCommands: Bool {
+        UserDefaults.standard.object(forKey: commandsKey) as? Bool ?? true
+    }
+
     // MARK: Writing
 
     /// Starts a record, or returns nil when history is off.
@@ -106,10 +119,28 @@ struct ConnectionRecord: Identifiable, Equatable {
         if [.failed, .closed, .lost].contains(kind) { open.remove(id); hidden[id] = nil }
     }
 
+    /// Writes how a connection reaches its server: the proxy and jump hosts in order, or that it is direct. A jump host's
+    /// own user name is left out when it is a session key.
+    func addRoute(to id: UUID?, target: SavedConnection, hops: [SavedConnection], names: [String]) {
+        for step in Self.route(target: target, hops: hops, names: names) { add(step.kind, to: id, detail: step.detail) }
+    }
+
+    static func route(target: SavedConnection, hops: [SavedConnection], names: [String]) -> [(kind: ConnectionRecord.Event.Kind, detail: String?)] {
+        var steps: [(kind: ConnectionRecord.Event.Kind, detail: String?)] = []
+        let proxy = (hops.first ?? target).proxy
+        if proxy.kind != .none { steps.append((.proxy, "\(proxy.kind.title) \(proxy.host):\(proxy.port)")) }
+        for (index, hop) in hops.enumerated() {
+            let address = SessionKey.masked(hop.username) + "@" + (hop.host.contains(":") ? "[\(hop.host)]" : hop.host) + ":\(hop.port)"
+            let name = index < names.count ? names[index] : hop.host
+            steps.append((.jump, name == hop.host ? address : "\(name) (\(address))"))
+        }
+        return steps.isEmpty ? [(.direct, nil)] : steps
+    }
+
     private func clean(_ text: String, _ id: UUID) -> String {
         var text = String(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.map(Character.init))
         if let secret = hidden[id] { text = text.replacingOccurrences(of: secret, with: SessionKey.concealed(secret)) }
-        return String(SecretRedaction.redact(text).prefix(1000))
+        return String(SecretRedaction.redactArguments(SecretRedaction.redact(text)).prefix(1000))
     }
 
     private static let encoder: JSONEncoder = {
@@ -154,12 +185,13 @@ struct ConnectionRecord: Identifiable, Equatable {
     func reload() {
         loaded = true
         guard let lines = try? locked({ try readLines() }) else { records = []; return }
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
         var found: [ConnectionRecord] = []
         var index: [UUID: Int] = [:]
         for line in lines { Self.apply(line, to: &found, index: &index) }
         let oldest = Date().addingTimeInterval(-Self.maximumAge)
         let kept = found.suffix(Self.recordLimit).filter { $0.started > oldest || open.contains($0.id) }
-        if kept.count < found.count { try? keep(Set(kept.map(\.id))) }
+        if kept.count < found.count || size > Self.fileLimit { try? keep(Set(kept.map(\.id))) }
         records = kept.reversed()
     }
 
@@ -234,7 +266,9 @@ struct ConnectionRecord: Identifiable, Equatable {
     func json(_ record: ConnectionRecord, events: Bool = false) -> [String: Any] {
         var object: [String: Any] = ["id": record.id.uuidString, "name": record.name, "protocol": record.kind, "host": record.host,
                                      "user": record.user, "source": record.source, "started": Self.stamp(record.started),
-                                     "state": record.state(open: open.contains(record.id)).rawValue, "transfers": record.transfers.count]
+                                     "state": record.state(open: open.contains(record.id)).rawValue, "transfers": record.transfers.count,
+                                     "commands": record.commands.count]
+        if let route = record.route { object["route"] = route }
         if let port = record.port { object["port"] = port }
         if let ended = record.ended { object["ended"] = Self.stamp(ended) }
         if let log = record.logPath { object["log"] = log }
@@ -256,12 +290,13 @@ struct ConnectionRecord: Identifiable, Equatable {
             let safe = text.first.map { "=+-@\t\r".contains($0) } == true ? "'" + text : text
             return "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
-        var out = "started,ended,state,name,protocol,host,port,user,source,transfers,detail\n"
+        var out = "started,ended,state,name,protocol,host,port,user,source,transfers,detail,commands,route\n"
         for record in records {
             let reason = record.events.last { $0.kind == .failed }?.detail ?? ""
             out += [Self.stamp(record.started), record.ended.map(Self.stamp) ?? "", record.state(open: open.contains(record.id)).rawValue,
                     record.name, record.kind, record.host, record.port.map(String.init) ?? "", record.user, record.source,
-                    String(record.transfers.count), reason].map(field).joined(separator: ",") + "\n"
+                    String(record.transfers.count), reason, String(record.commands.count),
+                    record.route.map { $0.isEmpty ? "direct" : $0.joined(separator: " → ") } ?? ""].map(field).joined(separator: ",") + "\n"
         }
         return out
     }
@@ -269,7 +304,9 @@ struct ConnectionRecord: Identifiable, Equatable {
     /// One connection as text: what happened, then its terminal log when there is one.
     func report(_ record: ConnectionRecord) -> String {
         var out = "Gloamux connection record\n\nName: \(record.name)\nAddress: \(record.address)\nProtocol: \(record.kind)\n"
-        out += "State: \(record.state(open: open.contains(record.id)).rawValue)\nOpened from: \(record.source)\n\n"
+        out += "State: \(record.state(open: open.contains(record.id)).rawValue)\nOpened from: \(record.source)\n"
+        if let route = record.route { out += "Route: " + (route.isEmpty ? "direct" : route.joined(separator: " → ")) + "\n" }
+        out += "\n"
         out += "\(Self.stamp(record.started))  opened\n"
         for event in record.events {
             out += "\(Self.stamp(event.time))  \(event.kind.rawValue)" + (event.detail.map { "  " + $0 } ?? "")
@@ -310,6 +347,12 @@ extension WorkspaceModel {
     func beginHistory(_ tab: SessionTab, kind: String? = nil, user: String? = nil, key: String? = nil) {
         // Trying again without disconnecting first ends the earlier attempt.
         endHistory(tab, .closed)
+        defer {
+            let id = tab.historyID
+            tab.commands = id == nil ? nil : CommandCapture { [weak self] command in
+                if ConnectionHistory.keepsCommands { self?.history.add(.command, to: id, detail: command) }
+            }
+        }
         let name = UIStrings.text(tab.title, language: UIStrings.language)
         if let container = tab.container {
             tab.historyID = history.begin(name: name, kind: container.tool.rawValue, host: container.target,
@@ -329,5 +372,12 @@ extension WorkspaceModel {
     func endHistory(_ tab: SessionTab, _ event: ConnectionRecord.Event.Kind, detail: String? = nil) {
         history.add(event, to: tab.historyID, detail: detail)
         tab.historyID = nil
+        tab.commands = nil
+    }
+
+    /// Notes typed input for the record of this tab's connection.
+    func captureCommands(_ tab: SessionTab, _ bytes: [UInt8]) {
+        guard tab.historyID != nil, ConnectionHistory.keepsCommands else { return }
+        tab.commands?.sent(bytes, on: tab.screen)
     }
 }
