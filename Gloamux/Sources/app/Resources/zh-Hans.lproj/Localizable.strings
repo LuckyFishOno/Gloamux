@@ -639,7 +639,7 @@
 "Stop typing into all panes" = "停止向所有窗格同步输入";
 "Stop using this key?" = "要停止使用这个密钥吗？";
 "Succeeded" = "成功";
-"Switch between the terminal and two-pane file transfer" = "在终端和双栏文件传输之间切换";
+"Switch between file transfer, the terminal, and the session log" = "切换文件传输、终端或连接记录";
 "Symbolic links are skipped." = "已跳过符号链接。";
 "System default" = "系统默认";
 "System default (%@)" = "系统默认（%@）";
@@ -1187,7 +1187,7 @@
 "Choose a session key when an access gateway gives you a new key in place of the user name. Gloamux asks for it when you connect, keeps it until you quit, and never saves it." = "如果访问网关每次给你一组新密钥代替用户名，请选择会话密钥。Gloamux 连接时才询问，只保留到退出为止，不会保存。";
 "Remote folder" = "远程文件夹";
 "Folder on this Mac" = "这台 Mac 的文件夹";
-"Connection history" = "连接记录";
+"Session Log" = "连接记录";
 "Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000." = "每次连接保存为一条：时间、位置、结果，以及传输了哪些文件。不包含密码、会话密钥、回答和终端内容。保留一年，最多 2,000 条。";
 "Export as CSV" = "导出 CSV";
 "Export as JSON" = "导出 JSON";

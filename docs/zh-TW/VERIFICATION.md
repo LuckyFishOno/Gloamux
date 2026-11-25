@@ -4,6 +4,14 @@
 
 本頁依版本記錄每次發布背後的檢查，最新的在前。原始的 2026 年 11 月 24 日架構與壓力測試基準，使用 `b1e4638` 之上、收錄於 Gloamux 1.2 (build 3) 的修改，測試套件位於 `build/Gloamux.app`。
 
+## Gloamux 1.4.1 (build 10)：視窗內的連線歷史（2026 年 11 月 25 日）
+
+以 `8bef52f`（1.4 build 9）為基礎。預設工具列多了第三格 **連線歷史**（英文為 Session Log）；經典工具列和工作台按鈕列會在獨立視窗打開。英文名稱由 Connection history 改為 **Session Log**，儲存的檔案不變。
+
+- 用改名的打包版和隔離工作區檢查：第三格會顯示紀錄、選分頁會回到終端、`gloamux tabs view TAB_ID session-log` 可切換、工作台按鈕會開啟視窗、經典工具列有按鈕。`gloamux history list COUNT SEARCH` 回傳符合的紀錄。
+- `swift test`：發布 commit 前 **515 項，通過 507、略過 8、失敗 0**；之後只改了文件和版本號。`release.sh build` 會在該 commit 重跑測試。
+- 未點擊：經典工具列按鈕，以及已存連線的右鍵項目。
+
 ## Gloamux 1.4 (build 9)：SFTP 閘道、連線歷史與登入修正（2026 年 11 月 25 日）
 
 發布 commit 前，在 `f04169a`（1.3.2 build 8）之上的工作目錄檢查。`release.sh build` 會在發布的 commit 重跑 Swift 與 Rust 測試，數字寫在發布說明。

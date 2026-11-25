@@ -5,12 +5,13 @@ import FileTransfer
 
 /// What the main window shows in the macOS layout.
 enum WorkspaceMode: String, CaseIterable {
-    case files, terminal
+    case files, terminal, log
 
     var title: String {
         switch self {
         case .terminal: return T("Terminal")
         case .files: return T("File Transfer")
+        case .log: return T("Session Log")
         }
     }
 }
@@ -21,7 +22,7 @@ struct WorkspaceModeSwitch: View {
     let choose: (WorkspaceMode) -> Void
 
     var body: some View {
-        // Both halves take the wider title's width, so the switch is symmetric in every language.
+        // Every segment takes the wider title's width, so the switch is symmetric in every language.
         EqualWidthRow(spacing: 2) {
             ForEach(WorkspaceMode.allCases, id: \.self) { segment($0) }
         }
@@ -33,7 +34,7 @@ struct WorkspaceModeSwitch: View {
     private func segment(_ value: WorkspaceMode) -> some View {
         let selected = mode == value
         return Button { if !selected { choose(value) } } label: {
-            // The bold title is laid out hidden underneath, so choosing a side doesn't change its width.
+            // The bold title is laid out hidden underneath, so choosing one doesn't change its width.
             ZStack {
                 Text(value.title).appFont(.system(size: 12, weight: .semibold)).hidden()
                 Text(value.title)

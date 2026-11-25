@@ -639,7 +639,7 @@
 "Stop typing into all panes" = "Dejar de escribir en todos los paneles";
 "Stop using this key?" = "¿Dejar de usar esta clave?";
 "Succeeded" = "Correcto";
-"Switch between the terminal and two-pane file transfer" = "Cambiar entre el terminal y la transferencia de archivos de dos paneles";
+"Switch between file transfer, the terminal, and the session log" = "Cambiar entre la transferencia de archivos, el terminal y el historial de conexiones";
 "Symbolic links are skipped." = "Se omiten los enlaces simbólicos.";
 "System default" = "Predeterminado del sistema";
 "System default (%@)" = "Predeterminado del sistema (%@)";
@@ -1187,7 +1187,7 @@
 "Choose a session key when an access gateway gives you a new key in place of the user name. Gloamux asks for it when you connect, keeps it until you quit, and never saves it." = "Elige una clave de sesión si una puerta de acceso te da una clave nueva en lugar del nombre de usuario. Gloamux la pide al conectar, la conserva hasta que salgas y nunca la guarda.";
 "Remote folder" = "Carpeta remota";
 "Folder on this Mac" = "Carpeta de este Mac";
-"Connection history" = "Historial de conexiones";
+"Session Log" = "Historial de conexiones";
 "Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000." = "Cada conexión se guarda como un registro: cuándo, dónde, cómo terminó y qué archivos se copiaron. No incluye contraseñas, claves de sesión, respuestas ni la salida del terminal. Se conservan un año, hasta 2000.";
 "Export as CSV" = "Exportar como CSV";
 "Export as JSON" = "Exportar como JSON";

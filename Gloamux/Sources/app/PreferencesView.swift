@@ -323,7 +323,7 @@ private struct TerminalSettings: View {
                 Toggle(isOn: $keepsHistory) {
                     label(T("Keep connection history"), T("Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000."))
                 }
-                LabeledContent(T("Connection history")) {
+                LabeledContent(T("Session Log")) {
                     Button(T("Show")) { model.showConnectionHistory() }
                 }
                 LabeledContent(T("Session logs")) {

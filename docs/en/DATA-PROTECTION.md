@@ -8,11 +8,11 @@ Reviewed on November 21, 2026, against the 0.10.0 working tree, and rechecked ag
 
 The 1.3.2 (build 8) serial-discovery change was checked against this inventory. Discovery reads local device paths and IOKit USB ancestry; it neither opens a serial port nor makes a network request. Device paths are held in memory and enter `sessions.json` only when a connection is saved, under the catalog's existing protection. A USB device path can contain the adapter's identifier.
 
-The 1.4 (build 9) changes were checked against this inventory on November 25, 2026. They add `connection-history.jsonl` and session keys held in memory; both are listed below.
+The 1.4 (build 9) changes were checked against this inventory on November 25, 2026. They add `connection-history.jsonl` and session keys held in memory; both are listed below. 1.4.1 (build 10) adds no stored data.
 
 ## Protection classes
 
-These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.4 (build 9).
+These are protection targets. The current-storage table records what the implementation provides and the gaps still open in 1.4.1 (build 10).
 
 | Class | Meaning | Required protection |
 |---|---|---|

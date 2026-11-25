@@ -47,7 +47,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 |---|---|
 | Sidebar button (⌃⌘S) | Shows or hides the connection tree. |
 | Environment badge | Shows the focused session's environment tag, such as Production. |
-| **Terminal** / **File Transfer** | Switches the window between the terminal and the two-pane file transfer view. |
+| **File Transfer** / **Terminal** / **Session Log** | Switches the window between two-pane file transfer, the terminal, and the [session log](#session-log-page). Choosing a tab leaves the session log. |
 | **New connection** menu | **New connection**, **Local terminal**, **Other connection**, **Discover hosts**, and **Import sessions**. |
 | **Files** | Shows or hides the focused pane's files on the right. |
 | **Quick commands** | Opens the quick commands sidebar. |
@@ -58,7 +58,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 
 - The address bar takes `ssh://user@host:port`, `user@host`, or a host name. Press Return to connect.
 - The compose bar under the terminal sends one line to the **Current session** or to **All sessions**. Hide it with **Hide compose bar**.
-- The toolbar also starts and stops the session log, imports a highlight set, opens the output triggers in Settings, splits panes, and locks the workspace.
+- The toolbar also starts and stops a session's log, opens the **Session Log**, imports a highlight set, opens the output triggers in Settings, splits panes, and locks the workspace.
 - The status bar shows the address, protocol, terminal size, cursor position (`Ln`, `Col`), selected lines, the number of sessions, data received and sent, and Caps Lock.
 
 ### Workbench layout
@@ -67,6 +67,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 - **MultiExec** types what you type into every terminal of the window at once, split or not, except read-only ones.
 - **X server** starts XQuartz. **Saved passwords** opens the saved passwords after Touch ID or the Mac password. **Tunneling** lists every connected SSH session of the window with its running forwards.
 - **Follow terminal folder**, under the SFTP browser, shows the folder the remote shell is in after each command. If the shell does not report its folder, Gloamux types a one-line prompt hook into it.
+- **Session Log** in the ribbon opens the record of every connection in its own window.
 - **Two-pane**, next to the SFTP panel title, opens the two-pane File Transfer window.
 - A monitoring bar under the terminal shows CPU, memory, network, uptime, users, and disk use for this Mac or for a Linux server.
 
@@ -226,9 +227,10 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 
 ⌘F searches the terminal and its scrollback as plain text or a regular expression and highlights every match. ⌘G and ⇧⌘G step through them.
 
-### Connection history
+### Session Log page
 
-- **Terminal › Connection history** lists every connection: when, where, how it ended, and which files were copied. Select one for its details, search the list, or choose **Download log** to save one record as text, with its terminal log when there is one.
+- Open it with **Session Log** in the Default toolbar, the Classic toolbar, or the Workbench ribbon, from the **Terminal** menu or the command palette, or by right-clicking a saved session, which shows only records that match its name.
+- It lists every connection: when, where, how it ended, and which files were copied. Select one for its details, search the list, or choose **Download log** to save one record as text, with its terminal log when there is one.
 - The options menu exports the list as CSV or JSON, clears it, or turns it off. Right-click a record to delete it.
 - Passwords, session keys, answers, and terminal output are not part of it. A session key is shown as its first four characters. Records are kept for a year, up to 2,000.
 
@@ -295,7 +297,7 @@ Each upload and download gets a row at the bottom of the files sidebar with the 
 
 This Mac is on the left, a connected server on the right, and the transfer queue below.
 
-- Open it with **Terminal | File Transfer** in the Default toolbar (the tab bar picks the server), the Classic **File Transfer** button, or **Two-pane** in the Workbench SFTP panel.
+- Open it with **File Transfer** in the Default toolbar (the tab bar picks the server), the Classic **File Transfer** button, or **Two-pane** in the Workbench SFTP panel.
 - Drag files between the panes or use the arrow buttons. Folders copy with everything inside them.
 - When names are already taken, choose **Replace** or **Skip existing**.
 - Transfers write to a temporary name first and then replace an existing file in one step, so a failed or cancelled transfer leaves the existing file intact. An SFTP server that cannot replace a file in one step refuses the overwrite and keeps its file. A broken connection is retried after 2, 5, and 10 seconds, and SFTP and FTP copies continue where they stopped. A failed transfer has **Try again** in the queue.
@@ -494,7 +496,7 @@ What an agent can do:
 | | **Start recording** / **Stop recording** | ⌥⌘R |
 | | **Recordings** | |
 | | **Start session log** / **Stop session log** | ⌥⌘L |
-| | **Connection history** | |
+| | **Session Log** | |
 | | **Show session logs** | |
 | | **Save output** | ⇧⌘S |
 | | **Open output in text editor** | |
@@ -633,7 +635,7 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 | `gloamux ssh SESSION` | Opens a saved SSH session's shell in this terminal and exits with the remote shell's status. Options: `--password-stdin`, `--vault-password-stdin`, `--host-key FINGERPRINT`, `--interactive`. |
 | `gloamux files OP --session S` | `ls`, `pwd`, `stat`, `get`, `put`, `mkdir`, `mv`, `rm`, `rmdir`, `chmod`. Options: `--protocol sftp\|scp\|ftp\|ftps`, `--recursive`, `--overwrite`, `--resume`, `--allow-plain-ftp`, `--json`, and the sign-in options of `ssh`. Ctrl-C removes the partial file. |
 | `gloamux sftp SESSION` | Signs in once and reads `sftp` commands (`ls`, `cd`, `get`, `put`, `mkdir`, `rename`, `rm`, `chmod`, and more) from the terminal or standard input. Also takes `sftp` options with a host, or a whole pasted command with `--command FILE\|-`. Options: `--password-stdin` (the password or session key), `--vault-password-stdin`, `--host-key FINGERPRINT`, `--overwrite`. |
-| `gloamux history` | `list`, `show`, `log ID PATH`, `export PATH.csv\|PATH.json`, `remove`, `clear`. |
+| `gloamux history` | `list [COUNT [SEARCH]]`, `show`, `log ID PATH`, `export PATH.csv\|PATH.json`, `remove`, `clear`. |
 | `gloamux sessions` | `list`, `show`, `mkdir`, `add`, `edit`, `options`, `add-other`, `edit-other`, `serial-ports`, `rename`, `move`, `remove`, `env`, `auth`, `cert`, `from-sftp`, `import`, `export`. |
 | `gloamux hosts` | `list`, `history`, `clear-history`, `trust`, `replace`, `remove`, `export` (as `known_hosts`), `discover bonjour\|tailscale\|aws`. |
 | `gloamux tabs` | `list`, `show`, `open`, `open-window`, `connect`, `local`, `select`, `rename`, `duplicate`, `close`, `disconnect`, `reconnect`, `split`, `unsplit`, `broadcast`, `multiexec`, `window`, `attach`, `read`, `send`, `run`, `readonly`, `log`, `record`, `encoding`, `integration`, `view`, `colors`, `highlights`. Needs the running app. |

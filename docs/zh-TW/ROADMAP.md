@@ -6,7 +6,9 @@
 
 [功能待辦](FEATURE-BACKLOG.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
 
-目前版本為 **Gloamux 1.4 (build 9)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+目前版本為 **Gloamux 1.4.1 (build 10)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+
+1.4.1 (build 10) 收錄：連線歷史成為預設工具列的第三個畫面 **連線歷史**，經典和工作台也有按鈕。
 
 1.4 (build 9) 收錄：從貼上的 `sftp` 指令存成連線、用 session key 登入、連線歷史、`gloamux sftp` 與 `gloamux history`，並修正名稱的第一個位址拒絕連線時登入失敗。
 

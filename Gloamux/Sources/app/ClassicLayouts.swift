@@ -243,6 +243,7 @@ private struct ClassicToolbar<NewItems: View>: View {
             }
             ToolSeparator()
             SessionLogIcon(model: model, logs: model.logs)
+            ToolIcon(symbol: "clock.arrow.circlepath", help: "Session Log", color: .brown) { model.showConnectionHistory() }
             ToolIcon(symbol: "highlighter", help: "Import highlight set", color: .yellow, enabled: tab.map { $0.desktop == nil } ?? false) {
                 model.chooseHighlightSet()
             }
@@ -507,6 +508,7 @@ private struct MobaRibbon<NewItems: View>: View {
             RibbonButton(symbol: "x.square.fill", title: "X server", color: .indigo, active: xServerRunning) {
                 if let problem = XQuartz.open() { model.error = problem }
             }
+            RibbonButton(symbol: "clock.arrow.circlepath", title: "Session Log", color: .brown) { model.showConnectionHistory() }
             RibbonButton(symbol: "key.fill", title: "Saved passwords", color: .yellow) {
                 Task { if await model.authorizeSavedSignIns() { showingSignIns = true } }
             }

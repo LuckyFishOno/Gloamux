@@ -151,13 +151,13 @@ public enum CLICatalog {
             window TAB_ID | attach TAB_ID
             read TAB_ID [LINES] | send TAB_ID TEXT | run TAB_ID COMMAND_LINE
             readonly TAB_ID on|off | log TAB_ID on|off | record TAB_ID on|off | encoding TAB_ID ENCODING
-            integration TAB_ID | view TAB_ID terminal|files
+            integration TAB_ID | view TAB_ID terminal|files|session-log
             colors TAB_ID XCS_PATH | highlights TAB_ID HIGHLIGHT_PATH
 
             Tab IDs come from gloamux tabs list and stay the same while the tab is open, in any window.
             record saves what the terminal shows, with secrets masked; list them with gloamux recordings.
-            integration types the shell integration hook into the terminal. view switches the window to the terminal or to
-            two-pane file transfer for the tab.
+            integration types the shell integration hook into the terminal. view switches the window to the terminal, to
+            two-pane file transfer for the tab, or to the session log.
             broadcast types into the panes of a split. multiexec types into every terminal of the tab's window.
             read prints the visible screen, or the last LINES lines with scrollback. run presses Return after the text.
             A risky command in a confirming environment waits for your answer in Gloamux.
@@ -224,7 +224,7 @@ public enum CLICatalog {
                    operations: ["list", "show", "log", "export", "remove", "clear"],
                    localPaths: ["log": [1], "export": [0]],
                    help: """
-            list [COUNT] | show ID | log ID PATH | export PATH.csv|PATH.json | remove ID | clear
+            list [COUNT [SEARCH]] | show ID | log ID PATH | export PATH.csv|PATH.json | remove ID | clear
 
             Each connection is one record: when, where, how it ended, and which files were copied. log writes one record as
             text, with its terminal log when there is one. Turn history off with gloamux settings set history.enabled off.

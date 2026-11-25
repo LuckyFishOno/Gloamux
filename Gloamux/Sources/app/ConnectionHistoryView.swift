@@ -9,25 +9,17 @@ struct ConnectionHistoryView: View {
     @AppStorage(ConnectionHistory.enabledKey) private var enabled = true
     @AppStorage(TerminalPreferences.logKey) private var logsEverySession = false
     @State private var selection: UUID?
-    @State private var search = ""
     @State private var confirmsClear = false
     @State private var error: String?
 
-    private var shown: [ConnectionRecord] {
-        let words = search.split(whereSeparator: \.isWhitespace)
-        guard !words.isEmpty else { return history.records }
-        return history.records.filter { record in
-            let text = [record.name, record.address, record.kind] + record.transfers.compactMap(\.detail)
-            return words.allSatisfy { word in text.contains { $0.localizedStandardContains(String(word)) } }
-        }
-    }
+    private var shown: [ConnectionRecord] { history.matching(history.search) }
 
     var body: some View {
         let records = shown
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    Text(T("Connection history")).appFont(.headline)
+                    Text(T("Session Log")).appFont(.headline)
                     InfoButton(T("Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000."))
                     Spacer()
                     Menu {
@@ -43,10 +35,10 @@ struct ConnectionHistoryView: View {
                         .accessibilityLabel(T("History options"))
                 }
                 .padding(12)
-                TextField(T("Search"), text: $search).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.bottom, 10)
+                TextField(T("Search"), text: $history.search).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.bottom, 10)
                 Divider()
                 if records.isEmpty {
-                    ContentUnavailableView(T(search.isEmpty ? "No connections yet" : "No matches"), systemImage: "clock.arrow.circlepath")
+                    ContentUnavailableView(T(history.search.isEmpty ? "No connections yet" : "No matches"), systemImage: "clock.arrow.circlepath")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(records, selection: $selection) { record in
@@ -70,7 +62,11 @@ struct ConnectionHistoryView: View {
             }
             .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onAppear { history.reload(); if selection == nil { selection = history.records.first?.id } }
+        .onAppear { history.reload(); if selection == nil { selection = shown.first?.id } }
+        .onChange(of: history.search) { _, _ in
+            let records = shown
+            if !records.contains(where: { $0.id == selection }) { selection = records.first?.id }
+        }
         .alert(T("Clear the connection history?"), isPresented: $confirmsClear) {
             Button(T("Clear"), role: .destructive) { perform { try history.clear() } }
             Button(T("Cancel"), role: .cancel) {}
@@ -128,6 +124,16 @@ struct ConnectionHistoryView: View {
 }
 
 extension ConnectionHistory {
+    /// Records whose name, address, kind, or copied files contain every word.
+    func matching(_ search: String) -> [ConnectionRecord] {
+        let words = search.split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return records }
+        return records.filter { record in
+            let text = [record.name, record.address, record.kind] + record.transfers.compactMap(\.detail)
+            return words.allSatisfy { word in text.contains { $0.localizedStandardContains(String(word)) } }
+        }
+    }
+
     func exportJSON(_ records: [ConnectionRecord]) throws -> Data {
         try JSONSerialization.data(withJSONObject: records.map { json($0, events: true) }, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
     }

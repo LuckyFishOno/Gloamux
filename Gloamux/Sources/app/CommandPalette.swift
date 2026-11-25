@@ -142,7 +142,7 @@ extension WorkspaceModel {
                 shortcut: "⌥⌘R") { [weak self] in self?.toggleRecording(tab) }
         }
         add("recordings", "Recordings…", "play.rectangle", "Terminal") { [weak self] in self?.showRecordings() }
-        add("history", "Connection history", "clock.arrow.circlepath", "Session") { [weak self] in self?.showConnectionHistory() }
+        add("history", "Session Log", "clock.arrow.circlepath", "Session") { [weak self] in self?.showConnectionHistory() }
         add("sftp.command", "New session from sftp command", "arrow.up.arrow.down.circle", "Session") { [weak self] in self?.showSFTPCommand() }
         add("runbooks", "Runbooks…", "book.pages", "Terminal") { [weak self] in self?.showRunbooks() }
         for file in runbooks.files.prefix(30) {

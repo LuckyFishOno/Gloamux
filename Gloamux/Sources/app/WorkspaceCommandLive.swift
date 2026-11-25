@@ -210,7 +210,10 @@ extension WorkspaceCommand {
             case "terminal":
                 if owner.tabs.contains(where: { $0.id == tab.id }) { owner.selectTab(tab.id) }
                 owner.showTerminal()
-            default: throw Usage("Choose terminal or files.")
+            case "session-log":
+                if owner.tabs.contains(where: { $0.id == tab.id }) { owner.selectTab(tab.id, focusTerminal: false) }
+                owner.showConnectionHistory()
+            default: throw Usage("Choose terminal, files, or session-log.")
             }
             return ["id": tab.id.uuidString, "view": args[1]]
         case "readonly":

@@ -74,6 +74,8 @@ struct ConnectionRecord: Identifiable, Equatable {
     @Published private(set) var records: [ConnectionRecord] = []
     /// Connections this process has open.
     @Published private(set) var open: Set<UUID> = []
+    /// What the session log's search field holds.
+    @Published var search = ""
     /// Texts to leave out of an open connection's events: its session key.
     private var hidden: [UUID: String] = [:]
     private var loaded = false

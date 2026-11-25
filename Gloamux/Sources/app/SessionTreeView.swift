@@ -208,6 +208,7 @@ struct SessionTreeView: View {
                         if item.container != nil { model.editContainer(item) }
                         else { connectionEditor = ConnectionEditRequest(item: item, parent: item.parent) }
                     }
+                    Button(T("Session Log")) { model.showConnectionHistory(search: item.name) }
                 }
                 environmentMenu(item)
                 if !item.isFolder { AgentAccessToggle(agents: model.agents, item: item) }

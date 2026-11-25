@@ -104,7 +104,7 @@ extension WorkspaceCommand {
         }
     }
 
-    /// `history list [COUNT]|show ID|log ID PATH|export PATH|remove ID|clear`: the Connection history window.
+    /// `history list [COUNT [SEARCH]]|show ID|log ID PATH|export PATH|remove ID|clear`: the Session Log.
     @MainActor static func history(_ action: String, _ args: [String], _ model: WorkspaceModel) throws -> Any {
         let history = model.history
         history.reload()
@@ -121,9 +121,9 @@ extension WorkspaceCommand {
         }
         switch action {
         case "list":
-            try count(args, 0...1)
+            try count(args, 0...2)
             guard let limit = args.first.map({ Int($0) }) ?? 50, limit > 0 else { throw Usage("Enter how many connections to list.") }
-            return history.records.prefix(limit).map { history.json($0) }
+            return history.matching(args.count > 1 ? args[1] : "").prefix(limit).map { history.json($0) }
         case "show":
             try count(args, 1...1)
             return history.json(try record(args[0]), events: true)

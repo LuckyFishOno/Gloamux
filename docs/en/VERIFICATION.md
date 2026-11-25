@@ -4,6 +4,14 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.1 (build 10): Session Log in the window (November 25, 2026)
+
+Built on `8bef52f` (1.4 build 9). The Default toolbar has a third segment, **Session Log**; the Classic toolbar and Workbench ribbon open it in its own window. **Connection history** is now named **Session Log** in English; the stored file is unchanged.
+
+- A renamed copy of the packaged app with an isolated workspace: the segment shows the records, choosing a tab returns to the terminal, `gloamux tabs view TAB_ID session-log` switches to it, the Workbench button opens its window, and the Classic button is in the toolbar. `gloamux history list COUNT SEARCH` returned the matching record.
+- `swift test`: **515 cases, 507 passed, 8 skipped, 0 failed** before the release commit; only documents and the version number changed after it. `release.sh build` reruns the suites on that commit.
+- Not clicked: the Classic button and the session's right-click item.
+
 ## Gloamux 1.4 (build 9): SFTP gateways, connection history, and sign-in fixes (November 25, 2026)
 
 Checked on the working tree on top of `f04169a` (1.3.2 build 8) before the release commit. `release.sh build` reruns the Swift and Rust suites on the release commit; the release notes carry those counts.

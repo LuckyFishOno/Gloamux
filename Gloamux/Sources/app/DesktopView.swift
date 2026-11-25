@@ -480,9 +480,10 @@ public struct DesktopView: View {
             switch mode {
             case .terminal: model.showTerminal()
             case .files: model.openFileTransfer(for: nil)
+            case .log: model.showConnectionHistory()
             }
         }
-        .help(T("Switch between the terminal and two-pane file transfer"))
+        .help(T("Switch between file transfer, the terminal, and the session log"))
         .accessibilityIdentifier("workspaceModePicker")
     }
 
@@ -541,6 +542,10 @@ public struct DesktopView: View {
         ZStack {
             if model.layout == .native && model.workspaceMode == .files {
                 FileTransferView(model: model, local: model.localBrowser, queue: model.transfers, target: model.mainTransferTarget)
+            } else if model.layout == .native && model.workspaceMode == .log {
+                ConnectionHistoryView(model: model, history: model.history)
+                    .background(model.theme.background.color)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else if let split = model.split {
                 if let id = model.maximizedPane, let tab = model.tabs.first(where: { $0.id == id }) {
                     pane(tab, card: true)

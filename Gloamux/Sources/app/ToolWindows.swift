@@ -11,7 +11,7 @@ enum ToolWindowKind: String, CaseIterable {
         case .runbooks: return "Runbooks"
         case .discovery: return "Discover hosts"
         case .hostKeyHistory: return "Host keys"
-        case .connectionHistory: return "Connection history"
+        case .connectionHistory: return "Session Log"
         case .containers: return "Other session"
         case .rdp, .vnc, .desktopEditor: return "Remote desktop"
         }
@@ -95,7 +95,6 @@ extension WorkspaceModel {
     }
 
     func showRecordings() { openTool(.recordings) }
-    func showConnectionHistory() { history.reload(); openTool(.connectionHistory) }
     func showRunbooks() { openTool(.runbooks) }
     public func showCommandPalette() { commandPaletteShown = true }
 }

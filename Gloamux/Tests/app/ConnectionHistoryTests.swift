@@ -56,6 +56,29 @@ import XCTest
         XCTAssertEqual(app.records, [])
     }
 
+    func testSearchAndTheSessionLogView() throws {
+        let model = try WorkspaceModel(storage: scratch())
+        let id = try XCTUnwrap(model.history.begin(name: "Gateway", kind: "sftp", host: "192.0.2.10", port: 4997, user: "u"))
+        model.history.add(.downloaded, to: id, detail: "/tmp/report.csv")
+        _ = model.history.begin(name: "Other", kind: "ssh", host: "192.0.2.11", port: 22, user: "u")
+        model.history.reload()
+        XCTAssertEqual(model.history.matching("").count, 2)
+        XCTAssertEqual(model.history.matching("gateway REPORT").map(\.id), [id])
+        XCTAssertEqual(model.history.matching("gateway other").count, 0)
+
+        let tab = model.addTab()
+        model.showConnectionHistory(search: "Gateway")
+        XCTAssertEqual(model.workspaceMode, .log)
+        XCTAssertEqual(model.history.search, "Gateway")
+        // Choosing a tab leaves the log, and opening the log again starts with everything.
+        model.selectTab(tab.id)
+        XCTAssertEqual(model.workspaceMode, .terminal)
+        model.showConnectionHistory()
+        XCTAssertEqual(model.history.search, "")
+        model.openFileTransfer(for: nil)
+        XCTAssertEqual(model.workspaceMode, .files)
+    }
+
     func testDamagedLinesAndLogsOutsideTheFolder() throws {
         let root = try scratch()
         let file = root.appendingPathComponent("history.jsonl")

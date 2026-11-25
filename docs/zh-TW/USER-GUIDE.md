@@ -47,7 +47,7 @@
 |---|---|
 | 側欄按鈕（⌃⌘S） | 顯示或隱藏連線樹。 |
 | 環境標籤 | 顯示目前工作階段的環境，例如 Production。 |
-| **終端** / **檔案傳輸** | 在終端和雙欄檔案傳輸之間切換。 |
+| **檔案傳輸** / **終端** / **連線歷史** | 在雙欄檔案傳輸、終端和[連線歷史](#連線歷史)之間切換。選一個分頁就會離開連線歷史。 |
 | **新連線** 選單 | **新連線**、**本機終端**、**其他連線**、**探索主機** 和 **匯入連線**。 |
 | **檔案** | 在右邊顯示或隱藏目前窗格的檔案。 |
 | **常用指令** | 打開常用指令側欄。 |
@@ -58,7 +58,7 @@
 
 - 網址列接受 `ssh://user@host:port`、`user@host` 或主機名稱，按 Return 連線。
 - 終端下方的輸入列會把一行文字送到 **目前工作階段** 或 **所有工作階段**。用 **隱藏輸入列** 收起來。
-- 工具列也能開始和停止連線紀錄、匯入醒目提示、打開設定裡的輸出觸發、分割窗格，以及鎖定工作區。
+- 工具列也能開始和停止連線紀錄、打開 **連線歷史**、匯入醒目提示、打開設定裡的輸出觸發、分割窗格，以及鎖定工作區。
 - 狀態列顯示位址、通訊協定、終端大小、游標位置（`Ln`、`Col`）、選取行數、工作階段數量、收發的資料量和 Caps Lock。
 
 ### 工作台版面
@@ -67,6 +67,7 @@
 - **多重執行** 會把你輸入的內容同時送到視窗裡的每個終端，不論是否分割，唯讀的除外。
 - **X 伺服器** 啟動 XQuartz。**已存密碼** 在通過 Touch ID 或 Mac 密碼後打開已存的密碼。**通道** 列出視窗中每個已連線的 SSH 工作階段和正在執行的轉發。
 - SFTP 瀏覽器下方的 **跟隨終端資料夾** 會在每個指令執行後，顯示遠端 shell 所在的資料夾。shell 沒有回報資料夾時，Gloamux 會在 shell 中輸入一行提示字元掛鉤。
+- 上方按鈕列的 **連線歷史** 會在獨立視窗打開每次連線的紀錄。
 - SFTP 面板標題旁的 **雙欄傳輸** 會打開雙欄的檔案傳輸視窗。
 - 終端下方的監控列顯示這台 Mac 或 Linux 伺服器的 CPU、記憶體、網路、開機時間、使用者和磁碟用量。
 
@@ -228,7 +229,8 @@
 
 ### 連線歷史
 
-- **終端 › 連線歷史** 列出每一次連線：時間、位置、結果，以及傳輸了哪些檔案。選一筆看細節、搜尋清單，或按 **下載紀錄** 把那一筆存成文字檔；有終端紀錄時會一併附上。
+- 從預設工具列、經典工具列或工作台按鈕列的 **連線歷史** 打開，也可以用 **終端** 選單或指令面板。在已存連線上按右鍵打開時，只顯示符合該名稱的紀錄。
+- 列出每一次連線：時間、位置、結果，以及傳輸了哪些檔案。選一筆看細節、搜尋清單，或按 **下載紀錄** 把那一筆存成文字檔；有終端紀錄時會一併附上。
 - 選單可以把清單匯出成 CSV 或 JSON、清除或關閉。在一筆上按右鍵可刪除。
 - 不包含密碼、session key、回答和終端內容。session key 只顯示前四個字元。紀錄保留一年，最多 2,000 筆。
 
@@ -295,7 +297,7 @@
 
 左邊是這台 Mac，右邊是已連線的伺服器，下方是傳輸佇列。
 
-- 從預設工具列的 **終端 | 檔案傳輸**（由分頁列選擇伺服器）、經典版面的 **檔案傳輸** 按鈕，或工作台 SFTP 面板的 **雙欄傳輸** 打開。
+- 從預設工具列的 **檔案傳輸**（由分頁列選擇伺服器）、經典版面的 **檔案傳輸** 按鈕，或工作台 SFTP 面板的 **雙欄傳輸** 打開。
 - 在兩欄之間拖曳檔案，或用箭頭按鈕。資料夾會連同內容一起複製。
 - 名稱已存在時，選 **取代** 或 **略過同名檔案**。
 - 傳輸會先寫到暫存名稱，再一次換掉原本的檔案，所以失敗或取消的傳輸不會破壞原本的檔案。無法一次換掉檔案的 SFTP 伺服器會拒絕覆寫，並保留原本的檔案。連線中斷時，會在 2、5、10 秒後重試，SFTP 和 FTP 會從中斷處繼續。失敗的傳輸在佇列中有 **重試** 按鈕。
@@ -633,7 +635,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 | `gloamux ssh SESSION` | 在目前的終端開啟已存 SSH 連線的 shell，並以遠端 shell 的結束狀態結束。選項：`--password-stdin`、`--vault-password-stdin`、`--host-key FINGERPRINT`、`--interactive`。 |
 | `gloamux files OP --session S` | `ls`、`pwd`、`stat`、`get`、`put`、`mkdir`、`mv`、`rm`、`rmdir`、`chmod`。選項：`--protocol sftp\|scp\|ftp\|ftps`、`--recursive`、`--overwrite`、`--resume`、`--allow-plain-ftp`、`--json`，以及 `ssh` 的登入選項。Ctrl-C 會刪除未完成的檔案。 |
 | `gloamux sftp SESSION` | 登入一次，從終端或標準輸入讀取 `sftp` 指令（`ls`、`cd`、`get`、`put`、`mkdir`、`rename`、`rm`、`chmod` 等）。也接受帶主機的 `sftp` 選項，或用 `--command FILE\|-` 讀入整段貼上的指令。選項：`--password-stdin`（密碼或 session key）、`--vault-password-stdin`、`--host-key FINGERPRINT`、`--overwrite`。 |
-| `gloamux history` | `list`、`show`、`log ID PATH`、`export PATH.csv\|PATH.json`、`remove`、`clear`。 |
+| `gloamux history` | `list [COUNT [SEARCH]]`、`show`、`log ID PATH`、`export PATH.csv\|PATH.json`、`remove`、`clear`。 |
 | `gloamux sessions` | `list`、`show`、`mkdir`、`add`、`edit`、`options`、`add-other`、`edit-other`、`serial-ports`、`rename`、`move`、`remove`、`env`、`auth`、`cert`、`from-sftp`、`import`、`export`。 |
 | `gloamux hosts` | `list`、`history`、`clear-history`、`trust`、`replace`、`remove`、`export`（輸出成 `known_hosts`）、`discover bonjour\|tailscale\|aws`。 |
 | `gloamux tabs` | `list`、`show`、`open`、`open-window`、`connect`、`local`、`select`、`rename`、`duplicate`、`close`、`disconnect`、`reconnect`、`split`、`unsplit`、`broadcast`、`multiexec`、`window`、`attach`、`read`、`send`、`run`、`readonly`、`log`、`record`、`encoding`、`integration`、`view`、`colors`、`highlights`。需要 App 正在執行。 |

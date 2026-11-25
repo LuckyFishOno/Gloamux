@@ -639,7 +639,7 @@
 "Stop typing into all panes" = "すべてのパネルへの入力を停止";
 "Stop using this key?" = "この鍵の使用を停止しますか？";
 "Succeeded" = "成功";
-"Switch between the terminal and two-pane file transfer" = "ターミナルと 2 パネルのファイル転送を切り替え";
+"Switch between file transfer, the terminal, and the session log" = "ファイル転送、ターミナル、接続履歴を切り替え";
 "Symbolic links are skipped." = "シンボリックリンクはスキップされます。";
 "System default" = "システムのデフォルト";
 "System default (%@)" = "システムのデフォルト（%@）";
@@ -1187,7 +1187,7 @@
 "Choose a session key when an access gateway gives you a new key in place of the user name. Gloamux asks for it when you connect, keeps it until you quit, and never saves it." = "アクセスゲートウェイがユーザ名の代わりに新しいキーを発行する場合に選びます。接続時に尋ね、終了するまで保持し、保存はしません。";
 "Remote folder" = "リモートフォルダ";
 "Folder on this Mac" = "この Mac のフォルダ";
-"Connection history" = "接続履歴";
+"Session Log" = "接続履歴";
 "Each connection is saved as one record: when, where, how it ended, and which files were copied. Passwords, session keys, answers, and terminal output are not part of it. Records are kept for a year, up to 2,000." = "接続ごとに、日時、接続先、結果、コピーしたファイルを 1 件として保存します。パスワード、セッションキー、回答、ターミナルの出力は含みません。1 年間、最大 2,000 件保持します。";
 "Export as CSV" = "CSV として書き出す";
 "Export as JSON" = "JSON として書き出す";

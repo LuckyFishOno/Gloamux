@@ -381,11 +381,8 @@ enum ConnectionState: Equatable {
     var sessionWindows: [UUID: SavedSessionWindow] = [:]
     /// Uploads and downloads started from any file panel or window.
     lazy var transfers = TransferQueue(model: self)
-    /// Whether the middle of the main window shows terminals or the two-pane file transfer view.
-    @Published private var showingFileTransfer = false
-    var workspaceMode: WorkspaceMode {
-        showingFileTransfer ? .files : .terminal
-    }
+    /// What the middle of the main window shows: the two-pane file transfer view, terminals, or the session log.
+    @Published private(set) var workspaceMode: WorkspaceMode = .terminal
     /// A session in its own window whose files the transfer view shows instead of the selected tab's.
     @Published var pinnedTransferTab: UUID?
     /// The left-hand folder of the file transfer view, kept while switching tabs and modes.
@@ -460,6 +457,8 @@ enum ConnectionState: Equatable {
         tab.outputPending = false
         if maximizedPane != nil && !(split?.contains(id) ?? false) { maximizedPane = nil }
         selection = id; pinnedTransferTab = nil
+        // The session log does not follow the tabs, so choosing one leaves it.
+        if workspaceMode == .log { workspaceMode = .terminal }
         if focusTerminal { tab.terminalFocusRequest += 1 }
     }
 
@@ -612,7 +611,7 @@ enum ConnectionState: Equatable {
         if remember, let type { NewConnectionType.last = type }
         let tab = addTab(select: false)
         tab.newConnectionType = type ?? NewConnectionType.last
-        showingFileTransfer = false
+        workspaceMode = .terminal
         selectTab(tab.id)
         return tab
     }
@@ -1142,7 +1141,7 @@ enum ConnectionState: Equatable {
     func reveal(tab id: UUID) {
         if let window = sessionWindows[id]?.window { window.makeKeyAndOrderFront(nil); return }
         guard tabs.contains(where: { $0.id == id }) else { return }
-        showingFileTransfer = false
+        workspaceMode = .terminal
         selectTab(id)
         bringForward()
     }
@@ -1281,11 +1280,22 @@ enum ConnectionState: Equatable {
             pinnedTransferTab = nil
             if let tab, tab.id != selection { selectTab(tab.id, focusTerminal: false) }
         }
-        showingFileTransfer = true
+        workspaceMode = .files
+    }
+
+    /// The Default layout shows the session log in the main window; the others open its own window.
+    /// `search` narrows the list, for example to one session's name.
+    func showConnectionHistory(search: String = "") {
+        history.reload()
+        history.search = search
+        guard layout == .native else { openTool(.connectionHistory); return }
+        workspaceMode = .log
+        // Opened from Settings or a session's own window, the log is in the window behind it.
+        workspaceWindow?.makeKeyAndOrderFront(nil)
     }
 
     func showTerminal() {
-        showingFileTransfer = false
+        workspaceMode = .terminal
         pinnedTransferTab = nil
         if let selected, selected.desktop == nil && selected.newConnectionType?.editorTool == nil {
             selected.terminalFocusRequest += 1
@@ -1445,7 +1455,7 @@ enum ConnectionState: Equatable {
             controller.showWindow(nil)
             controller.window?.makeKeyAndOrderFront(nil)
         } else {
-            showingFileTransfer = false
+            workspaceMode = .terminal
             selectTab(tab.id, focusTerminal: false)
         }
         return tab

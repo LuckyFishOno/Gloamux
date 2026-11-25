@@ -201,7 +201,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - `RemoteFileSystem` 由瀏覽器、佇列、預覽和 CLI 共用。
 - SSH 預設用 SFTP，子系統被拒絕後改用 SCP。設定檔可以強制使用其中一種。OpenSSH SFTP 的取代使用伺服器宣告的 `posix-rename@openssh.com` 擴充。
 - FTP 使用被動式資料連線。明確和隱含 FTPS 會加密兩條連線，在資料連線上重用控制連線的 TLS 工作階段，並使用系統信任或已驗證的憑證釘選。
-- 檔案傳輸都經過 `TransferQueue`，由 `WorkspaceModel.transfers` 在檔案側欄（`RemoteFileSidebar`，本機終端時顯示 `LocalTreeState`）、雙欄的 `FileTransferView` 和所有版面之間共用。預設版面在 `workspaceMode` 為 `.files` 時於主視窗顯示 `FileTransferView`，並跟著選取的分頁；經典和工作台則在附伺服器選單的 `FileTransferWindow` 中顯示。
+- 檔案傳輸都經過 `TransferQueue`，由 `WorkspaceModel.transfers` 在檔案側欄（`RemoteFileSidebar`，本機終端時顯示 `LocalTreeState`）、雙欄的 `FileTransferView` 和所有版面之間共用。預設版面在 `workspaceMode` 為 `.files` 時於主視窗顯示 `FileTransferView`，並跟著選取的分頁；經典和工作台則在附伺服器選單的 `FileTransferWindow` 中顯示。`.log` 時顯示 `ConnectionHistoryView`，`selectTab` 會離開；其他版面以工具視窗打開。
 - 佇列在分頁的 SFTP 通道上一次執行一個項目。上傳會先寫入暫存的 `.name.gloamux-….partial` 檔，再用 `RemoteFileSystem.commitUpload` 放到定位；已有檔案時使用 `replace`，不會先刪除舊檔。下載會在目的地旁寫入隱藏的暫存檔。CLI 上傳和 **在這台 Mac 編輯** 也會先放在遠端的暫存名稱，再用同樣方式提交。
 - `SFTPTransfer` 同時保持 16 個 32 KiB 的讀取或寫入，並在工作取消時停止。
 - `SFTPCommand` 解析貼上的 `sftp` 指令，並拒絕會改變連線路徑或執行程式的選項。`SavedConnection.signIn` 是 `questions` 或 `session-key`；session key 只存在 `SessionTreeStore.sessionKeys`。
