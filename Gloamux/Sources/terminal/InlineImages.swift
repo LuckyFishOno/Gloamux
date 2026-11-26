@@ -1,8 +1,8 @@
 import Foundation
 import ImageIO
 
-/// A picture a program showed in the terminal with the iTerm2 inline image protocol (OSC 1337 File) or with sixel
-/// graphics. It covers a block of cells whose top row is an absolute line, so it scrolls with the text.
+/// A picture a program showed in the terminal with the iTerm2 inline image protocol (OSC 1337 File), sixel
+/// graphics, or the kitty graphics protocol. It covers a block of cells whose top row is an absolute line, so it scrolls with the text.
 public struct TerminalImage: Sendable {
     public enum Content: Sendable {
         /// A PNG, JPEG, GIF, or other file ImageIO reads.
@@ -23,9 +23,12 @@ public struct TerminalImage: Sendable {
 
     /// Bytes once decoded, which is what the display keeps.
     let byteCount: Int
+    /// The kitty graphics image and placement it shows, for pictures sent with that protocol.
+    public internal(set) var kittyImage: UInt32? = nil
+    public internal(set) var kittyPlacement: UInt32? = nil
 }
 
-/// Size limits and parsing for the two image protocols. The screen places the result.
+/// Size limits and parsing for the iTerm2 and sixel image protocols; `KittyGraphics` reads the kitty one. The screen places the result.
 enum InlineImages {
     /// The largest image file accepted, decoded from base64.
     static let maximumFileBytes = 10 * 1_048_576

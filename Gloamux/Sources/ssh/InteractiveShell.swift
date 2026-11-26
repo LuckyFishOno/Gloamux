@@ -14,9 +14,11 @@ public final class SSHInteractiveShell: @unchecked Sendable {
         guard !bytes.isEmpty, bytes.count <= 262144 else { if bytes.isEmpty { return }; throw SSHError.invalidSettings("Terminal input exceeds 256 KiB.") }
         try await channel.writeAndFlush(SSHChannelData(type: .channel, data: .byteBuffer(ByteBuffer(bytes: bytes)))).get()
     }
-    public func resize(rows: Int, columns: Int) async throws {
+    /// Sends the terminal's size in cells and, when known, in pixels, which image programs use to size pictures.
+    public func resize(rows: Int, columns: Int, pixelWidth: Int = 0, pixelHeight: Int = 0) async throws {
         guard (1...500).contains(rows), (1...1000).contains(columns) else { throw SSHError.invalidSettings("Invalid terminal dimensions.") }
-        try await channel.triggerUserOutboundEvent(SSHChannelRequestEvent.WindowChangeRequest(terminalCharacterWidth: columns, terminalRowHeight: rows, terminalPixelWidth: 0, terminalPixelHeight: 0)).get()
+        let width = min(max(pixelWidth, 0), 65535), height = min(max(pixelHeight, 0), 65535)
+        try await channel.triggerUserOutboundEvent(SSHChannelRequestEvent.WindowChangeRequest(terminalCharacterWidth: columns, terminalRowHeight: rows, terminalPixelWidth: width, terminalPixelHeight: height)).get()
     }
     public func close() async { try? await channel.close().get() }
 }

@@ -246,6 +246,15 @@ Naming:
   - Sign-in uses no authentication, the classic VNC password, or Apple Remote Desktop (security type 30) when a user name is entered. Type 30 is what macOS Screen Sharing uses for a Mac account: a Diffie-Hellman exchange keys AES-128 for the account name and password. Only the credentials are encrypted.
 - Clipboard sharing follows the connection, or the `desktop.share-clipboard` default when the connection leaves it unset.
 
+### Browser panel
+
+- `BrowserPanel` (`WebPage.swift`) belongs to a window's `WorkspaceModel` and holds up to 20 `WebPageSession` pages, shown as tabs in the panel header. All of them share one `WKWebsiteDataStore.nonPersistent()` and one `WebCertificates`, so cookies and trusted certificates last until Gloamux quits. WebKit keeps an answered HTTP sign-in for as long as its store lives, and `removeData(ofTypes:)` does not forget it, so `clearWebsiteData()` moves every page to a new store (`WebPageSession.restart(with:)`) and opens it again; `BrowserPanelPageTests` checks that the site asks again. Hiding the panel calls `pauseMedia()`. A page makes its `WKWebView` (`GloamuxWebView`) only when it first loads.
+- `WebAddress.url(from:)` normalizes typed addresses the way Safari does (`http` for IP addresses, `localhost`, and names without a dot) and refuses other schemes and credentials in the URL. `WebAddress.destination(from:)`, used by the address field and `gloamux web`, turns words, a single word without a dot, and text that is not an address into a Google search.
+- The User-Agent adds Safari's `Version/… Safari/…` from `/Applications/Safari.app`, as sites such as Google send basic pages without it.
+- A certificate that fails `SecTrustEvaluateWithError` is shown with its fingerprint (`WebCertificateCard`) and trusted only for that endpoint. Sign-in challenges, JavaScript dialogs, uploads, downloads, and a crashed web content process are handled in the delegate extension.
+- `WebPageViews.swift` draws the panel (`WorkspaceSidebar.browser`): its page tabs, toolbar, and page. Every trailing panel (browser, files, quick commands, and themes) shares one width, `filesSidebarWidth` (`SidebarWidth.right`), dragged from 240 points to all but 340 points of the window in every layout. `gloamux web` (`WorkspaceCommandWeb.swift`) drives the panel and its pages and needs the running app.
+- `WebPageTests` cover addresses, pages, downloads, zoom, certificates, and the CLI. `BrowserPanelPageTests` loads pages from a local server and checks the title, history, and User-Agent.
+
 ## Updates
 
 - `AppUpdates` (in the `App` module) is what the menu and Settings see: **Gloamux › Check for Updates** (`CheckForUpdatesCommand`) and **Check for updates automatically** in **Settings › General**.
@@ -265,16 +274,16 @@ To test an update locally:
 
 `gloamux benchmark [--megabytes N] [--columns N] [--rows N] [--json]` feeds plain text, colored logs, CJK text, full-screen redraws, and OSC 133 prompts through `TerminalScreen` in 4 KB reads, times a full redraw of the visible lines with `TerminalLineRenderer`, and times one keystroke's echo. Run it from the packaged release app.
 
-On an Apple silicon Mac at 160×48 (November 22, 2026):
+On an Apple silicon Mac at 160×48, from a packaged build (November 26, 2026, after the CJK changes; the November 22 figures were 20 MB/s for CJK text and 25 MB/s for full-screen redraws):
 
 | Workload | Result |
 |---|---|
-| Plain text | about 100 MB/s |
-| Colored logs | 36 MB/s |
-| CJK text | 20 MB/s |
-| Full-screen redraws | 25 MB/s |
+| Plain text | about 117 MB/s |
+| Colored logs | 35 MB/s |
+| CJK text | 68 MB/s |
+| Full-screen redraws | 50 MB/s |
 | OSC 133 prompts | 10 MB/s |
-| Full redraw | 0.4–0.7 ms |
+| Full redraw | 0.4–1.0 ms |
 | Keystroke echo | about 0.01 ms |
 
 ### Stress test
@@ -283,7 +292,8 @@ On an Apple silicon Mac at 160×48 (November 22, 2026):
 
 - It needs only the Python 3 standard library and macOS's OpenSSH, so an agent can run it unattended after `package-app.sh`.
 - It creates a throwaway workspace and a throwaway `sshd` on 127.0.0.1 that accepts only a key made for the run. It never opens your workspace, never signs in with a password, and never connects to another host. In that workspace only, it turns on agent access for the test session.
-- Options: `--quick` runs about a fifth of the load, `--no-app` skips the phases that need the app, `--out DIR` chooses the report folder, and `--keep` keeps the throwaway files.
+- Options: `--quick` runs about a fifth of the load, `--no-app` skips the phases that need the app, `--app PATH` runs another copy such as a renamed test copy, `--out DIR` chooses the report folder, and `--keep` keeps the throwaway files.
+- The app and its `gloamux` write the app's own preferences domain. With the installed app's identifier, `local.gloamux.desktop`, the run leaves out the configuration import, so your settings stay as they are.
 - It writes `report.md`, `report.json`, and once-a-second samples in `samples.csv`. The exit status is 0 when every phase passed, 1 when any failed, and 2 for a setup problem.
 
 It covers:
@@ -296,8 +306,20 @@ It covers:
 - 20 local and 10 SSH tabs, each printing a million lines
 - port forwarding, checked with a TCP echo server
 - every MCP tool, including that an agent sees only allowed sessions and that a proposed command waits for review
+- wide text and inline images: CJK lines and kitty graphics images printed in a local tab
+- the browser panel, against a local web server: more pages than the 20-page limit, navigation churn, a cookie that Clear website data removes, and the WebKit processes and memory left after closing the pages
 
 Each phase gets a pass or fail, its own figures, the app's CPU time and peak memory, and the CPU used by the CLI processes it ran. Memory figures are the physical footprint shown in Activity Monitor; RSS is also recorded, but it stays high after memory is freed.
+
+### Feature check
+
+`python3 Gloamux/scripts/feature-check.py` checks one working operation of every `gloamux` command group against the packaged app, with the same throwaway workspace, `sshd`, and local web servers as the stress test.
+
+- Without the app: version, self-test, help, completion, sessions, hosts, files over SFTP and SCP, `sftp` and `ssh` reading standard input, forwards, commands, triggers, runbooks, history, appearance, layout, settings, config, agents, vault, X server, recordings, and benchmark.
+- With the app: tabs (run, read, switches, views, splits, windows, reconnect, recording), quick commands and runbooks run in a tab, a live forward, the browser panel (navigation, zoom, an untrusted HTTPS certificate trusted and refused, Clear website data, closing pages), `gloamux mcp`, the dropdown window, and workspace lock.
+- Options: `--app PATH`, `--no-app`, `--out DIR`, and `--keep`, as in the stress test. With a renamed copy it also sets and resets a setting and imports a backup; with the installed app's identifier it leaves those out.
+- It does not run steps that need a person: Touch ID for saved passwords, unlocking the workspace, and approving an agent's proposed command. It never runs `runbooks delete`, `recordings remove`, or `web external`, which move files to the Trash or open your browser.
+- It writes `report.md` and `report.json`. The exit status is 0 when every check passed, 1 when any failed, and 2 for a setup problem.
 
 A full run on an Apple silicon Mac (10 cores, November 22, 2026):
 
@@ -314,8 +336,10 @@ A full run on an Apple silicon Mac (10 cores, November 22, 2026):
 
 ### Future work
 
-- **Metal.** Building every visible line takes under 1 ms, and AppKit then draws only the lines that changed, so a Metal renderer would not change what users notice today. The parser is the limit. Runs of printable ASCII are written a row at a time, UTF-8 is decoded without a `String` per character, and CSI parameters are parsed byte by byte. CJK text still goes through the width lookup one character at a time, so that is the next place to speed up.
-- **Inline images.** iTerm2's `OSC 1337 File=` (including `MultipartFile=`) and sixel are implemented in `Sources/terminal/InlineImages.swift`: the screen keeps each picture with the absolute line of its top row and the cells it covers, and the text view draws it over those cells. Each file is capped at 10 MB and 4096×4096 pixels, sixel at 4096 pixels a side, and a tab keeps at most 64 pictures and 64 MB counted as decoded pixels; pictures are dropped as their lines leave the scrollback, by erasing the screen or scrollback, and when a program leaves the alternate screen. Files not marked `inline=1` (downloads) are ignored, and nothing a remote host sends can read local files. The kitty graphics protocol is not supported yet.
+- **Metal.** Building every visible line takes under 1 ms, and AppKit then draws only the lines that changed, so a Metal renderer would not change what users notice today. The parser is the limit. Runs of printable ASCII are written a row at a time, UTF-8 is decoded without a `String` or array per character, and CSI parameters are parsed byte by byte. Character widths below U+20000 come from a table built the first time a terminal shows a character from U+0300 up, and runs of complete non-ASCII characters (CJK text, box drawing, emoji) are written a row at a time like ASCII. A combining mark, a control byte, or a UTF-8 sequence that is invalid or cut off by the end of a read goes back to the per-character path. `WideTextTests` checks that both paths give the same screen. SGR and OSC 133 parsing are now the slowest workloads.
+- **Inline images.** iTerm2's `OSC 1337 File=` (including `MultipartFile=`) and sixel are implemented in `Sources/terminal/InlineImages.swift`: the screen keeps each picture with the absolute line of its top row and the cells it covers, and the text view draws it over those cells. Each file is capped at 10 MB and 4096×4096 pixels, sixel at 4096 pixels a side, and a tab keeps at most 64 pictures and 64 MB counted as decoded pixels; pictures are dropped as their lines leave the scrollback, by erasing the screen or scrollback, and when a program leaves the alternate screen. Files not marked `inline=1` (downloads) are ignored, and nothing a remote host sends can read local files.
+- **Kitty graphics.** `Sources/terminal/KittyGraphics.swift` decodes `ESC _ G` commands and `TerminalScreen` keeps and places the images, as `TerminalImage` values like the other two protocols. Supported: transmit (`a=t`), transmit and display (`a=T`), display (`a=p`) with placement ids, query (`a=q`), and delete (`a=d` with `a`, `i`, `n`, `c`, `p`, `x`, and `y`, lowercase or uppercase); formats `f=24`, `f=32`, and `f=100` (PNG); zlib compression (`o=z`); chunked transfers (`m=1`); source rectangles (`x`, `y`, `w`, `h`); cell sizes (`c`, `r`); `C=1`; and `q=1` and `q=2`. Only direct transmission (`t=d`) is accepted; file, temporary-file, and shared-memory transfers are refused with `EINVAL`, so nothing a remote host sends can read local files. Animation, Unicode placeholders (`U=1`), z-index, and pixel offsets within a cell are not supported. Kept images count against the same 64-image and 64 MB limits, oldest first. A command is capped at the 10 MB file limit in base64. With **Show inline images** off, kitty commands get no reply.
+- **Pixel sizes.** `CSI 14 t`, `CSI 16 t`, and `CSI 18 t` report the text area and one cell in pixels (one pixel per point) and the text area in cells. Local shells set `ws_xpixel` and `ws_ypixel` on the PTY, and SSH sessions send the pixel size in window-change requests. A font change that keeps the same rows and columns resends the pixel size.
 
 ## Tests
 

@@ -40,8 +40,9 @@ int gloamux_spawn_command(const char *path, char *const arguments[], const char 
     if (pid > 0) { fcntl(*descriptor, F_SETFD, FD_CLOEXEC); pthread_t thread; if (pthread_create(&thread, 0, reap, (void *)(long)pid) == 0) pthread_detach(thread); }
     return pid;
 }
-void gloamux_resize(int descriptor, int rows, int columns) {
-    struct winsize size = { .ws_row = rows, .ws_col = columns };
+/// Sets the PTY's size in cells and, when known, in pixels, which image programs use to size pictures.
+void gloamux_resize(int descriptor, int rows, int columns, int width, int height) {
+    struct winsize size = { .ws_row = rows, .ws_col = columns, .ws_xpixel = width, .ws_ypixel = height };
     ioctl(descriptor, TIOCSWINSZ, &size);
 }
 void gloamux_stop(int pid) { if (pid > 0) { kill(-pid, SIGHUP); kill(pid, SIGHUP); } }

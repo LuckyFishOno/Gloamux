@@ -174,6 +174,30 @@ public enum CLICatalog {
             A risky command in a confirming environment waits for your answer in Gloamux.
             Encodings: utf8, big5, gb18030, shiftJIS, eucJP, eucKR, latin1. Needs the running app.
             """),
+        CLICommand("web",
+                   summary: "Open web pages in the browser panel of the running app",
+                   runner: .workspace,
+                   operations: ["show", "hide", "list", "open", "select", "close", "status", "go", "back", "forward", "reload", "stop", "zoom", "external", "trust", "refuse", "clear-data"],
+                   help: """
+            show [URL] | hide | list | open URL | select PAGE | close PAGE
+            status PAGE | go PAGE URL | back PAGE | forward PAGE | reload PAGE | stop PAGE
+            zoom PAGE PERCENT | external PAGE
+            trust PAGE VERIFIED_SHA256 | refuse PAGE
+            clear-data
+
+            The browser panel at the right of the active window shows web pages as tabs. PAGE is a page's ID from
+            list, or current for the page the panel shows.
+            show and hide open and close the panel; show URL also opens the address in the page it shows. open opens
+            an address in a new page. An address without http:// or https:// gets one as a browser adds it, and
+            text that is not an address, such as words or a single word without a dot, is searched on Google.
+            status prints the address, title, zoom, and any certificate question, sign-in, error, or download.
+            external opens the page in the default browser.
+            trust trusts the certificate a page is asking about until Gloamux quits, after you compare its SHA-256
+            fingerprint from status. refuse leaves the page closed. Sign-ins a page asks for are answered in Gloamux.
+            Pages keep cookies and sign-ins in memory only; clear-data deletes them and the trusted certificates and
+            opens each page again, as Clear website data in the app does.
+            Downloads go to the Downloads folder. Needs the running app.
+            """),
         CLICommand("forwards",
                    summary: "Manage SSH forwarding rules",
                    runner: .workspace,
@@ -342,6 +366,17 @@ public enum CLICatalog {
     public static let internalCommands: Set<String> = ["agent"]
 
     public static func command(_ name: String) -> CLICommand? { commands.first { $0.name == name } }
+
+    /// Whether a command's arguments ask only for its help: `--help` or `-h`, also next to `--workspace PATH`, which
+    /// every command accepts, so `gloamux web --help --workspace PATH` prints help and does not refuse `--help`.
+    public static func asksForHelp(_ arguments: [String]) -> Bool {
+        var rest: [String] = []
+        var iterator = arguments.makeIterator()
+        while let argument = iterator.next() {
+            if argument == "--workspace" { _ = iterator.next() } else { rest.append(argument) }
+        }
+        return rest == ["--help"] || rest == ["-h"]
+    }
 
     /// The text of `gloamux --help`.
     public static var usage: String {

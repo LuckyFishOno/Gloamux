@@ -37,7 +37,7 @@ enum MCPServer {
     }
 
     @MainActor static func run(_ arguments: [String]) async throws {
-        if arguments == ["--help"] || arguments == ["-h"] {
+        if CLICatalog.asksForHelp(arguments) {
             print("""
                 Usage: gloamux mcp [--workspace PATH]
 

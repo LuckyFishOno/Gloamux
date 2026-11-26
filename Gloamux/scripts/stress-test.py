@@ -9,14 +9,19 @@ another host. The app instance it starts is a second, separate Gloamux process t
     python3 Gloamux/scripts/stress-test.py                  # full run, about 3 minutes
     python3 Gloamux/scripts/stress-test.py --quick          # smaller loads, about 1 minute
     python3 Gloamux/scripts/stress-test.py --no-app         # CLI and file transfers only, no app window
+    python3 Gloamux/scripts/stress-test.py --app "/path/Gloamux UITest.app"   # a renamed copy of the app
 
-Build first with Gloamux/scripts/package-app.sh. The report (Markdown and JSON) and the resource samples (CSV) are
+Build first with Gloamux/scripts/package-app.sh. The app and its `gloamux` use the app's own preferences domain, so a
+renamed copy (another CFBundleIdentifier) keeps the run away from the settings of the Gloamux you use; with the
+installed app's identifier, the run leaves out the steps that would write those settings. The report (Markdown and JSON) and the resource samples (CSV) are
 written to --out, by default a new folder under the system temporary folder; its path is printed at the end.
 Exit status: 0 when every check passed, 1 when any failed, 2 for a setup problem.
 """
 
 import argparse
 import base64
+import http.server
+import plistlib
 import concurrent.futures
 import csv
 import datetime
@@ -42,6 +47,28 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "build" / "Gloamux.app"
 APP_BINARY = APP / "Contents" / "MacOS" / "Gloamux"
 CLI = APP / "Contents" / "Resources" / "bin" / "gloamux"
+INSTALLED_ID = "local.gloamux.desktop"
+
+
+def use_app(path):
+    """Points the run at another copy of the app, such as a renamed test copy."""
+    global APP, APP_BINARY, CLI
+    APP = Path(path).resolve()
+    APP_BINARY = APP / "Contents" / "MacOS" / "Gloamux"
+    CLI = APP / "Contents" / "Resources" / "bin" / "gloamux"
+
+
+def app_identifier():
+    try:
+        with open(APP / "Contents" / "Info.plist", "rb") as handle:
+            return plistlib.load(handle).get("CFBundleIdentifier", "")
+    except (OSError, plistlib.InvalidFileException):
+        return ""
+
+
+def writes_installed_settings():
+    """True when this copy's preferences are those of the Gloamux the user runs."""
+    return app_identifier() == INSTALLED_ID
 
 
 class SetupError(Exception):
@@ -331,6 +358,54 @@ def heap_live_mb(pid):
     return None
 
 
+# MARK: A web server for the browser panel
+
+class PageServer(threading.Thread):
+    """Serves numbered pages with some weight to them, and a page that keeps a cookie, on 127.0.0.1."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path.startswith("/cookie"):
+                    body = ("<!doctype html><title>cookie</title><script>"
+                            "if (document.cookie.includes('stress=1')) document.title = 'cookie kept';"
+                            "else { document.cookie = 'stress=1; path=/'; document.title = 'cookie set'; }</script>")
+                else:
+                    name = self.path.strip("/").replace("page/", "Page ") or "Page 0"
+                    rows = "".join(f"<tr><td>{i}</td><td>{'x' * 60}</td></tr>" for i in range(2000))
+                    body = (f"<!doctype html><title>{name}</title><style>td{{padding:2px}}</style>"
+                            f"<h1>{name}</h1><canvas id=c width=600 height=300></canvas><table>{rows}</table>"
+                            "<script>const g=document.getElementById('c').getContext('2d');"
+                            "for(let i=0;i<500;i++){g.fillStyle=`hsl(${i},70%,50%)`;g.fillRect(i%600,i%300,40,40)}</script>")
+                data = body.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_address[1]
+
+    def run(self):
+        self.server.serve_forever()
+
+    def stop(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def webkit_processes():
+    """PIDs of WebKit's page processes, which hold a page's memory apart from the app."""
+    out = subprocess.run(["pgrep", "-f", "com.apple.WebKit.WebContent"], capture_output=True, text=True).stdout
+    return {int(pid) for pid in out.split()}
+
+
 # MARK: MCP client
 
 class MCPClient:
@@ -460,6 +535,10 @@ class StressRun:
         line = (self.scratch / "all.gloamuxconfig.sha256").read_text().split()[0]
         if line != sha256_file(backup):
             raise RuntimeError("the .sha256 file does not match the export")
+        if writes_installed_settings():
+            # Importing writes the settings of the app's preferences domain, here the installed Gloamux's.
+            return {"backup_kb": round(backup.stat().st_size / 1024), "export_s": round(seconds, 2),
+                    "import": "left out: run with --app and a renamed copy to include it"}
         other = CLIRunner(self.scratch / "restored")
         restore_seconds, _ = other("config", "import", backup)
         original = sorted(item["name"] for item in self.cli.json("sessions", "list"))
@@ -632,6 +711,117 @@ class StressRun:
                 "lines_per_s": round(lines * len(tabs) / flood), "memory_with_tabs_mb": with_tabs,
                 "memory_after_close_mb": after, "heap_in_use_after_close_mb": live}
 
+    def browser_panel(self):
+        server = PageServer()
+        server.start()
+        base = f"http://127.0.0.1:{server.port}"
+        before = webkit_processes()
+        try:
+            def pages():
+                return self.cli.json("web", "list")["pages"]
+
+            def settle(seconds=120):
+                deadline = time.monotonic() + seconds
+                while time.monotonic() < deadline:
+                    listed = pages()
+                    if all(not page["loading"] and page["title"] for page in listed):
+                        return listed
+                    time.sleep(0.3)
+                raise RuntimeError("pages in the browser panel did not finish loading")
+
+            self.cli("web", "show", f"{base}/page/0")
+            count = self.n(40, 25)
+            open_times = []
+            start = time.monotonic()
+            for index in range(1, count + 1):
+                open_times.append(self.cli("web", "open", f"{base}/page/{index}")[0])
+            listed = settle()
+            loaded = time.monotonic() - start
+            limit = 20
+            if len(listed) != limit:
+                raise RuntimeError(f"the panel kept {len(listed)} pages, not {limit}")
+            expected = {f"Page {index}" for index in range(count - limit + 1, count + 1)}
+            if {page["title"] for page in listed} != expected:
+                raise RuntimeError("the panel did not keep the newest pages")
+            processes = webkit_processes() - before
+            web_memory = round(sum(footprint_mb(pid) or 0 for pid in processes), 1)
+            with_pages = footprint_mb(self.app.pid)
+
+            # Navigation in one page: forward through pages, then back through its history.
+            steps = self.n(60, 15)
+            nav_start = time.monotonic()
+            for index in range(steps):
+                self.cli("web", "go", "current", f"{base}/page/nav{index}")
+            settle()
+            for _ in range(min(steps, 10)):
+                self.cli("web", "back", "current")
+                time.sleep(0.2)
+            settle()
+            navigation = time.monotonic() - nav_start
+
+            self.cli("web", "go", "current", f"{base}/cookie")
+            self.wait_title("cookie set")
+            self.cli("web", "reload", "current")
+            self.wait_title("cookie kept")
+            self.cli("web", "clear-data")
+            self.wait_title("cookie set")
+            if self.cli.json("web", "zoom", "current", 150)["zoom"] != 150:
+                raise RuntimeError("zoom was not set")
+
+            for page in pages():
+                self.cli("web", "close", page["id"])
+            self.cli("web", "hide")
+            time.sleep(4)
+            left = webkit_processes() - before
+            return {"pages_opened": count + 1, "pages_kept": limit, "open_ms_p50": round(percentile(open_times, 0.5) * 1000),
+                    "all_loaded_s": round(loaded, 1), "navigations": steps + 10, "navigation_s": round(navigation, 1),
+                    "webkit_processes": len(processes), "webkit_memory_mb": web_memory,
+                    "app_memory_with_pages_mb": with_pages, "app_memory_after_close_mb": footprint_mb(self.app.pid),
+                    "webkit_processes_after_close": len(left)}
+        finally:
+            server.stop()
+
+    def wait_title(self, title, seconds=30):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            status = self.cli.json("web", "status", "current")
+            if status.get("title") == title and not status.get("loading"):
+                return
+            time.sleep(0.2)
+        raise RuntimeError(f"the page did not show {title!r}")
+
+    def wide_text_and_images(self):
+        lines = self.n(200_000, 40_000)
+        images = self.n(500, 100)
+        text = self.scratch / "wide.txt"
+        with open(text, "w", encoding="utf-8") as handle:
+            for index in range(lines):
+                handle.write(f"第{index}行 終端機測試 日本語のテキスト 한국어 텍스트 ┃ ━━━ 🙂\n")
+        pictures = self.scratch / "kitty.txt"
+        pixel = base64.b64encode(bytes(random.randrange(256) for _ in range(16 * 16 * 3))).decode()
+        with open(pictures, "w") as handle:
+            for _ in range(images):
+                handle.write(f"\x1b_Ga=T,f=24,s=16,v=16,q=2;{pixel}\x1b\\\n")
+        tab = self.cli.json("tabs", "local")["id"]
+        deadline = time.monotonic() + 60
+        while not self.cli.json("tabs", "show", tab).get("terminalReady"):
+            if time.monotonic() > deadline:
+                raise RuntimeError("the local tab did not start")
+            time.sleep(0.3)
+        time.sleep(1.5)
+        marker = uuid.uuid4().hex[:8]
+        start = time.monotonic()
+        self.cli("tabs", "run", tab, f"cat {pictures} {text}; echo DONE_{marker}_$((1+1))")
+        self.wait_for(tab, f"\nDONE_{marker}_2\n", seconds=600, lines=5)
+        seconds = time.monotonic() - start
+        tail = self.cli.json("tabs", "read", tab, 6)["text"]
+        if f"第{lines - 1}行" not in tail:
+            raise RuntimeError(f"the last line of the text is missing: {tail[-160:]!r}")
+        memory = footprint_mb(self.app.pid)
+        self.cli("tabs", "close", tab)
+        return {"lines": lines, "images": images, "seconds": round(seconds, 1),
+                "megabytes_per_s": round(text.stat().st_size / (1 << 20) / seconds, 1), "app_memory_mb": memory}
+
     def live_forward(self):
         tab = self.cli.json("tabs", "open", "Fixture")["id"]
         deadline = time.monotonic() + 60
@@ -755,6 +945,8 @@ class StressRun:
                         self.phase("Tabs and terminal output", self.live_tabs)
                         self.phase("Port forwarding", self.live_forward)
                         self.phase("MCP agents", self.mcp)
+                    self.phase("Wide text and inline images", self.wide_text_and_images)
+                    self.phase("Browser panel", self.browser_panel)
                     self.phase("App idle after load", lambda: (time.sleep(10), {})[1])
         finally:
             self.finish()
@@ -827,7 +1019,10 @@ def main():
     parser.add_argument("--no-app", action="store_true", help="skip the phases that start the app")
     parser.add_argument("--out", help="folder for report.md, report.json, and samples.csv")
     parser.add_argument("--keep", action="store_true", help="keep the throwaway workspace and server files")
+    parser.add_argument("--app", help="the Gloamux app to test, such as a renamed copy (default: build/Gloamux.app)")
     options = parser.parse_args()
+    if options.app:
+        use_app(options.app)
     stress = StressRun(options)
     try:
         stress.execute()

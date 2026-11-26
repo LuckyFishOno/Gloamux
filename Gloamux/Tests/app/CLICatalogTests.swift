@@ -27,6 +27,19 @@ import XCTest
         XCTAssertEqual(Set(CLICatalog.filePaths.keys), Set(CLICatalog.command("files")?.operations ?? []))
     }
 
+    /// `gloamux web --help --workspace PATH` refused `--help` as an unknown option, because only `--help` alone was
+    /// taken as a request for help.
+    func testHelpIsRecognizedNextToAWorkspace() {
+        XCTAssertTrue(CLICatalog.asksForHelp(["--help"]))
+        XCTAssertTrue(CLICatalog.asksForHelp(["-h"]))
+        XCTAssertTrue(CLICatalog.asksForHelp(["--help", "--workspace", "/tmp/w"]))
+        XCTAssertTrue(CLICatalog.asksForHelp(["--workspace", "/tmp/w", "-h"]))
+        XCTAssertFalse(CLICatalog.asksForHelp([]))
+        XCTAssertFalse(CLICatalog.asksForHelp(["--workspace", "/tmp/w"]))
+        XCTAssertFalse(CLICatalog.asksForHelp(["list", "--help"]))
+        XCTAssertFalse(CLICatalog.asksForHelp(["--workspace", "--help"]), "--help here is the workspace path")
+    }
+
     func testTheUsageListsEveryCommand() {
         let lines = CLICatalog.usage.components(separatedBy: "\n")
         for command in CLICatalog.commands {

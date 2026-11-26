@@ -4,11 +4,21 @@ import Terminal
 /// Settings, output triggers, layout, and the password vault, for `gloamux settings|triggers|layout|vault|signins|workspace`.
 extension WorkspaceCommand {
     /// The app's preferences. The running app answers commands with its own defaults; a command run without the app
-    /// writes the same domain, so the next launch sees it. Tests replace it.
+    /// writes the same domain, so the next launch sees it. The `gloamux` inside a renamed copy of the app writes that
+    /// copy's domain, not the installed app's. Tests replace it.
     @MainActor public static var preferences: UserDefaults = {
-        let id = "local.gloamux.desktop"
+        let id = enclosingAppIdentifier ?? "local.gloamux.desktop"
         return Bundle.main.bundleIdentifier == id ? .standard : UserDefaults(suiteName: id) ?? .standard
     }()
+
+    /// The bundle identifier of the app this executable belongs to, through the `Resources/bin/gloamux` link too.
+    nonisolated static var enclosingAppIdentifier: String? {
+        guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath(),
+              executable.deletingLastPathComponent().lastPathComponent == "MacOS" else { return nil }
+        let info = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Info.plist")
+        guard let id = NSDictionary(contentsOf: info)?["CFBundleIdentifier"] as? String, id.hasPrefix("local.gloamux.") else { return nil }
+        return id
+    }
 
     struct Setting {
         enum Kind {

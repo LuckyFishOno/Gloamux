@@ -6,6 +6,8 @@ import GloamuxNetwork
 protocol TerminalTransport: AnyObject {
     func send(_ bytes: [UInt8])
     func resize(rows: Int, columns: Int)
+    /// The same, with the text area's size in pixels for programs that size pictures by it. Only a PTY keeps it.
+    func resize(rows: Int, columns: Int, pixelWidth: Int, pixelHeight: Int)
     func close()
     /// Stops and restarts reading output while the screen catches up. A serial line or Telnet never outpaces it.
     func setOutputPaused(_ paused: Bool)
@@ -13,6 +15,7 @@ protocol TerminalTransport: AnyObject {
 
 extension TerminalTransport {
     func setOutputPaused(_ paused: Bool) {}
+    func resize(rows: Int, columns: Int, pixelWidth: Int, pixelHeight: Int) { resize(rows: rows, columns: columns) }
 }
 
 extension LocalShell: TerminalTransport {}

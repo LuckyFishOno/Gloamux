@@ -4,6 +4,35 @@
 
 本頁依版本記錄每次發布背後的檢查，最新的在前。原始的 2026 年 11 月 24 日架構與壓力測試基準，使用 `b1e4638` 之上、收錄於 Gloamux 1.2 (build 3) 的修改，測試套件位於 `build/Gloamux.app`。
 
+## Gloamux 1.6 (build 17)：瀏覽器面板、測試腳本，以及改名副本寫入的設定（2026 年 11 月 27 日）
+
+以 `f72a8d5`（1.5 build 16）為基礎，連同下一節的 kitty 圖片等修改一起發布。
+
+- **過程中的設計調整。** 先做出並驗證了已存的 **網頁** 連線類型（含 **透過 SSH**），之後依擁有者要求移除，網頁只在瀏覽器面板開啟。面板的網頁改成標題列上的分頁，畫法和工作階段分頁相同；右邊每個面板共用一個寬度，可以拖曳到只留給終端 340 點。連線樹選單的 **從 sftp 指令新增工作階段** 已移除，指令面板和直接貼上指令仍可使用。
+- **單元測試。** `WebPageTests`（8 個：輸入的網址和 Google 搜尋、被拒絕的通訊協定和帳號密碼、下載檔名、縮放上下限、網頁分頁和 20 頁上限、憑證上限、User-Agent、網頁不是連線類型，以及每個 `gloamux web` 操作和錯誤輸入）和 `BrowserPanelPageTests`（2 個：本機伺服器的網頁用 Safari 的 User-Agent 載入，再開第二頁、上一頁和下一頁；HTTP Basic 登入在同一網站會沿用，**清除網站資料** 後會再要求登入）。`SidebarLayoutTests` 檢查右側共用寬度。
+- **檢查程式時發現清除後仍保留登入。** **清除網站資料** 用 `removeData(ofTypes:)` 清空資料，但 WebKit 仍用先前的 HTTP 登入回應網站；修正前，新測試就是這樣失敗。現在面板會把網頁換到新的網站資料並重新開啟每一頁，選單和 `gloamux web clear-data` 都一樣。隱藏面板時會暫停聲音和影片。
+- **Swift 測試。** 592 個：584 個通過、8 個略過（需要外部輸入的遠端主機和 Xshell 範例檢查）、0 個失敗。Rust 遠端桌面引擎：18 個通過。兩組測試會在發布 commit 上由 `release.sh build` 再跑一次。
+- **改名副本寫入的設定。** App 關閉時，從改名測試副本執行的 `gloamux settings set` 和 `gloamux config import` 會寫入已安裝 App 的網域 `local.gloamux.desktop`，因為命令列工具不知道自己屬於哪個 App。現在它寫入所在 App 的網域，所以從副本執行 `settings set terminal.scrollback 50000` 只改到 `local.gloamux.uitest`，已安裝 App 的設定在下面每次執行中都完全沒變。
+- **和 `--workspace` 一起的說明。** 新的功能檢查發現 `gloamux web --help --workspace PATH` 會把 `--help` 當成不明選項拒絕。現在每個指令在這種寫法下也會顯示說明。新測試：`CLICatalogTests.testHelpIsRecognizedNextToAWorkspace`。需要執行中 App 的指令，現在提示時不再只提到分頁，例如 `gloamux web`。
+- **功能檢查。** 新的 `feature-check.py` 對改名副本、拋棄式工作區、只在 127.0.0.1 且只接受金鑰的拋棄式 `sshd`，以及本機網頁伺服器，執行每一組 `gloamux` 指令的一項實際操作。第一次 50 項通過 47 項；三項失敗都是腳本本身的問題：用空白文字執行 `tabs run`、沒有快速鍵設定就叫出下拉視窗，以及用 macOS 內建 LibreSSL 產生的 EC 金鑰憑證，TLS 握手在網頁詢問前就失敗。單獨重測時，App 對 RSA 憑證會詢問、拒絕錯誤的指紋、用正確指紋開啟網頁，也能拒絕另一頁。修正腳本後：50 項全部通過。
+- **壓力測試。** 對改名副本完整執行 `stress-test.py --app`，16 個階段全部通過。20 個本機分頁和 10 個 SSH 分頁各印出 1,000,000 行，約每秒 691,000 行，記憶體峰值 712 MB，關閉後 157 MB。新的寬字元階段在 1.2 秒內印出 200,000 行中日韓文字和 500 張 kitty 圖片。瀏覽器面板開了 41 頁、保留 20 頁，2.7 秒全部載入，3.8 秒完成 70 次導覽，使用 20 個 WebKit 程序共 532 MB，關閉網頁後沒有留下 WebKit 程序。終端效能測試的中日韓文字為 71.4 MB/s。
+- **打包後的 App。** `package-app.sh` 和 `codesign --verify --deep --strict` 通過。在改名的測試副本（`local.gloamux.uitest`）和獨立的工作區中，用 `gloamux web` 操作：`show` 和 `open` 在面板載入本機 `http.server` 的網頁，沒有新增分頁；網頁的 `navigator.userAgent` 回報 `Version/27.2 Safari/605.1.15`；`go`、`back`、`select`、`zoom 150`、`close`、`hide` 和 `clear-data` 正常；`open "gloamux terminal"` 載入 Google 搜尋結果；`ftp://` 和 `file://` 網址及不明的網頁 ID 以結束代碼 2 拒絕；`sessions add-other ... web` 被拒絕。擁有者在測試副本看過網頁分頁，確認沒問題。正在播放聲音的網頁在 `hide` 關閉面板時收到 `pause`；會設定 Cookie 的網頁重新載入後仍找得到 Cookie，`clear-data` 後則找不到，且網頁會自己重新開啟。
+- 未檢查：對真實設備的憑證核可和登入視窗、點擊下載，以及透過 **檢查更新** 安裝更新。
+
+## Gloamux 1.6 (build 17)：kitty 圖片、像素大小、更快的中日韓文字、重新連上後的畫面，以及編輯過的桌面連線（2026 年 11 月 26 日）
+
+以 `f72a8d5`（1.5 build 16）為基礎的工作目錄，和上方的瀏覽器面板一起在 1.6 發布。
+
+- **單元測試。** 新增：`KittyGraphicsTests`（11 項：原始 RGB 與 RGBA、分段傳送的 PNG、zlib、先傳送再顯示、裁切、放置 ID、圖片編號、刪除時是否釋放資料、拒絕指定檔案的傳送、安靜模式、查詢、關閉設定時、重設，以及 `CSI 14 t`、`16 t`、`18 t` 的回應）、`WideTextTests`（6 項：中日韓文字、表情符號、組合字元、寬度不明確字元、無效與被切斷的 UTF-8，一次讀入和逐位元組讀入得到相同畫面，加上 200 段隨機文字與寬度表），以及 `EndProgramTests`（4 項：shell 斷線、全螢幕程式中斷線、讀到一半的序列，以及清到回捲中）。
+- **新測試找到的卡死。** 在只有一欄寬的終端中，寬字元永遠放不下，一次寫入一整列的路徑會無限迴圈，逐字元的路徑則會超出該列的範圍。現在寬字元在這種情況下只佔那一格。App 的終端至少有 20 欄，使用者不會遇到。
+- **Swift 測試。** 581 項：573 通過、8 項略過（需要外部輸入的遠端主機與 Xshell 範例檢查）、0 失敗。
+- **基準測試。** 從打包好的版本執行 `gloamux benchmark --megabytes 32`：中日韓文字由 18.7 MB/s 提升到 67.5 MB/s；全螢幕重繪由 25.8 提升到 50.0 MB/s；純文字、彩色記錄與 OSC 133 提示字元沒有變慢。
+- **打包的 App。** `package-app.sh` 與 `codesign --verify --deep --strict` 通過。在改名的測試副本（`local.gloamux.uitest`）中使用獨立的工作區：
+  - 在本機 shell 中，一個 Python 腳本顯示了分兩段傳送的 PNG、拉伸到 12×3 格的 zlib 壓縮 RGB 圖片，以及裁切過的第二個放置。kitty 查詢得到 `OK`，`CSI 14 t` 回報 739×656，PTY 也回報相同的像素大小（`ws_xpixel`、`ws_ypixel`）。
+  - 對 127.0.0.1 上只接受本次產生金鑰的拋棄式 `sshd`：在 shell 提示字元時中斷連線後，**連線已中斷** 顯示在最後一個提示字元下方，自動重新連線從清空的畫面開始，先前的文字完整留在回捲中。修正前，`ESC [?1049l` 會把游標移到左上角，所以訊息和新連線會覆寫先前的行。在已開啟替代畫面、捲動區域、紅色文字和滑鼠回報的程式中斷線時，重新連上的 shell 以預設顏色捲動整個畫面。
+- **編輯過的桌面連線（使用者回報）。** 從已存連線開啟的 VNC 分頁會一直使用開啟時的主機和連接埠。因此在表單把連接埠從 5900 改成 5901 後，按 **連線** 仍然連 5900，並顯示 **無法連線到遠端桌面主機**。現在已存連線有變更時，不論來自表單、`gloamux sessions edit` 或 `edit-other`，尚未連線的桌面分頁都會套用新設定。新測試：`RemoteKindsTests.testAnOpenDesktopTabUsesTheEditedPortOnTheNextConnect`，沒有修正時會失敗。修正後 Swift 全套：582 項，574 通過、8 跳過、0 失敗。在打包的 `local.gloamux.uitest` 副本中，先在 127.0.0.1:5900 開啟分頁，再用 CLI 改成另一個連接埠，按 **連線** 後連到了新連接埠上的測試用 RFB 伺服器。
+- 未檢查：`kitten icat`、`chafa` 等真正的 kitty 用戶端（沒有安裝）、以及真實 SSH 伺服器上的像素大小。完整的 `stress-test.py` 見上一節。
+
 ## Gloamux 1.5 (build 16)：終端工具、ZMODEM、內嵌圖片與「相容」SSH 金鑰交換（2026 年 11 月 26 日）
 
 以 `395ad71`（1.4.6 build 15）為基礎。

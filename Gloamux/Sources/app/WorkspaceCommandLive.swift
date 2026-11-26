@@ -4,7 +4,7 @@ import Terminal
 /// Operations on the running app's tabs and terminals, for `gloamux tabs` and `gloamux commands send|run`.
 extension WorkspaceCommand {
     @MainActor static func requireLive(_ live: Bool, _ model: WorkspaceModel) throws {
-        guard live else { throw WorkspaceError.invalid("Open Gloamux before controlling tabs.") }
+        guard live else { throw WorkspaceError.invalid("Open Gloamux first. This command needs the running app.") }
         guard !model.workspaceLocked else { throw WorkspaceError.invalid("Unlock this workspace in Gloamux first.") }
     }
 

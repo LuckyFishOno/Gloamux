@@ -124,7 +124,6 @@ struct SessionTreeView: View {
     @ViewBuilder private func newItems(parent: UUID?) -> some View {
         Button(T("New folder…")) { edit(.folder, parent: parent) }
         Button(T("New saved session…")) { connectionEditor = ConnectionEditRequest(parent: parent) }
-        Button(T("New session from sftp command")) { model.showSFTPCommand() }
         Button(T(ContainerSession.Tool.rdp.title)) { model.openTool(.rdp, parent: parent) }
         Button(T(ContainerSession.Tool.vnc.title)) { model.openTool(.vnc, parent: parent) }
     }
@@ -147,7 +146,6 @@ struct SessionTreeView: View {
         func addNewItems(parent: UUID?) {
             add(T("New folder…")) { edit(.folder, parent: parent) }
             add(T("New saved session…")) { connectionEditor = ConnectionEditRequest(parent: parent) }
-            add(T("New session from sftp command")) { model.showSFTPCommand() }
             add(T(ContainerSession.Tool.rdp.title)) { model.openTool(.rdp, parent: parent) }
             add(T(ContainerSession.Tool.vnc.title)) { model.openTool(.vnc, parent: parent) }
         }

@@ -13,7 +13,7 @@ enum ManagementCommands {
             try completion(arguments)
             return
         }
-        if arguments == ["--help"] || arguments == ["-h"] || arguments.isEmpty {
+        if CLICatalog.asksForHelp(arguments) || arguments.isEmpty {
             print("Usage: gloamux \(command) <operation> [arguments] [--workspace PATH]\n")
             print(CLICatalog.command(command)?.help ?? "")
             print("\nResults are emitted as JSON. Use -- before a literal argument that begins with --.")
@@ -54,7 +54,7 @@ enum ManagementCommands {
 
     private static func completion(_ args: [String]) throws {
         let usage = CLICatalog.choice("completion")
-        if args == ["--help"] || args == ["-h"] { print(usage); return }
+        if CLICatalog.asksForHelp(args) { print(usage); return }
         guard args.count == 1, let shell = args.first, CLICatalog.command("completion")?.operations.contains(shell) == true else {
             throw CLIUsageError(usage)
         }

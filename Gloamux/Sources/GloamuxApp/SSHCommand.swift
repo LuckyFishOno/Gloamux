@@ -22,7 +22,7 @@ enum SSHCommand {
     """
 
     @MainActor static func run(_ arguments: [String]) async throws -> Int32 {
-        if arguments == ["--help"] || arguments == ["-h"] { print(usage); return 0 }
+        if CLICatalog.asksForHelp(arguments) { print(usage); return 0 }
         let args = try CLIArguments(arguments, values: ["--session", "--workspace", "--host-key"],
                                     switches: ["--password-stdin", "--vault-password-stdin", "--interactive"], repeated: ["--host-key"])
         let selector: String

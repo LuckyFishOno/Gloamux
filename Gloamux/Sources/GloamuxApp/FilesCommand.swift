@@ -8,7 +8,7 @@ enum FilesCommand {
     static var usage: String { CLICatalog.command("files")?.help ?? "" }
 
     @MainActor static func run(_ arguments: [String]) async throws {
-        if arguments == ["--help"] || arguments == ["-h"] { print(usage); return }
+        if CLICatalog.asksForHelp(arguments) { print(usage); return }
         let args = try CLIArguments(arguments, values: ["--session", "--workspace", "--protocol", "--host-key"],
                                     switches: ["--json", "--password-stdin", "--vault-password-stdin", "--interactive",
                                                "--allow-plain-ftp", "--overwrite", "--resume", "--recursive"], repeated: ["--host-key"])

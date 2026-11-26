@@ -252,6 +252,7 @@ private struct ClassicToolbar<NewItems: View>: View {
                 openWindow(id: SettingsWindow.id)
             }
             ToolSeparator()
+            ToolIcon(symbol: "globe", help: "Browser", color: .blue, active: sidebar == .browser) { toggleSidebar(.browser) }
             ToolIcon(symbol: "command", help: "Quick commands", color: .cyan, active: sidebar == .commands) { toggleSidebar(.commands) }
             ToolIcon(symbol: "paintpalette", help: "Color theme", color: .pink, active: sidebar == .themes) { toggleSidebar(.themes) }
             ToolIcon(symbol: "arrow.up.left.and.arrow.down.right", help: "Full screen", color: .secondary) { NSApp.keyWindow?.toggleFullScreen(nil) }
@@ -513,6 +514,7 @@ private struct MobaRibbon<NewItems: View>: View {
                 Task { if await model.authorizeSavedSignIns() { showingSignIns = true } }
             }
             ToolSeparator().frame(height: 40)
+            RibbonButton(symbol: "globe", title: "Browser", color: .blue, active: sidebar == .browser) { toggleSidebar(.browser) }
             RibbonButton(symbol: "paintpalette.fill", title: "Theme", color: .pink, active: sidebar == .themes) { toggleSidebar(.themes) }
             RibbonButton(symbol: "arrow.up.left.and.arrow.down.right", title: "Full screen", color: .secondary) { NSApp.keyWindow?.toggleFullScreen(nil) }
             RibbonButton(symbol: "gearshape.fill", title: "Settings", color: .gray) { openWindow(id: SettingsWindow.id) }

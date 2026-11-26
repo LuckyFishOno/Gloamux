@@ -343,7 +343,7 @@ private struct TerminalSettings: View {
                     label(T("Ambiguous-width characters are wide"), T("Greek, Cyrillic, box drawing, and symbols such as ① and ○ take two cells, as in many Chinese, Japanese, and Korean terminals. Turn it on only when the server expects that. Applies to new terminals."))
                 }
                 Toggle(isOn: $inlineImages) {
-                    label(T("Show inline images"), T("Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals."))
+                    label(T("Show inline images"), T("Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals."))
                 }
                 Toggle(isOn: $zmodem) {
                     label(T("ZMODEM file transfer"), T("Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused."))

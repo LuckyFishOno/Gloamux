@@ -246,6 +246,15 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
   - 登入方式有不驗證、傳統 VNC 密碼，或在輸入使用者名稱時使用 Apple Remote Desktop（安全類型 30）。類型 30 是 macOS 螢幕共享用於 Mac 帳號的方式：以 Diffie-Hellman 交換產生 AES-128 金鑰來加密帳號名稱和密碼。只有登入資訊會加密。
 - 剪貼簿共用依連線設定；連線沒有設定時，使用 `desktop.share-clipboard` 預設值。
 
+### 瀏覽器面板
+
+- `BrowserPanel`（`WebPage.swift`）屬於視窗的 `WorkspaceModel`，最多保留 20 個 `WebPageSession` 網頁，以分頁顯示在面板標題列。它們共用一個 `WKWebsiteDataStore.nonPersistent()` 和一個 `WebCertificates`，所以 Cookie 和信任的憑證保留到 Gloamux 結束。WebKit 會在資料存在期間一直保留回答過的 HTTP 登入，`removeData(ofTypes:)` 清不掉它，所以 `clearWebsiteData()` 會把每一頁換到新的資料（`WebPageSession.restart(with:)`）並重新開啟；`BrowserPanelPageTests` 檢查網站會再要求登入。隱藏面板時會呼叫 `pauseMedia()`。網頁第一次載入時才建立 `WKWebView`（`GloamuxWebView`）。
+- `WebAddress.url(from:)` 用和 Safari 相同的方式補齊輸入的位址（IP 位址、`localhost` 和沒有點的名稱用 `http`），並拒絕其他通訊協定和網址裡的帳號密碼。網址欄和 `gloamux web` 使用的 `WebAddress.destination(from:)` 會把一般字詞、沒有點的單一字詞和其他不是網址的文字改成 Google 搜尋。
+- User-Agent 會加上 `/Applications/Safari.app` 的 `Version/… Safari/…`，因為 Google 等網站沒有它時會送出簡易版網頁。
+- 沒通過 `SecTrustEvaluateWithError` 的憑證會連同指紋顯示（`WebCertificateCard`），且只在那個端點信任。登入要求、JavaScript 對話框、上傳、下載和當掉的網頁內容程序在 delegate extension 處理。
+- `WebPageViews.swift` 繪製面板（`WorkspaceSidebar.browser`）：網頁分頁、工具列和網頁。右側每個面板（瀏覽器、檔案、常用指令和配色）共用一個寬度 `filesSidebarWidth`（`SidebarWidth.right`），在每種版面都能從 240 點拖曳到只留給視窗其他部分 340 點。`gloamux web`（`WorkspaceCommandWeb.swift`）控制面板和它的網頁，需要 App 正在執行。
+- `WebPageTests` 涵蓋位址、網頁、下載、縮放、憑證和 CLI。`BrowserPanelPageTests` 從本機伺服器載入網頁，檢查標題、上一頁下一頁和 User-Agent。
+
 ## 更新
 
 - 選單和設定看到的是 `App` 模組裡的 `AppUpdates`：**Gloamux › 檢查更新**（`CheckForUpdatesCommand`）和 **設定 › 一般** 的 **自動檢查更新**。
@@ -265,16 +274,16 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 
 `gloamux benchmark [--megabytes N] [--columns N] [--rows N] [--json]` 以每次 4 KB 的讀取，把純文字、彩色記錄、中日韓文字、全螢幕重繪和 OSC 133 提示字元送進 `TerminalScreen`，量測用 `TerminalLineRenderer` 完整重繪可見行的時間，以及一次按鍵回顯的時間。請從打包好的正式版 App 執行。
 
-在 Apple 晶片的 Mac 上以 160×48 執行（2026 年 11 月 22 日）：
+在 Apple 晶片的 Mac 上以 160×48、用打包好的版本執行（2026 年 11 月 26 日，中日韓文字加速之後；11 月 22 日的數字是中日韓文字 20 MB/s、全螢幕重繪 25 MB/s）：
 
 | 工作負載 | 結果 |
 |---|---|
-| 純文字 | 約 100 MB/s |
-| 彩色記錄 | 36 MB/s |
-| 中日韓文字 | 20 MB/s |
-| 全螢幕重繪 | 25 MB/s |
+| 純文字 | 約 117 MB/s |
+| 彩色記錄 | 35 MB/s |
+| 中日韓文字 | 68 MB/s |
+| 全螢幕重繪 | 50 MB/s |
 | OSC 133 提示字元 | 10 MB/s |
-| 完整重繪 | 0.4–0.7 毫秒 |
+| 完整重繪 | 0.4–1.0 毫秒 |
 | 按鍵回顯 | 約 0.01 毫秒 |
 
 ### 壓力測試
@@ -283,7 +292,8 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 
 - 只需要 Python 3 標準函式庫和 macOS 的 OpenSSH，所以代理可以在 `package-app.sh` 之後無人看管地執行。
 - 它會建立拋棄式工作區，以及只在 127.0.0.1 上、只接受為這次執行產生的金鑰的拋棄式 `sshd`。它不會打開你的工作區、不會用密碼登入，也不會連到其他主機。只在那個工作區中，它會為測試連線開啟 AI 代理存取。
-- 選項：`--quick` 執行約五分之一的負載，`--no-app` 略過需要 App 的階段，`--out DIR` 選擇報告資料夾，`--keep` 保留拋棄式檔案。
+- 選項：`--quick` 執行約五分之一的負載，`--no-app` 略過需要 App 的階段，`--app PATH` 執行另一份副本（例如改名的測試副本），`--out DIR` 選擇報告資料夾，`--keep` 保留拋棄式檔案。
+- App 和它的 `gloamux` 會寫入 App 自己的偏好設定網域。若是已安裝 App 的識別碼 `local.gloamux.desktop`，這次執行會略過設定匯入，讓你的設定維持原樣。
 - 它會寫出 `report.md`、`report.json`，以及每秒取樣的 `samples.csv`。所有階段都通過時結束狀態為 0，有任何失敗為 1，設定問題為 2。
 
 涵蓋範圍：
@@ -296,8 +306,20 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 20 個本機分頁和 10 個 SSH 分頁，各印出一百萬行
 - 以 TCP 回聲伺服器檢查的連接埠轉發
 - 每個 MCP 工具，包括代理只能看到允許的連線，以及提議的指令會等待審閱
+- 寬字元文字和內嵌圖片：在本機分頁中印出 CJK 文字行和 kitty graphics 圖片
+- 瀏覽器面板，對本機網頁伺服器：超過 20 頁上限的頁面、反覆導覽、被「清除網站資料」移除的 cookie，以及關閉頁面後剩下的 WebKit 程序和記憶體
 
 每個階段都有通過或失敗、自己的數據、App 的 CPU 時間和記憶體峰值，以及它執行的 CLI 程序所用的 CPU。記憶體數據是活動監視器顯示的實體記憶體用量；RSS 也有記錄，但記憶體釋放後仍會維持在高點。
+
+### 功能檢查
+
+`python3 Gloamux/scripts/feature-check.py` 對打包好的 App 檢查每一組 `gloamux` 指令的一項實際操作，使用和壓力測試相同的拋棄式工作區、`sshd` 和本機網頁伺服器。
+
+- 不需要 App：版本、自我測試、說明、自動完成、連線、主機、透過 SFTP 和 SCP 的檔案、從標準輸入讀取的 `sftp` 和 `ssh`、轉發、快速指令、觸發器、Runbook、歷史紀錄、外觀、版面、設定、設定備份、代理、密碼庫、X 伺服器、錄製和效能測試。
+- 需要 App：分頁（執行、讀取、開關、檢視、分割、視窗、重新連線、錄製）、在分頁中執行快速指令和 Runbook、執行中的轉發、瀏覽器面板（導覽、縮放、信任和拒絕不受信任的 HTTPS 憑證、清除網站資料、關閉頁面）、`gloamux mcp`、下拉視窗，以及鎖定工作區。
+- 選項：`--app PATH`、`--no-app`、`--out DIR` 和 `--keep`，和壓力測試相同。用改名的副本時，它也會變更並重設一項設定，以及匯入備份；用已安裝 App 的識別碼時會略過這些。
+- 它不執行需要人操作的步驟：已存密碼的 Touch ID、解鎖工作區，以及核准代理提議的指令。它從不執行 `runbooks delete`、`recordings remove` 或 `web external`，這些會把檔案移到垃圾桶或打開你的瀏覽器。
+- 它會寫出 `report.md` 和 `report.json`。所有檢查都通過時結束狀態為 0，有任何失敗為 1，設定問題為 2。
 
 在 Apple 晶片的 Mac（10 核心，2026 年 11 月 22 日）上完整執行的結果：
 
@@ -314,8 +336,10 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 
 ### 未來工作
 
-- **Metal。** 建立所有可見行不到 1 毫秒，之後 AppKit 只繪製有變動的行，所以 Metal 繪製器目前不會帶來使用者感受得到的差異。瓶頸在解析器。連續的可列印 ASCII 一次寫入一整列，UTF-8 解碼不再為每個字元建立 `String`，CSI 參數也逐位元組解析。中日韓文字仍一次一個字元查詢寬度，下一個要加速的就是這裡。
-- **內嵌圖片。** iTerm2 的 `OSC 1337 File=`（含 `MultipartFile=`）與 sixel 已實作於 `Sources/terminal/InlineImages.swift`：畫面為每張圖片記下其最上一行的絕對行號與涵蓋的儲存格，文字畫面再把圖片畫在這些儲存格上。每個檔案上限 10 MB、4096×4096 像素，sixel 每邊上限 4096 像素，每個分頁最多保留 64 張、以解碼後像素計 64 MB；圖片在其所在行離開回捲、清除畫面或回捲，或程式離開替代畫面時丟棄。沒有標記 `inline=1` 的檔案（下載）會被忽略，遠端主機送來的內容絕不能讀取本機檔案。kitty 圖形協定尚未支援。
+- **Metal。** 建立所有可見行不到 1 毫秒，之後 AppKit 只繪製有變動的行，所以 Metal 繪製器目前不會帶來使用者感受得到的差異。瓶頸在解析器。連續的可列印 ASCII 一次寫入一整列，UTF-8 解碼不再為每個字元建立 `String` 或陣列，CSI 參數也逐位元組解析。U+20000 以下的字元寬度改為查表，這張表在終端第一次顯示 U+0300 以上的字元時建立；連續的完整非 ASCII 字元（中日韓文字、框線字元、表情符號）也像 ASCII 一樣一次寫入一整列。遇到組合字元、控制位元組，或無效、被一次讀取的結尾切斷的 UTF-8 序列，就改走逐字元的路徑。`WideTextTests` 檢查兩條路徑得到相同的畫面。現在最慢的是 SGR 與 OSC 133 的解析。
+- **內嵌圖片。** iTerm2 的 `OSC 1337 File=`（含 `MultipartFile=`）與 sixel 已實作於 `Sources/terminal/InlineImages.swift`：畫面為每張圖片記下其最上一行的絕對行號與涵蓋的儲存格，文字畫面再把圖片畫在這些儲存格上。每個檔案上限 10 MB、4096×4096 像素，sixel 每邊上限 4096 像素，每個分頁最多保留 64 張、以解碼後像素計 64 MB；圖片在其所在行離開回捲、清除畫面或回捲，或程式離開替代畫面時丟棄。沒有標記 `inline=1` 的檔案（下載）會被忽略，遠端主機送來的內容絕不能讀取本機檔案。
+- **kitty 圖片。** `Sources/terminal/KittyGraphics.swift` 解碼 `ESC _ G` 指令，`TerminalScreen` 保存並放置圖片，和另外兩種協定一樣以 `TerminalImage` 表示。支援：傳送（`a=t`）、傳送並顯示（`a=T`）、以放置 ID 顯示（`a=p`）、查詢（`a=q`），以及刪除（`a=d`，搭配 `a`、`i`、`n`、`c`、`p`、`x`、`y`，大小寫皆可）；格式 `f=24`、`f=32`、`f=100`（PNG）；zlib 壓縮（`o=z`）；分段傳送（`m=1`）；來源矩形（`x`、`y`、`w`、`h`）；儲存格大小（`c`、`r`）；`C=1`；以及 `q=1` 與 `q=2`。只接受直接傳送（`t=d`）；指定檔案、暫存檔或共用記憶體的傳送會以 `EINVAL` 拒絕，所以遠端主機送來的內容絕不能讀取本機檔案。不支援動畫、Unicode 佔位字元（`U=1`）、z-index，以及儲存格內的像素位移。保存的圖片同樣計入 64 張與 64 MB 的上限，從最舊的開始丟棄。一個指令的上限是 10 MB 檔案的 base64 長度。關閉 **顯示內嵌圖片** 時，kitty 指令不會得到回應。
+- **像素大小。** `CSI 14 t`、`CSI 16 t`、`CSI 18 t` 回報文字區域與一個儲存格的像素大小（一點一像素），以及文字區域的儲存格數。本機 shell 會在 PTY 設定 `ws_xpixel` 與 `ws_ypixel`，SSH 連線會在視窗大小變更要求中送出像素大小。只換字型、列數與欄數不變時，也會重新送出像素大小。
 
 ## 測試
 

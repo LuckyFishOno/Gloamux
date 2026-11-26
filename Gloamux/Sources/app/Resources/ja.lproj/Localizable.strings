@@ -597,7 +597,6 @@
 "Show in Finder" = "Finder に表示";
 "Show in menu bar" = "メニューバーに表示";
 "Show Gloamux key" = "Gloamux 鍵を表示";
-"Show or hide the focused pane's files on the right" = "フォーカスのあるパネルのファイルを右側に表示/非表示";
 "Show or hide the focused server's files on the right" = "フォーカスのあるサーバのファイルを右側に表示/非表示";
 "Show output" = "出力を表示";
 "Show public key" = "公開鍵を表示";
@@ -1280,7 +1279,7 @@
 "Another app uses this key. Choose a different one." = "別のアプリがこのキーを使っています。別のキーを選んでください。";
 "⌥Space" = "⌥スペース";
 "Show inline images" = "インライン画像を表示";
-"Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals." = "imgcat、chafa、img2sixel などのプログラムが sixel グラフィックスや iTerm2 の画像プロトコルで送る画像をターミナルに表示します。新しいターミナルに適用されます。";
+"Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals." = "imgcat、chafa、img2sixel、kitten icat などのプログラムが sixel グラフィックス、iTerm2 の画像プロトコル、または kitty のグラフィックスプロトコルで送る画像をターミナルに表示します。新しいターミナルに適用されます。";
 "ZMODEM file transfer" = "ZMODEM ファイル転送";
 "Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused." = "サーバーで sz を実行するとファイルがこの Mac に保存され、rz を実行すると送るファイルを尋ねます。サーバーがこの Mac で実行を求めるコマンドは常に拒否します。";
 "Save received files in" = "受信したファイルの保存先";
@@ -1295,3 +1294,38 @@
 "Transfer failed: %@" = "転送に失敗しました：%@";
 "The server asked to run a command on this Mac, which Gloamux never allows." = "サーバーがこの Mac でのコマンド実行を求めましたが、Gloamux は決して許可しません。";
 "No rz is waiting in this tab. Run rz on the server first." = "このタブで待機中の rz はありません。先にサーバーで rz を実行してください。";
+
+/* Web pages and the browser panel */
+"%@ says" = "%@ からのメッセージ";
+"Back" = "戻る";
+"Browser" = "ブラウザ";
+"Clear website data" = "Web サイトデータを消去";
+"Copy address" = "アドレスをコピー";
+"Could not download %@" = "%@ をダウンロードできませんでした";
+"Downloaded %@" = "%@ をダウンロードしました";
+"Downloading %@" = "%@ をダウンロード中";
+"Search or enter a web address" = "検索または Web アドレスを入力";
+"Enter a web address, such as https://192.0.2.10." = "https://192.0.2.10 のような Web アドレスを入力してください。";
+"Forward" = "進む";
+"Hide browser" = "ブラウザを隠す";
+"More" = "その他";
+"Not encrypted" = "暗号化されていません";
+"Open in the default browser" = "デフォルトのブラウザで開く";
+"Reload" = "再読み込み";
+"Sign in" = "サインイン";
+"Sign in to %@" = "%@ にサインイン";
+"Stop loading" = "読み込みを停止";
+"The page was not opened because its certificate is not trusted." = "証明書が信頼されていないため、ページを開きませんでした。";
+"The user name or password was not accepted." = "ユーザ名またはパスワードが受け付けられませんでした。";
+"This page says" = "このページからのメッセージ";
+"This site's certificate changed" = "このサイトの証明書が変わりました";
+"This site's certificate is not trusted" = "このサイトの証明書は信頼されていません";
+"User name" = "ユーザ名";
+"Zoom in" = "拡大";
+"Zoom out" = "縮小";
+"The page stopped working. Reload to try again." = "ページが動作を停止しました。再読み込みしてもう一度お試しください。";
+"New page" = "新しいページ";
+"Close page" = "ページを閉じる";
+"Pages in this panel keep their sign-ins and cookies only until Gloamux quits, apart from Safari." = "このパネルのページは、サインイン状態と Cookie を Gloamux の終了まで保持します。Safari とは別です。";
+"Devices often use a certificate they made themselves. Compare this fingerprint with the one the device shows before trusting it. Gloamux then trusts this certificate for this address until it quits." = "デバイスは自分で作った証明書をよく使います。信頼する前に、デバイスに表示される指紋と比べてください。Gloamux は終了するまで、このアドレスでこの証明書を信頼します。";
+"This page uses http, so the password crosses the network as plain text. Open it with https to protect it." = "このページは http を使うため、パスワードが平文でネットワークを通ります。保護するには https で開いてください。";

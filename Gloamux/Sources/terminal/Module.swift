@@ -28,7 +28,7 @@ public struct TerminalOptions: Equatable, Sendable {
     /// BackspaceSends: true sends DEL (0x7F), false sends Ctrl+H (0x08).
     public var backspaceSendsDelete = true
     public var type: TerminalType = .xterm
-    /// Shows pictures sent with sixel graphics or the iTerm2 inline image protocol.
+    /// Shows pictures sent with sixel graphics, the iTerm2 inline image protocol, or the kitty graphics protocol.
     public var inlineImages = true
     public init() {}
 }
@@ -130,6 +130,13 @@ public final class TerminalScreen {
     public var cellSize: (width: Double, height: Double) = (8, 16)
     /// A file sent in parts with `MultipartFile=`, `FilePart=`, and `FileEnd`.
     private var multipart: (arguments: [String: String], data: Data)?
+    /// Images sent with the kitty graphics protocol by id, and their ids oldest first.
+    private var kittyImages: [UInt32: KittyStoredImage] = [:]
+    private var kittyOrder: [UInt32] = []
+    /// Ids given to images sent without one, counting down from the top so they do not meet a program's own.
+    private var nextKittyID: UInt32 = .max
+    /// A kitty transfer sent in chunks (`m=1`): the first chunk's keys and the base64 so far.
+    private var kittyTransfer: (command: KittyCommand, data: [UInt8])?
 
     private var style = CellStyle()
     private var scrollTop = 0, scrollBottom: Int
@@ -139,11 +146,12 @@ public final class TerminalScreen {
     private var lineDrawing = false
 
     // Parser state
-    private enum State { case ground, escape, escapeIntermediate, csi, osc, oscEscape, string, stringEscape, dcs, dcsEscape }
+    private enum State { case ground, escape, escapeIntermediate, csi, osc, oscEscape, string, stringEscape, dcs, dcsEscape, apc, apcEscape }
     private var state = State.ground
     private var params = "", intermediates = ""
-    private var oscBytes: [UInt8] = [], dcsBytes: [UInt8] = []
-    private var utf8: [UInt8] = [], utf8Need = 0
+    private var oscBytes: [UInt8] = [], dcsBytes: [UInt8] = [], apcBytes: [UInt8] = []
+    /// A UTF-8 sequence being read: the bits so far, its full length, and how many bytes are still to come.
+    private var utf8Value: UInt32 = 0, utf8Length = 0, utf8Need = 0
 
     public init(options: TerminalOptions = TerminalOptions()) {
         self.options = options
@@ -182,6 +190,10 @@ public final class TerminalScreen {
                     while end < buffer.count, buffer[end] >= 0x20, buffer[end] < 0x7F { end += 1 }
                     putASCII(UnsafeBufferPointer(rebasing: buffer[index..<end]))
                     index = end
+                } else if b >= 0xC2, b < 0xF5, state == .ground, utf8Need == 0, !lineDrawing, !insertMode, autowrap {
+                    // Runs of other text, such as Chinese, Japanese, or Korean, are written a row at a time too.
+                    let end = putText(buffer, from: index)
+                    if end == index { byte(b); index += 1 } else { index = end }
                 } else {
                     byte(b); index += 1
                 }
@@ -218,6 +230,74 @@ public final class TerminalScreen {
         }
     }
 
+    /// Decoded text from `start` on, written a row at a time: the same result as `put` for each character. It stops
+    /// before a control byte, a combining mark, or a UTF-8 sequence that is invalid or cut off by the end of the
+    /// buffer, and returns the index it stopped at, which is `start` when it wrote nothing.
+    private func putText(_ buffer: UnsafeBufferPointer<UInt8>, from start: Int) -> Int {
+        var index = start
+        let ambiguous = options.cjkAmbiguousAsWide
+        while index < buffer.count {
+            if wrapPending {
+                let row = cursorRow, last = cols - 1
+                mutateGrid { g in g[row][last].wraps = true }
+                cursorCol = 0; lineFeed(); wrapPending = false
+            }
+            let row = cursorRow, first = cursorCol, width = cols
+            var column = first, full = false
+            while index < buffer.count {
+                let b = buffer[index]
+                var value: UInt32, length: Int
+                switch b {
+                case 0x20..<0x7F: value = UInt32(b); length = 1
+                case 0xC2..<0xE0: value = UInt32(b & 0x1F); length = 2
+                case 0xE0..<0xF0: value = UInt32(b & 0x0F); length = 3
+                case 0xF0..<0xF5: value = UInt32(b & 0x07); length = 4
+                default: length = 0; value = 0
+                }
+                guard length > 0, index + length <= buffer.count else { break }
+                var valid = true
+                for offset in 1..<max(length, 1) where valid {
+                    let next = buffer[index + offset]
+                    if next & 0xC0 == 0x80 { value = value << 6 | UInt32(next & 0x3F) } else { valid = false }
+                }
+                guard valid, length == 1 || Self.scalar(value, length: length) == value else { break }
+                let w = length == 1 ? 1 : Self.width(scalar: value, ambiguousWide: ambiguous)
+                // A combining mark joins the previous cell, and a terminal one column wide cannot hold a wide
+                // character: both go through `put`.
+                guard w > 0, w <= width else { break }
+                guard column + w <= width else { full = true; break }
+                textRun.append((length == 1 ? Self.ascii[Int(value)] : Character(Unicode.Scalar(value)!), UInt8(w)))
+                column += w; index += length
+            }
+            if textRun.isEmpty {
+                // A wide character that does not fit in the last column goes to the next line, as `put` does.
+                guard full else { return index }
+                let last = cols - 1
+                mutateGrid { g in g[row][last].wraps = true }
+                cursorCol = 0; lineFeed()
+                continue
+            }
+            let current = style, blank = blankCell(), end = column
+            mutateGrid { g in
+                Self.clearWide(&g, row, first, cols: width, blank: blank)
+                Self.clearWide(&g, row, end - 1, cols: width, blank: blank)
+                var at = first
+                for (character, w) in textRun {
+                    g[row][at] = Cell(character: character, style: current, width: w)
+                    if w == 2 { g[row][at + 1] = Cell(character: " ", style: current, width: 0) }
+                    at += Int(w)
+                }
+            }
+            textRun.removeAll(keepingCapacity: true)
+            if column >= width { cursorCol = width - 1; wrapPending = true } else { cursorCol = column }
+            if !full, index < buffer.count { return index }
+        }
+        return index
+    }
+
+    /// Characters decoded by `putText`, kept between calls so its buffer is reused.
+    private var textRun: [(Character, UInt8)] = []
+
     /// Characters for the ASCII bytes, made once.
     private static let ascii: [Character] = (0..<128).map { Character(Unicode.Scalar(UInt8($0))) }
     public func feed(_ text: String) { feed(Array(text.utf8)) }
@@ -246,6 +326,16 @@ public final class TerminalScreen {
         case .dcsEscape:
             if b == 0x5C { finishDCS() } else { state = .ground; dcsBytes = []; byte(0x1B); byte(b) }
             return
+        case .apc:
+            if b == 0x07 { finishAPC(); return }
+            if b == 0x1B { state = .apcEscape; return }
+            if b == 0x18 || b == 0x1A { state = .ground; apcBytes = []; return }
+            // Only kitty graphics (`G`) are read; other APC strings are skipped without being kept.
+            if apcBytes.isEmpty || (apcBytes[0] == 0x47 && apcBytes.count < KittyGraphics.maximumCommandLength) { apcBytes.append(b) }
+            return
+        case .apcEscape:
+            if b == 0x5C { finishAPC() } else { state = .ground; apcBytes = []; byte(0x1B); byte(b) }
+            return
         default: break
         }
         if b < 0x20 || b == 0x7F { control(b); return }
@@ -259,7 +349,7 @@ public final class TerminalScreen {
 
     private func control(_ b: UInt8) {
         switch b {
-        case 0x1B: state = .escape; params = ""; intermediates = ""; utf8 = []
+        case 0x1B: state = .escape; params = ""; intermediates = ""
         case 0x07: events.append(.bell)
         case 0x08: if cursorCol > 0 { cursorCol -= 1 }; wrapPending = false
         case 0x09: tab()
@@ -275,27 +365,26 @@ public final class TerminalScreen {
     private func text(_ b: UInt8) {
         if utf8Need == 0 {
             if b < 0x80 { put(Character(Unicode.Scalar(b))); return }
-            if b & 0xE0 == 0xC0 { utf8 = [b]; utf8Need = 1 }
-            else if b & 0xF0 == 0xE0 { utf8 = [b]; utf8Need = 2 }
-            else if b & 0xF8 == 0xF0 { utf8 = [b]; utf8Need = 3 }
+            if b & 0xE0 == 0xC0 { utf8Value = UInt32(b & 0x1F); utf8Length = 2; utf8Need = 1 }
+            else if b & 0xF0 == 0xE0 { utf8Value = UInt32(b & 0x0F); utf8Length = 3; utf8Need = 2 }
+            else if b & 0xF8 == 0xF0 { utf8Value = UInt32(b & 0x07); utf8Length = 4; utf8Need = 3 }
             else { put("\u{FFFD}") }
             return
         }
         guard b & 0xC0 == 0x80 else { utf8Need = 0; put("\u{FFFD}"); text(b); return }
-        utf8.append(b); utf8Need -= 1
-        if utf8Need == 0 { put(Self.decode(utf8)) }
+        utf8Value = utf8Value << 6 | UInt32(b & 0x3F); utf8Need -= 1
+        if utf8Need == 0 {
+            let value = Self.scalar(utf8Value, length: utf8Length)
+            // Nothing outside ASCII is redrawn by the line-drawing set, so the width is known from the value.
+            putCell(Character(Unicode.Scalar(value)!), width: Self.width(scalar: value, ambiguousWide: options.cjkAmbiguousAsWide))
+        }
     }
 
-    /// One complete UTF-8 sequence as a character, or U+FFFD when it is overlong, a surrogate, or out of range.
-    private static func decode(_ bytes: [UInt8]) -> Character {
-        var value: UInt32
-        switch bytes.count {
-        case 2: value = UInt32(bytes[0] & 0x1F) << 6 | UInt32(bytes[1] & 0x3F); if value < 0x80 { return "\u{FFFD}" }
-        case 3: value = UInt32(bytes[0] & 0x0F) << 12 | UInt32(bytes[1] & 0x3F) << 6 | UInt32(bytes[2] & 0x3F); if value < 0x800 { return "\u{FFFD}" }
-        case 4: value = UInt32(bytes[0] & 0x07) << 18 | UInt32(bytes[1] & 0x3F) << 12 | UInt32(bytes[2] & 0x3F) << 6 | UInt32(bytes[3] & 0x3F); if value < 0x10000 { return "\u{FFFD}" }
-        default: return "\u{FFFD}"
-        }
-        return Unicode.Scalar(value).map(Character.init) ?? "\u{FFFD}"
+    /// A decoded UTF-8 value, or U+FFFD when it was overlong, a surrogate, or out of range.
+    private static func scalar(_ value: UInt32, length: Int) -> UInt32 {
+        let smallest: UInt32 = length == 2 ? 0x80 : length == 3 ? 0x800 : 0x10000
+        guard value >= smallest, value <= 0x10FFFF, !(0xD800...0xDFFF).contains(value) else { return 0xFFFD }
+        return value
     }
 
     private func escape(_ b: UInt8) {
@@ -304,7 +393,8 @@ public final class TerminalScreen {
         case 0x5B: state = .csi; params = ""; intermediates = ""
         case 0x5D: state = .osc; oscBytes = []
         case 0x50: state = .dcs; dcsBytes = []
-        case 0x5F, 0x5E, 0x58: state = .string
+        case 0x5F: state = .apc; apcBytes = []
+        case 0x5E, 0x58: state = .string
         case 0x20...0x2F: intermediates = String(UnicodeScalar(b)); state = .escapeIntermediate
         case 0x37: saveCursor()
         case 0x38: restoreCursor()
@@ -411,15 +501,198 @@ public final class TerminalScreen {
               cursorBelow: arguments["donotmovecursor"] == "1" ? nil : false)
     }
 
+    // MARK: Connections
+
+    /// Puts the terminal back the way a new program expects it after the one that used it is gone, as when a
+    /// connection ends: it leaves the alternate screen, drops a half-read escape sequence, resets the scroll region,
+    /// colors, and modes, and moves to the start of a new line. The text, scrollback, and pictures stay. Unlike
+    /// `ESC [?1049l` on its own, it does not move the cursor back to a saved position when the alternate screen was
+    /// not in use.
+    public func endProgram() {
+        if usingAlternate { switchScreen(false, clear: false); restoreCursor() }
+        state = .ground; params = ""; intermediates = ""; oscBytes = []; dcsBytes = []; apcBytes = []; utf8Need = 0
+        multipart = nil; kittyTransfer = nil
+        style = CellStyle(); scrollTop = 0; scrollBottom = rows - 1
+        originMode = false; insertMode = false; autowrap = true; lineDrawing = false
+        bracketedPaste = false; mouseTracking = .off; sgrMouse = false; reportsFocus = false
+        cursorVisible = true; cursorShape = nil; cursorBlinks = nil; applicationCursorKeys = options.applicationCursorKeys
+        if cursorCol > 0 || wrapPending { cursorCol = 0; wrapPending = false; lineFeed() }
+    }
+
+    /// Moves the lines in use on the screen into the scrollback and starts again at the top, as `clear` does in most
+    /// terminals, so nothing is lost. On the alternate screen it only clears.
+    public func clearKeepingScrollback() {
+        endProgram()
+        let screen = grid
+        let used = (0..<rows).last { row in screen[row].contains { $0.character != " " } } ?? -1
+        let count = max(used + 1, cursorRow)
+        scrollTop = 0; scrollBottom = rows - 1
+        if count > 0 { scrollUp(count) }
+        cursorRow = 0; cursorCol = 0; wrapPending = false
+    }
+
+    // MARK: Kitty graphics
+
+    /// An APC string. Only kitty graphics commands (`ESC _ G ... ESC \`) are read.
+    private func finishAPC() {
+        state = .ground
+        let bytes = apcBytes
+        apcBytes = []
+        guard bytes.first == 0x47 else { return }
+        // With inline images off, programs get no reply, so they see a terminal without kitty graphics.
+        guard options.inlineImages else { kittyTransfer = nil; return }
+        guard bytes.count < KittyGraphics.maximumCommandLength else {
+            kittyTransfer = nil
+            kittyReply(KittyCommand(bytes.dropFirst().prefix(256)), KittyError.tooLarge.reply)
+            return
+        }
+        let command = KittyCommand(bytes.dropFirst())
+        if var transfer = kittyTransfer {
+            // Later chunks carry only `m` (and perhaps `q`); the first chunk's keys apply to the whole transfer.
+            guard transfer.data.count + command.payload.count < KittyGraphics.maximumCommandLength else {
+                kittyTransfer = nil
+                kittyReply(transfer.command, KittyError.tooLarge.reply)
+                return
+            }
+            transfer.data.append(contentsOf: command.payload)
+            if command.more { kittyTransfer = transfer; return }
+            kittyTransfer = nil
+            var whole = transfer.command
+            whole.payload = transfer.data[...]
+            kittyRun(whole)
+        } else if command.more, "tTq".contains(command.action) {
+            kittyTransfer = (command, Array(command.payload))
+        } else {
+            kittyRun(command)
+        }
+    }
+
+    private func kittyRun(_ command: KittyCommand) {
+        do {
+            switch command.action {
+            case "t", "T", "q": try kittyTransmit(command)
+            case "p":
+                guard let id = kittyID(command), let image = kittyImages[id] else { throw KittyError.notFound }
+                try kittyDisplay(id, image, command)
+                kittyReply(command, "OK", id: id)
+            case "d": kittyDelete(command)
+            default: throw KittyError.action
+            }
+        } catch let error as KittyError {
+            kittyReply(command, error.reply)
+        } catch {
+            kittyReply(command, KittyError.invalid.reply)
+        }
+    }
+
+    /// The image a command names with `i=`, or with `I=` for the newest image sent with that number.
+    private func kittyID(_ command: KittyCommand) -> UInt32? {
+        if let id = command.number("i"), id > 0, id <= Int(UInt32.max) { return UInt32(id) }
+        if let number = command.number("I"), number > 0 { return kittyOrder.last { kittyImages[$0]?.number == number } }
+        return nil
+    }
+
+    private func kittyTransmit(_ command: KittyCommand) throws {
+        guard command.letter("t") ?? "d" == "d" else { throw KittyError.medium }
+        guard let data = Data(base64Encoded: Data(command.payload), options: .ignoreUnknownCharacters) else { throw KittyError.invalid }
+        guard data.count <= InlineImages.maximumFileBytes else { throw KittyError.tooLarge }
+        let decoded = try KittyGraphics.decode(format: command.number("f") ?? 32, width: command.number("s"), height: command.number("v"),
+                                               compressed: command.letter("o") == "z", data: data)
+        let image = KittyStoredImage(content: decoded.content, width: decoded.width, height: decoded.height,
+                                     number: command.number("I").flatMap { $0 > 0 ? $0 : nil })
+        // A query checks the data and answers without keeping anything.
+        if command.action == "q" { kittyReply(command, "OK"); return }
+        let id: UInt32
+        if let given = command.number("i"), given > 0, given <= Int(UInt32.max) { id = UInt32(given) }
+        else { id = nextKittyID; nextKittyID -= 1 }
+        kittyOrder.removeAll { $0 == id }
+        kittyOrder.append(id)
+        kittyImages[id] = image
+        while kittyOrder.count > InlineImages.maximumImages
+                || kittyOrder.reduce(0, { $0 + (kittyImages[$1]?.byteCount ?? 0) }) > InlineImages.maximumTotalBytes {
+            kittyImages[kittyOrder.removeFirst()] = nil
+        }
+        if command.action == "T" { try kittyDisplay(id, image, command) }
+        kittyReply(command, "OK", id: id)
+    }
+
+    /// Shows a kept image at the cursor. A placement id (`p=`) replaces the image's earlier placement with that id.
+    private func kittyDisplay(_ id: UInt32, _ stored: KittyStoredImage, _ command: KittyCommand) throws {
+        // Unicode placeholders (`U=1`) need placeholder characters drawn as image cells, which the display does not do.
+        guard command.letter("U") != "1" else { throw KittyError.placeholders }
+        var image = (content: stored.content, width: stored.width, height: stored.height)
+        if command.keys["x"] != nil || command.keys["y"] != nil || command.keys["w"] != nil || command.keys["h"] != nil {
+            guard let part = KittyGraphics.crop(image, x: command.number("x") ?? 0, y: command.number("y") ?? 0,
+                                                width: command.number("w") ?? 0, height: command.number("h") ?? 0) else { throw KittyError.invalid }
+            image = part
+        }
+        let placement = UInt32(clamping: max(command.number("p") ?? 0, 0))
+        if placement != 0 { images.removeAll { $0.kittyImage == id && $0.kittyPlacement == placement } }
+        let size = KittyGraphics.cells(width: image.width, height: image.height, columns: command.number("c"), rows: command.number("r"), cell: cellSize)
+        place(image.content, bytes: image.width * image.height * 4, columns: min(size.columns, cols), rows: size.rows, stretches: size.stretches,
+              cursorBelow: command.letter("C") == "1" ? nil : false, kitty: (id, placement))
+    }
+
+    /// `a=d`: removes placements on the screen being shown. The lowercase forms keep the image data for later
+    /// placements; the uppercase forms also drop the data of images left with no placement.
+    private func kittyDelete(_ command: KittyCommand) {
+        let what = command.letter("d") ?? "a"
+        let alternate = usingAlternate
+        func covers(_ image: TerminalImage, line: Int?, column: Int?) -> Bool {
+            (line.map { image.line <= $0 && $0 < image.line + image.rows } ?? true)
+                && (column.map { image.column <= $0 && $0 < image.column + image.columns } ?? true)
+        }
+        var matches: (TerminalImage) -> Bool
+        switch what.lowercased() {
+        case "a": matches = { _ in true }
+        case "i", "n":
+            guard let id = kittyID(command) else { return }
+            let placement = command.number("p").flatMap { $0 > 0 ? UInt32(clamping: $0) : nil }
+            matches = { $0.kittyImage == id && (placement == nil || $0.kittyPlacement == placement) }
+            if what.isUppercase, placement == nil { kittyImages[id] = nil; kittyOrder.removeAll { $0 == id } }
+        case "c": let line = absoluteLine(ofRow: cursorRow), column = cursorCol; matches = { covers($0, line: line, column: column) }
+        case "p":
+            let line = absoluteLine(ofRow: (command.number("y") ?? 1) - 1), column = (command.number("x") ?? 1) - 1
+            matches = { covers($0, line: line, column: column) }
+        case "x": let column = (command.number("x") ?? 1) - 1; matches = { covers($0, line: nil, column: column) }
+        case "y": let line = absoluteLine(ofRow: (command.number("y") ?? 1) - 1); matches = { covers($0, line: line, column: nil) }
+        default: count("kitty graphics delete " + String(what)); return
+        }
+        images.removeAll { $0.kittyImage != nil && $0.alternate == alternate && matches($0) }
+        if what.isUppercase {
+            let shown = Set(images.compactMap(\.kittyImage))
+            kittyOrder.removeAll { id in
+                guard !shown.contains(id) else { return false }
+                kittyImages[id] = nil
+                return true
+            }
+        }
+    }
+
+    /// Answers a command that named its image with `i=` or `I=`, unless `q=` asked for quiet.
+    private func kittyReply(_ command: KittyCommand, _ message: String, id: UInt32? = nil) {
+        let quiet = command.quiet
+        guard message == "OK" ? quiet < 1 : quiet < 2 else { return }
+        var keys: [String] = []
+        if let given = command.keys["i"] { keys.append("i=\(given)") }
+        else if command.keys["I"] != nil, let id { keys.append("i=\(id)") }
+        if let number = command.keys["I"] { keys.append("I=\(number)") }
+        guard !keys.isEmpty else { return }
+        if let placement = command.keys["p"] { keys.append("p=\(placement)") }
+        events.append(.reply(Array("\u{1B}_G\(keys.joined(separator: ","));\(message)\u{1B}\\".utf8)))
+    }
+
     /// Puts a picture at the cursor, scrolling so all of it fits. `cursorBelow` true leaves the cursor on the line
     /// under it, as sixel does; false leaves it after the picture's last row, as iTerm2 does; nil leaves it in place.
-    private func place(_ content: TerminalImage.Content, bytes: Int, columns: Int, rows height: Int, stretches: Bool, cursorBelow: Bool?) {
+    private func place(_ content: TerminalImage.Content, bytes: Int, columns: Int, rows height: Int, stretches: Bool, cursorBelow: Bool?,
+                       kitty: (image: UInt32, placement: UInt32)? = nil) {
         if wrapPending { cursorCol = 0; lineFeed() }
         let row = cursorRow, column = cursorCol
         for _ in 1..<max(1, height) { lineFeed() }
         let top = absoluteLine(ofRow: cursorRow) - (height - 1)
         let image = TerminalImage(id: nextImageID, content: content, line: top, column: column, columns: max(1, min(columns, cols - column)),
-                                  rows: height, stretches: stretches, alternate: usingAlternate, byteCount: bytes)
+                                  rows: height, stretches: stretches, alternate: usingAlternate, byteCount: bytes,
+                                  kittyImage: kitty?.image, kittyPlacement: kitty?.placement)
         nextImageID += 1
         images.append(image)
         pruneImages()
@@ -588,20 +861,40 @@ public final class TerminalScreen {
 
     public static func width(of c: Character, ambiguousWide: Bool) -> Int {
         guard let s = c.unicodeScalars.first else { return 1 }
-        let v = s.value
-        // Latin text needs no Unicode property lookup: nothing below U+0300 is a combining mark or wide.
+        return width(scalar: s.value, ambiguousWide: ambiguousWide)
+    }
+
+    /// The cells a character starting with `v` takes. Everything below U+20000 is looked up in a table built once.
+    static func width(scalar v: UInt32, ambiguousWide: Bool) -> Int {
+        // Latin text needs no lookup: nothing below U+0300 is a combining mark or wide.
         if v < 0x300 { return ambiguousWide && (v == 0xA1 || (0xB0...0xB4).contains(v)) ? 2 : 1 }
+        let kind = v < UInt32(widthTable.count) ? widthTable[Int(v)] : widthKind(v)
+        return kind == 3 ? (ambiguousWide ? 2 : 1) : Int(kind)
+    }
+
+    /// The width kind of every value below U+20000: 0 zero width, 1 narrow, 2 wide, 3 ambiguous. Building it takes a
+    /// few milliseconds the first time any terminal shows a character from U+0300 up.
+    private static let widthTable: [UInt8] = (0..<0x20000).map { widthKind(UInt32($0)) }
+
+    private static func widthKind(_ v: UInt32) -> UInt8 {
+        guard v >= 0x300, let s = Unicode.Scalar(v) else { return 1 }
         let category = s.properties.generalCategory
         if category == .nonspacingMark || category == .enclosingMark || v == 0x200B { return 0 }
         if v >= 0x1100 && wideRanges.contains(where: { $0.contains(v) }) { return 2 }
-        if ambiguousWide && ambiguousRanges.contains(where: { $0.contains(v) }) { return 2 }
+        if ambiguousRanges.contains(where: { $0.contains(v) }) { return 3 }
         return 1
     }
 
     private func put(_ input: Character) {
         var c = input
         if lineDrawing, let m = Self.lineDrawingMap[c] { c = m }
-        let w = Self.width(of: c, ambiguousWide: options.cjkAmbiguousAsWide)
+        putCell(c, width: Self.width(of: c, ambiguousWide: options.cjkAmbiguousAsWide))
+    }
+
+    /// Writes a character `w` cells wide at the cursor; zero joins it to the previous cell. In a terminal one column
+    /// wide, a wide character takes the one cell.
+    private func putCell(_ c: Character, width: Int) {
+        let w = min(width, cols)
         if w == 0 {
             // Combine with the previous cell.
             let col = wrapPending ? cursorCol : max(0, cursorCol - 1)
@@ -711,7 +1004,7 @@ public final class TerminalScreen {
         cursorRow = 0; cursorCol = 0; cursorVisible = true; applicationCursorKeys = o.applicationCursorKeys
         style = CellStyle(); scrollTop = 0; scrollBottom = rows - 1; autowrap = true; wrapPending = false; originMode = false; insertMode = false
         lineDrawing = false; bracketedPaste = false; resetTabs(); title = ""; scrollback = sb
-        images = []; multipart = nil
+        images = []; multipart = nil; kittyImages = [:]; kittyOrder = []; kittyTransfer = nil
         mouseTracking = .off; sgrMouse = false; reportsFocus = false; cursorShape = nil; cursorBlinks = nil
     }
 
@@ -789,7 +1082,16 @@ public final class TerminalScreen {
             if raw(0) == 6 { events.append(.reply(Array("\u{1B}[\(cursorRow + 1 - (originMode ? scrollTop : 0));\(cursorCol + 1)R".utf8))) }
             else if raw(0) == 5 { events.append(.reply(Array("\u{1B}[0n".utf8))) }
         case "c": events.append(.reply(Array((options.inlineImages ? "\u{1B}[?62;4;22c" : "\u{1B}[?62;22c").utf8)))
-        case "t": count("CSI t (window ops)")
+        case "t":
+            // Size reports that image programs use to fit pictures to the cells: the text area and one cell in
+            // pixels (one pixel per point, as pictures are shown), and the text area in cells.
+            let cell = cellSize
+            switch raw(0) {
+            case 14: events.append(.reply(Array("\u{1B}[4;\(Int(cell.height * Double(rows)));\(Int(cell.width * Double(cols)))t".utf8)))
+            case 16: events.append(.reply(Array("\u{1B}[6;\(Int(cell.height.rounded()));\(Int(cell.width.rounded()))t".utf8)))
+            case 18: events.append(.reply(Array("\u{1B}[8;\(rows);\(cols)t".utf8)))
+            default: count("CSI t (window ops)")
+            }
         default: count("CSI \(params)\(final)")
         }
     }

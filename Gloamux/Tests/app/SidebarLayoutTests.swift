@@ -5,9 +5,10 @@ import XCTest
     func testWidthsStayWithinLimits() {
         XCTAssertEqual(SidebarWidth.left.clamp(50), 200)
         XCTAssertEqual(SidebarWidth.left.clamp(300), 300)
-        XCTAssertEqual(SidebarWidth.files.clamp(9_000), 560)
+        XCTAssertEqual(SidebarWidth.right.clamp(100), 240)
+        XCTAssertEqual(SidebarWidth.right.clamp(1_400), 1_400, "every right panel, the browser too, can be dragged wide")
         XCTAssertEqual(SidebarWidth.left.direction, 1)
-        XCTAssertEqual(SidebarWidth.files.direction, -1)
+        XCTAssertEqual(SidebarWidth.right.direction, -1)
     }
 
     func testWidePanelsLeaveRoomForTheCenterWhenTheWindowNarrows() {
@@ -16,7 +17,7 @@ import XCTest
         XCTAssertEqual(widths.fitting(in: 698, reservingRight: 220),
                        WorkspaceSidebarWidths(left: 478, right: 220))
         XCTAssertEqual(SidebarWidth.left.clamp(500, upTo: 400), 400)
-        XCTAssertEqual(SidebarWidth.files.clamp(530, upTo: 350), 350)
+        XCTAssertEqual(SidebarWidth.right.clamp(530, upTo: 350), 350)
     }
 
     func testFinishedTransfersStayTenSecondsThenLeave() throws {

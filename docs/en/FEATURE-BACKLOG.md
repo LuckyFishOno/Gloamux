@@ -110,6 +110,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 ## Utilities and distribution
 
 - [x] Show CPU, memory, network, uptime, users, and disk use for this Mac or a Linux server in the Workbench layout's monitoring bar.
+- [x] **Browser panel** · A globe button left of **Files** shows a WebKit browser beside the terminal, with its pages as tabs in the panel header and a width you can drag: an address bar that searches Google for anything that is not an address, back and forward, reload, zoom, downloads, sign-in sheets, certificate approval by SHA-256 fingerprint, and the default browser. Cookies and sign-ins stay in memory until Gloamux quits.
 
 ## Beyond the Xshell and MobaXterm baseline
 
@@ -127,9 +128,9 @@ These items come from a November 20, 2026 brainstorm. They cover macOS-native, m
 
 - [x] Add shell integration with OSC 133 prompt marks: jump between prompts, select a command's output, show exit status, and notify when a long-running command finishes in an inactive tab.
 - [x] Track the remote working directory through OSC 7 and use it for the file pane's directory following and for opening new tabs in the same location.
-- [x] Support OSC 8 hyperlinks and detected URLs. Show inline images sent with sixel or the iTerm2 protocol, with size limits (see the development guide). The kitty graphics protocol is not supported yet.
+- [x] Support OSC 8 hyperlinks and detected URLs. Show inline images sent with sixel, the iTerm2 protocol, or the kitty graphics protocol, with size limits (see the development guide). Kitty animation and Unicode placeholders are not supported.
 - [x] Measure terminal throughput and input latency with repeatable benchmarks. Evaluate Metal rendering against the current renderer.
-- [x] Raise parser throughput: write runs of printable ASCII in bulk, decode UTF-8 without a `String` per character, and parse CSI parameters byte by byte (plain text from 22 to about 100 MB/s, colored logs from 17 to 36 MB/s).
+- [x] Raise parser throughput: write runs of printable ASCII in bulk, decode UTF-8 without a `String` per character, and parse CSI parameters byte by byte (plain text from 22 to about 100 MB/s, colored logs from 17 to 36 MB/s). Look up character widths in a table and write runs of other text a row at a time (CJK text from about 19 to about 70 MB/s).
 - [x] Add a ⌘⇧P command palette that lists every operation through the shared application operations.
 
 ### Fleet and environment workflows

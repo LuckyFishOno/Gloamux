@@ -597,7 +597,6 @@
 "Show in Finder" = "Show in Finder";
 "Show in menu bar" = "Show in menu bar";
 "Show Gloamux key" = "Show Gloamux key";
-"Show or hide the focused pane's files on the right" = "Show or hide the focused pane's files on the right";
 "Show or hide the focused server's files on the right" = "Show or hide the focused server's files on the right";
 "Show output" = "Show output";
 "Show public key" = "Show public key";
@@ -1280,7 +1279,7 @@
 "Another app uses this key. Choose a different one." = "Another app uses this key. Choose a different one.";
 "⌥Space" = "⌥Space";
 "Show inline images" = "Show inline images";
-"Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals." = "Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals.";
+"Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals." = "Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals.";
 "ZMODEM file transfer" = "ZMODEM file transfer";
 "Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused." = "Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused.";
 "Save received files in" = "Save received files in";
@@ -1295,3 +1294,38 @@
 "Transfer failed: %@" = "Transfer failed: %@";
 "The server asked to run a command on this Mac, which Gloamux never allows." = "The server asked to run a command on this Mac, which Gloamux never allows.";
 "No rz is waiting in this tab. Run rz on the server first." = "No rz is waiting in this tab. Run rz on the server first.";
+
+/* Web pages and the browser panel */
+"%@ says" = "%@ says";
+"Back" = "Back";
+"Browser" = "Browser";
+"Clear website data" = "Clear website data";
+"Copy address" = "Copy address";
+"Could not download %@" = "Could not download %@";
+"Downloaded %@" = "Downloaded %@";
+"Downloading %@" = "Downloading %@";
+"Search or enter a web address" = "Search or enter a web address";
+"Enter a web address, such as https://192.0.2.10." = "Enter a web address, such as https://192.0.2.10.";
+"Forward" = "Forward";
+"Hide browser" = "Hide browser";
+"More" = "More";
+"Not encrypted" = "Not encrypted";
+"Open in the default browser" = "Open in the default browser";
+"Reload" = "Reload";
+"Sign in" = "Sign in";
+"Sign in to %@" = "Sign in to %@";
+"Stop loading" = "Stop loading";
+"The page was not opened because its certificate is not trusted." = "The page was not opened because its certificate is not trusted.";
+"The user name or password was not accepted." = "The user name or password was not accepted.";
+"This page says" = "This page says";
+"This site's certificate changed" = "This site's certificate changed";
+"This site's certificate is not trusted" = "This site's certificate is not trusted";
+"User name" = "User name";
+"Zoom in" = "Zoom in";
+"Zoom out" = "Zoom out";
+"The page stopped working. Reload to try again." = "The page stopped working. Reload to try again.";
+"New page" = "New page";
+"Close page" = "Close page";
+"Pages in this panel keep their sign-ins and cookies only until Gloamux quits, apart from Safari." = "Pages in this panel keep their sign-ins and cookies only until Gloamux quits, apart from Safari.";
+"Devices often use a certificate they made themselves. Compare this fingerprint with the one the device shows before trusting it. Gloamux then trusts this certificate for this address until it quits." = "Devices often use a certificate they made themselves. Compare this fingerprint with the one the device shows before trusting it. Gloamux then trusts this certificate for this address until it quits.";
+"This page uses http, so the password crosses the network as plain text. Open it with https to protect it." = "This page uses http, so the password crosses the network as plain text. Open it with https to protect it.";

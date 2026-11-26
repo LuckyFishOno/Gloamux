@@ -56,6 +56,9 @@ public enum WorkspaceCommand {
         case "tabs":
             try requireLive(live, model)
             result = try await tabs(action, args, model, open)
+        case "web":
+            try requireLive(live, model)
+            result = try await web(action, args, model)
         case "forwards":
             if ["live-list", "start", "stop"].contains(action) {
                 guard live, !model.workspaceLocked else { throw WorkspaceError.invalid("Open and unlock Gloamux before controlling live forwards.") }

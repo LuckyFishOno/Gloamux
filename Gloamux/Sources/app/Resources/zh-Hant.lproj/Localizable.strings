@@ -597,7 +597,6 @@
 "Show in Finder" = "在 Finder 中顯示";
 "Show in menu bar" = "顯示在選單列";
 "Show Gloamux key" = "查看 Gloamux 金鑰";
-"Show or hide the focused pane's files on the right" = "在右側顯示或隱藏目前窗格的檔案";
 "Show or hide the focused server's files on the right" = "在右側顯示或隱藏目前伺服器的檔案";
 "Show output" = "顯示輸出";
 "Show public key" = "查看公鑰";
@@ -1280,7 +1279,7 @@
 "Another app uses this key. Choose a different one." = "另一個 App 正在使用此鍵，請選擇其他鍵。";
 "⌥Space" = "⌥空白鍵";
 "Show inline images" = "顯示內嵌圖片";
-"Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals." = "imgcat、chafa、img2sixel 等程式以 sixel 圖形或 iTerm2 圖片協定傳送的圖片會顯示在終端中。適用於新的終端。";
+"Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals." = "imgcat、chafa、img2sixel、kitten icat 等程式以 sixel 圖形、iTerm2 圖片協定或 kitty 圖片協定傳送的圖片會顯示在終端中。適用於新的終端。";
 "ZMODEM file transfer" = "ZMODEM 檔案傳輸";
 "Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused." = "在伺服器上執行 sz 會把檔案存到這台 Mac，執行 rz 則會詢問要傳送哪些檔案。伺服器要求在這台 Mac 上執行的指令一律拒絕。";
 "Save received files in" = "接收的檔案存放於";
@@ -1295,3 +1294,38 @@
 "Transfer failed: %@" = "傳輸失敗：%@";
 "The server asked to run a command on this Mac, which Gloamux never allows." = "伺服器要求在這台 Mac 上執行指令，Gloamux 絕不允許。";
 "No rz is waiting in this tab. Run rz on the server first." = "此標籤頁中沒有正在等待的 rz。請先在伺服器上執行 rz。";
+
+/* Web pages and the browser panel */
+"%@ says" = "來自 %@ 的訊息";
+"Back" = "上一頁";
+"Browser" = "瀏覽器";
+"Clear website data" = "清除網站資料";
+"Copy address" = "拷貝網址";
+"Could not download %@" = "無法下載 %@";
+"Downloaded %@" = "已下載 %@";
+"Downloading %@" = "正在下載 %@";
+"Search or enter a web address" = "搜尋或輸入網址";
+"Enter a web address, such as https://192.0.2.10." = "請輸入網址，例如 https://192.0.2.10。";
+"Forward" = "下一頁";
+"Hide browser" = "隱藏瀏覽器";
+"More" = "更多";
+"Not encrypted" = "未加密";
+"Open in the default browser" = "用預設瀏覽器開啟";
+"Reload" = "重新載入";
+"Sign in" = "登入";
+"Sign in to %@" = "登入 %@";
+"Stop loading" = "停止載入";
+"The page was not opened because its certificate is not trusted." = "憑證不受信任，所以沒有開啟網頁。";
+"The user name or password was not accepted." = "使用者名稱或密碼不正確。";
+"This page says" = "網頁訊息";
+"This site's certificate changed" = "這個網站的憑證變了";
+"This site's certificate is not trusted" = "這個網站的憑證不受信任";
+"User name" = "使用者名稱";
+"Zoom in" = "放大";
+"Zoom out" = "縮小";
+"The page stopped working. Reload to try again." = "網頁停止運作。請重新載入再試一次。";
+"New page" = "新網頁";
+"Close page" = "關閉網頁";
+"Pages in this panel keep their sign-ins and cookies only until Gloamux quits, apart from Safari." = "這個面板裡的網頁只把登入狀態和 Cookie 保留到 Gloamux 結束，和 Safari 分開。";
+"Devices often use a certificate they made themselves. Compare this fingerprint with the one the device shows before trusting it. Gloamux then trusts this certificate for this address until it quits." = "設備常使用自己產生的憑證。請先和設備上顯示的指紋比對再信任。Gloamux 會在這個位址信任這張憑證，直到結束。";
+"This page uses http, so the password crosses the network as plain text. Open it with https to protect it." = "這個網頁使用 http，密碼會以明文經過網路。改用 https 開啟才能保護它。";

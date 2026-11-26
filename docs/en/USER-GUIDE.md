@@ -48,7 +48,8 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 | Sidebar button (⌃⌘S) | Shows or hides the connection tree. |
 | Environment badge | Shows the focused session's environment tag, such as Production. |
 | **File Transfer** / **Terminal** / **Session Log** | Switches the window between two-pane file transfer, the terminal, and the [session log](#session-log-page). Choosing a tab leaves the session log. |
-| **New connection** menu | **New connection**, **Local terminal**, **Other connection**, **Discover hosts**, and **Import sessions**. |
+| **New connection** menu | **New connection**, **Local terminal**, **Windows Remote Desktop (RDP)**, **Remote Desktop (VNC)**, **Other connection**, **Discover hosts**, and **Import sessions**. |
+| **Browser** (globe) | Shows or hides the [browser panel](#browser-panel) on the right. |
 | **Files** | Shows or hides the focused pane's files on the right. |
 | **Quick commands** | Opens the quick commands sidebar. |
 | **Color theme** | Opens the theme list in the sidebar. |
@@ -70,6 +71,19 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 - **Session Log** in the ribbon opens the record of every connection in its own window.
 - **Two-pane**, next to the SFTP panel title, opens the two-pane File Transfer window.
 - A monitoring bar under the terminal shows CPU, memory, network, uptime, users, and disk use for this Mac or for a Linux server.
+
+### Browser panel
+
+The globe button in the toolbar, to the left of **Files**, shows a browser on the right side of the window, next to the terminal. Gloamux shows pages with WebKit, the engine Safari uses. The Classic toolbar, the Workbench ribbon, and the command palette have it as **Browser**.
+
+- Type an address or a search in the field and press Return. Without `http://` or `https://`, an IP address, `localhost`, or a name with a port or path (`router:8080`, `nas/`) opens with `http://`, and a name with a dot with `https://`, as browsers do. Anything else, such as words or a single word without a dot, is searched on Google. Other schemes, and addresses with a user name or password in them, are refused.
+- The panel's pages are tabs along its top. **+** (**New page**) opens one after the page shown, and the **×** on a tab closes it. The panel keeps up to 20 pages, closing the oldest past that, and keeps them while it is hidden, with any sound or video paused. The **×** at the right end hides the panel.
+- Drag the panel's left edge to make it wider, as far as leaving the terminal 340 points. Every panel on the right (the browser, **Files**, **Quick commands**, and **Color theme**) shares this width in every layout, and Gloamux remembers it.
+- The bar above the page has **Back**, **Forward**, **Reload** (or **Stop loading**), the address field, and the **More** menu: **Zoom in**, **Zoom out**, **Actual size**, **Open in the default browser**, **Copy address**, and **Clear website data**. ⌘+, ⌘−, and ⌘0 zoom the page while it has the keyboard.
+- The panel's pages share cookies and sign-ins, kept in memory apart from Safari until Gloamux quits. **Clear website data** removes them for every page, forgets trusted certificates, and opens each page again, so a site that needs a sign-in asks again.
+- When macOS does not trust a page's certificate, as with a device's self-signed one, the page shows the address and the certificate's SHA-256 fingerprint. Compare it with the one the device shows, then choose **Trust this certificate** to trust it for that address until Gloamux quits. A trusted certificate that changes is asked about again, in red.
+- A page that asks for a user name and password (HTTP Basic, Digest, or NTLM) shows a sign-in sheet. The password stays in memory until Gloamux quits and is not saved. Over plain `http` the sheet shows **Not encrypted**.
+- Downloads go to the Downloads folder, with a number added when the name is taken. Upload buttons on the page open the Mac's file panel. Links that open a new window open in the same page. A page's alerts and questions appear as sheets.
 
 ## 2. Connections and the session tree
 
@@ -140,7 +154,7 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 
 Some access gateways allow only `sftp` and give a new session key in place of the user name.
 
-- Choose **New session from sftp command** in the session tree's **+** menu or the command palette, or paste the command into the palette. The command can span lines and include `lcd`, `cd`, `get`, and `put`.
+- Choose **New session from sftp command** in the command palette, or paste the command into the palette. The command can span lines and include `lcd`, `cd`, `get`, and `put`.
 - Gloamux reads the host, port, sign-in, and folders, and shows options it leaves out under **Not included**. A command whose options change the route or run programs, such as `-J` or `ProxyCommand`, is refused.
 - **Save and connect** saves the session and copies the files in the command. **Replace existing files** is off unless you turn it on.
 - Later, open that session and enter the new key. You can paste the key alone, `key@host`, or a whole new command; a command for another host or port is refused.
@@ -156,7 +170,8 @@ Some access gateways allow only `sftp` and give a new session key in place of th
 ### Reconnecting
 
 - Typing `exit` or `logout` closes the tab.
-- If the connection drops, the tab stays open with **Reconnect**, and the tab shows a red mark.
+- If the connection drops, the tab stays open with **Reconnect**, and the tab shows a red mark. **Connection lost** appears under the last output, and whatever a full-screen program left on the terminal (its screen, colors, and modes) ends with it.
+- When the tab connects again, the screen starts clear. The earlier connection's text stays in the scrollback above it.
 - With **Reconnect automatically** on in **Settings › Terminal**, a saved session connects again after 2, 5, 10, 30, and 60 seconds. **Disconnect** or closing the tab stops it, even during an attempt. After the Mac wakes, every connection is checked at once.
 
 ### Port forwarding
@@ -222,7 +237,7 @@ Each window locks on its own. While a window is locked, `gloamux` commands and a
 - **Terminal › Paste from history** (⇧⌘H) lists text copied from or pasted into terminals since Gloamux opened, newest first. Text with a recognized secret is never kept.
 - **Terminal › Copy mode** (⇧⌘C) moves through the text with the keyboard: arrows or `h j k l`, `w` and `b` by word, `0` and `$` to the line ends, Control-U and Control-D by half a screen, `g` and `G` to the top and bottom, `v` to start a selection, `y` or Return to copy it, and Escape or `q` to leave.
 - **Terminal › Show timestamps** (⇧⌘E) shows beside each line when it last changed.
-- Pictures that programs such as `imgcat`, `chafa`, and `img2sixel` send with sixel graphics or the iTerm2 image protocol appear in the terminal and scroll with the text.
+- Pictures that programs such as `imgcat`, `chafa`, `img2sixel`, and `kitten icat` send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal and scroll with the text. Local shells and SSH sessions also tell programs the terminal's size in pixels, which some of them need to size a picture.
 - Running `sz FILE` on the server saves the file on this Mac (in Downloads unless you choose another folder); running `rz` asks which files to send. A bar over the terminal shows the progress, with **Cancel**; a cancelled download leaves no partial file and no stray data on the screen. A file that already exists is kept, and the new one gets a number. Commands that a server asks to run on this Mac are always refused.
 - **Terminal › Text encoding** switches a session to UTF-8, Big5, GB18030, Shift JIS, EUC-JP, EUC-KR, or ISO Latin 1. Saved sessions remember it.
 - **Terminal › Read-only** stops your typing from reaching the session.
@@ -558,7 +573,7 @@ What an agent can do:
 | ⇧⌘C | Copy mode |
 | ⇧⌘E | Show timestamps |
 | Chosen in Settings | Show or hide the dropdown window from any app |
-| ⌘+, ⌘−, ⌘0 | Session text size |
+| ⌘+, ⌘−, ⌘0 | Session text size, or the zoom of the browser panel page that has the keyboard |
 | ⌥⌘+, ⌥⌘−, ⌥⌘0 | App text size |
 | ⌃⌘L | Lock the workspace |
 | ⌘-click | Open a link in the terminal |
@@ -599,7 +614,7 @@ The settings are grouped under **New tabs**, **Shell integration**, **SSH connec
 | **Bell** (`terminal.bell`) | **Flash**, **Sound**, or **Off**. |
 | **Bounce the Dock icon on the bell** (`terminal.bell-bounces-dock`) | While Gloamux is in the background. On by default. |
 | **Ambiguous-width characters are wide** (`terminal.ambiguous-wide`) | Greek, Cyrillic, box drawing, and symbols such as ① take two cells, as many Chinese, Japanese, and Korean servers expect. Applies to new terminals. |
-| **Show inline images** (`terminal.inline-images`) | Sixel and iTerm2 inline images. On by default. Applies to new terminals. |
+| **Show inline images** (`terminal.inline-images`) | Sixel, iTerm2, and kitty inline images. When it is off, programs that ask whether kitty graphics work get no answer. On by default. Applies to new terminals. |
 | **ZMODEM file transfer** (`terminal.zmodem`) | Starts a transfer when `sz` or `rz` runs on the server. On by default. |
 | **Save received files in** (`terminal.zmodem-folder`) | Where files from `sz` go. Downloads unless set. |
 | **Word characters** (`terminal.word-characters`) | Characters that double-click keeps inside a word, besides letters and digits. Default `/-+\~_.`. |
@@ -681,6 +696,7 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 | `gloamux history` | `list [COUNT [SEARCH]]`, `show`, `log ID PATH`, `export PATH.csv\|PATH.json`, `remove`, `clear`. |
 | `gloamux sessions` | `list`, `show`, `mkdir`, `add`, `edit`, `options`, `add-other`, `edit-other`, `serial-ports`, `rename`, `move`, `remove`, `env`, `auth`, `cert`, `from-sftp`, `import`, `export`. |
 | `gloamux hosts` | `list`, `history`, `clear-history`, `trust`, `replace`, `remove`, `export` (as `known_hosts`), `discover bonjour\|tailscale\|aws`. |
+| `gloamux web` | The [browser panel](#browser-panel): `show [URL]`, `hide`, `list`, `open URL` (a new page), `select PAGE`, `close PAGE`, `status PAGE`, `go PAGE URL`, `back PAGE`, `forward PAGE`, `reload PAGE`, `stop PAGE`, `zoom PAGE PERCENT` (50 to 300), `external PAGE`, `trust PAGE SHA256`, `refuse PAGE`, `clear-data`. PAGE is `current` or a page ID from `list`. Needs the running app. |
 | `gloamux tabs` | `list`, `show`, `open`, `open-window`, `connect`, `local`, `select`, `rename`, `duplicate`, `close`, `disconnect`, `reconnect`, `split`, `unsplit`, `broadcast`, `multiexec`, `window`, `attach`, `read`, `send`, `run`, `paste-history`, `readonly`, `timestamps`, `copy-mode`, `zmodem` (`status`, `send PATH...` to answer `rz`, `cancel`), `log`, `record`, `encoding`, `integration`, `view`, `colors`, `highlights`. Needs the running app. |
 | `gloamux forwards` | `list`, `add`, `remove` (saved rules); `live-list`, `start`, `stop` (running forwards). Kinds: `local`, `remote`, `dynamic`. |
 | `gloamux commands` | `list`, `add`, `edit`, `remove`, `send`, `run` (quick commands). |

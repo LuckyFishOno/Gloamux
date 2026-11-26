@@ -34,7 +34,7 @@ enum SFTPShell {
     """
 
     @MainActor static func run(_ arguments: [String]) async throws -> Int32 {
-        if arguments.isEmpty || arguments == ["--help"] || arguments == ["-h"] { print(usage); return arguments.isEmpty ? 2 : 0 }
+        if arguments.isEmpty || CLICatalog.asksForHelp(arguments) { print(usage); return arguments.isEmpty ? 2 : 0 }
         let args = try CLIArguments(arguments, values: ["--session", "--workspace", "--host-key", "--command"],
                                     switches: ["--password-stdin", "--vault-password-stdin", "--overwrite"], repeated: ["--host-key"])
         let hostKeys = try FilesCommand.verifiedHostKeys(args)

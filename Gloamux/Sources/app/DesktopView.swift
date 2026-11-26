@@ -42,6 +42,13 @@ public struct DesktopView: View {
         .tint(model.theme.accent.color)
         .background(ThemeTitlebar(theme: model.theme))
         .preferredColorScheme(model.theme.isDark ? .dark : .light)
+        // gloamux web show and hide.
+        .onChange(of: model.browserPanelRequest) { _, request in
+            guard let request else { return }
+            model.browserPanelRequest = nil
+            if request != (sidebar == .browser) { setSidebar(request ? .browser : .collapsed) }
+        }
+        .onChange(of: sidebar) { _, panel in model.browserPanelShown = panel == .browser }
         .sheet(item: $importRequest) { request in
             ProfileImportView(store: model.sessionTree, source: request.url, parent: request.parent, kind: request.source)
         }
@@ -200,12 +207,10 @@ public struct DesktopView: View {
         }
     }
 
-    /// In the Mac layout, files, themes, and commands share the same trailing width and resize handle.
+    /// In every layout, the browser, files, themes, and commands share one trailing width and resize handle.
     func workspaceColumns<Leading: View, Center: View>(@ViewBuilder leading: () -> Leading,
                                                          @ViewBuilder center: () -> Center) -> some View {
-        let trailing = model.layout == .native ? TrailingSidebarSizing.resizable :
-            .fixed(sidebar == .themes ? 236 : 260)
-        return WorkspaceSidebarLayout(showsLeading: showsTree, trailing: showsTrailingSidebar ? trailing : nil,
+        WorkspaceSidebarLayout(showsLeading: showsTree, showsTrailing: showsTrailingSidebar,
                                       sidebarColor: model.theme.sidebar.color,
                                       dividerColor: model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16),
                                       leadingContent: leading(), centerContent: center(), trailingContent: trailingSidebarContent)
@@ -213,7 +218,7 @@ public struct DesktopView: View {
 
     private var showsTrailingSidebar: Bool {
         switch sidebar {
-        case .themes: return true
+        case .themes, .browser: return true
         case .commands: return model.selected != nil
         case .collapsed: return false
         case nil: return filesSidebarOpen
@@ -237,6 +242,8 @@ public struct DesktopView: View {
             if let tab = model.selected {
                 QuickCommandPanel(model: model, store: model.quickCommands, tab: tab) { setSidebar(.collapsed) }
             }
+        case .browser:
+            WebBrowserPanel(model: model, browser: model.browser) { setSidebar(.collapsed) }
         case .collapsed:
             EmptyView()
         case nil:
@@ -249,6 +256,7 @@ public struct DesktopView: View {
         var extras = [
             PaletteCommand(id: "view.tree", title: T(showsTree ? "Hide connection tree" : "Show connection tree"), symbol: "sidebar.left",
                            section: T("View"), shortcut: "⌃⌘S") { withAnimation(.easeOut(duration: 0.18)) { showsTree.toggle() } },
+            PaletteCommand(id: "view.browser", title: T("Browser"), symbol: "globe", section: T("View")) { toggleSidebar(.browser) },
             PaletteCommand(id: "view.commands", title: T("Quick commands"), symbol: "command", section: T("View")) { toggleSidebar(.commands) },
             PaletteCommand(id: "view.themes", title: T("Color theme"), symbol: "paintpalette", section: T("View")) { toggleSidebar(.themes) },
             PaletteCommand(id: "import.ssh", title: T("Import sessions") + ": " + T(FolderImportRequest.Source.openSSHConfig.menuTitle),
@@ -259,7 +267,7 @@ public struct DesktopView: View {
                            section: T("Settings")) { model.importConfiguration() },
         ]
         if canShowFilesSidebar {
-            extras.append(PaletteCommand(id: "view.files", title: T("Show or hide the focused pane's files on the right"), symbol: "folder",
+            extras.append(PaletteCommand(id: "view.files", title: T("Files"), symbol: "folder",
                                          section: T("View")) {
                 setFilesSidebar(!filesSidebarOpen)
             })
@@ -454,11 +462,16 @@ public struct DesktopView: View {
 
     private var sidebarPicker: some View {
         HStack(spacing: 5) {
+            Toggle(isOn: Binding(get: { sidebar == .browser }, set: { setSidebar($0 ? .browser : .collapsed) })) {
+                Label(T("Browser"), systemImage: "globe")
+            }
+            .help(T("Browser"))
+            .accessibilityIdentifier("browserToggle")
             Toggle(isOn: Binding(get: { filesSidebarOpen }, set: setFilesSidebar)) {
                 Label(T("Files"), systemImage: "folder")
             }
             .disabled(!canShowFilesSidebar)
-            .help(T("Show or hide the focused pane's files on the right"))
+            .help(T("Files"))
             .accessibilityIdentifier("remoteFilesToggle")
             Toggle(isOn: Binding(get: { sidebar == .commands }, set: { setSidebar($0 ? .commands : .collapsed) })) {
                 Label(T("Quick commands"), systemImage: "command")
@@ -694,7 +707,7 @@ public struct DesktopView: View {
 
 enum WorkspaceSidebar {
     // A collapsed panel overrides the default file sidebar for the current window.
-    case commands, themes, collapsed
+    case commands, themes, browser, collapsed
 }
 
 struct FolderImportRequest: Identifiable {
@@ -909,6 +922,10 @@ struct StripTab: View {
     var activity = false
     /// The connection dropped; the tab stays open with Reconnect.
     var lost = false
+    /// Shows the green or gray connection dot when the tab is wide enough.
+    var showsConnection = true
+    /// The close button's tooltip key.
+    var closeHelp = "Close connection"
     let select: () -> Void
     let close: () -> Void
     @State private var hovering = false
@@ -941,7 +958,7 @@ struct StripTab: View {
                     Circle().fill(theme.accent.color).frame(width: 7, height: 7).help(T("A command finished"))
                 } else if activity {
                     Circle().stroke(theme.accent.color, lineWidth: 1.5).frame(width: 7, height: 7).help(T("New output"))
-                } else if showsDot && chrome != .rounded {
+                } else if showsDot && showsConnection && chrome != .rounded {
                     Circle().fill(connected ? Color.green.opacity(0.85) : Color.secondary.opacity(0.35)).frame(width: 6, height: 6)
                 }
                 if fixedClose { closeButton }
@@ -1010,7 +1027,8 @@ struct StripTab: View {
         }
         .buttonStyle(.plain)
         .onHover { hoveringClose = $0 }
-        .help(T("Close connection"))
+        .help(T(closeHelp))
+        .accessibilityLabel(T(closeHelp))
     }
 }
 

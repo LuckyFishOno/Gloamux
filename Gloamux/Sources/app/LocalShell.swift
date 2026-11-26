@@ -159,7 +159,11 @@ final class LocalShell {
         let handle = handle
         writes.async { try? handle.write(contentsOf: Data(bytes)) }
     }
-    func resize(rows: Int, columns: Int) { gloamux_resize(handle.fileDescriptor, Int32(rows), Int32(columns)) }
+    func resize(rows: Int, columns: Int) { resize(rows: rows, columns: columns, pixelWidth: 0, pixelHeight: 0) }
+    func resize(rows: Int, columns: Int, pixelWidth: Int, pixelHeight: Int) {
+        gloamux_resize(handle.fileDescriptor, Int32(rows), Int32(columns), Int32(clamping: min(max(pixelWidth, 0), 65535)),
+                       Int32(clamping: min(max(pixelHeight, 0), 65535)))
+    }
     /// While paused, the shell's writes wait once the PTY buffer is full, so a fast program runs at the screen's pace.
     func setOutputPaused(_ paused: Bool) {
         pause.withLock {

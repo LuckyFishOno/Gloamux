@@ -95,6 +95,32 @@ final class RemoteKindsTests: XCTestCase {
         XCTAssertEqual(try SessionTreeStore(url: catalog).node(id)?.container?.gatewaySessionID, gatewayID)
     }
 
+    func testAnOpenDesktopTabUsesTheEditedPortOnTheNextConnect() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-desktop-edit-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = try WorkspaceModel(storage: root)
+        let before = ContainerSession(tool: .vnc, target: "192.0.2.10")
+        let id = try model.sessionTree.add(name: "Screen", parent: nil, container: before)
+        let tab = try XCTUnwrap(model.openSaved(try XCTUnwrap(model.sessionTree.node(id))))
+        let desktop = try XCTUnwrap(tab.desktop)
+        XCTAssertEqual(desktop.profile.effectivePort, 5900)
+        // Edited in the form while the tab is open but not connected, as with a server on display :1.
+        var edited = before
+        edited.port = 5901
+        edited.target = "192.0.2.11"
+        try model.sessionTree.updateContainer(id, name: "Screen", container: edited, environment: nil)
+        XCTAssertIdentical(tab.desktop, desktop, "the tab keeps its pane")
+        XCTAssertEqual(desktop.profile, edited)
+        XCTAssertEqual(tab.port, "5901")
+        XCTAssertEqual(tab.host, "192.0.2.11")
+        XCTAssertEqual(tab.container, edited)
+        // Edited through the CLI, which works on the same saved sessions.
+        _ = try await WorkspaceCommand.run(["sessions", "edit", id.uuidString, "192.0.2.12", "-", "5902"], model: model, live: true)
+        XCTAssertEqual(desktop.profile.effectivePort, 5902)
+        XCTAssertEqual(desktop.profile.target, "192.0.2.12")
+        XCTAssertEqual(tab.port, "5902")
+    }
+
     func testASavedDesktopPasswordShowsAsDotsUntilTheFieldIsEdited() {
         let mask = RemoteDesktopPane.savedMask
         XCTAssertEqual(mask.count, 8)

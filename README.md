@@ -4,7 +4,7 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.5 (build 16)**.
+Current release: **Gloamux 1.6 (build 17)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
@@ -80,10 +80,11 @@ New connection lists Local, SSH, RDP, VNC, and Other connection. A remote deskto
 
 ## Features
 
-- **Terminal** · Tabs, drag-to-split panes, local shell, shell integration (prompt marks, command status, notifications), find, logs, recordings with secrets masked, and 73 themes. Keyboard copy mode, paste history, line timestamps, sixel and iTerm2 inline images, `sz` and `rz` (ZMODEM), and a dropdown window on a hotkey.
+- **Terminal** · Tabs, drag-to-split panes, local shell, shell integration (prompt marks, command status, notifications), find, logs, recordings with secrets masked, and 73 themes. Keyboard copy mode, paste history, line timestamps, sixel, iTerm2, and kitty inline images, `sz` and `rz` (ZMODEM), and a dropdown window on a hotkey.
 - **SSH** · Passwords, Ed25519, ECDSA, and RSA keys, `ssh-agent`, Secure Enclave keys, keyboard-interactive (PAM) sign-in, gateways that take a session key in place of the user name, up to eight jump hosts listed in order with a route that shows each hop, SOCKS and HTTP proxies, port forwarding, agent forwarding, X11 through XQuartz, and a Compatible key exchange setting for older servers and network devices.
 - **Files** · A file sidebar that follows the focused pane, a two-pane transfer view with a resumable queue, Quick Look, and editing remote files in Mac apps, over SFTP, SCP, FTP, and FTPS. Paste an `sftp` command once to keep it as a session.
 - **Remote desktop** · RDP with Network Level Authentication and VNC, including macOS Screen Sharing, in a Gloamux tab, with an optional SSH tunnel and a shared clipboard.
+- **Browser panel** · A browser beside the terminal, shown by Safari's engine (WebKit), with its pages as tabs in the panel header, a width you can drag, and sign-ins kept in memory until Gloamux quits.
 - **Other connections** · Serial ports, Telnet, Mosh, Docker containers, Kubernetes pods, and AWS Systems Manager sessions.
 - **Session Log** · A record of every connection with its commands, jump hosts, port forwarding, and files, to view, search, or download.
 - **Safety** · Production, Staging, Test, and Development tags, confirmation of risky commands, host key review and history, and a workspace lock.
@@ -157,6 +158,7 @@ gloamux tabs list
 gloamux tabs run TAB_ID "uptime"
 gloamux tabs read TAB_ID 50
 gloamux forwards start TAB_ID local 8080 localhost 80
+gloamux web show https://192.0.2.10
 gloamux hosts discover bonjour
 gloamux settings set terminal.font-size 14
 gloamux config export ~/Gloamux.gloamuxconfig
@@ -166,7 +168,7 @@ gloamux config export ~/Gloamux.gloamuxconfig
 
 `gloamux sftp` signs in once and then takes `sftp` commands, from a saved session, the usual `sftp` options, or a whole pasted command with `--command`. `gloamux history` lists, exports, and removes connection records.
 
-`gloamux tabs` and `gloamux commands send|run` act on the running app; tab IDs from `gloamux tabs list` work in every window. Management commands return JSON, and file commands accept `--json`. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux --help`, or `gloamux <command> --help` for each command.
+`gloamux tabs`, `gloamux web`, and `gloamux commands send|run` act on the running app; tab IDs from `gloamux tabs list` work in every window. Management commands return JSON, and file commands accept `--json`. Exit codes are 0 for success, 1 for a failed operation, 2 for invalid usage, and 130 when Ctrl-C stops a command. Run `gloamux --help`, or `gloamux <command> --help` for each command.
 
 The [command-line reference](docs/en/USER-GUIDE.md#20-command-line-reference) in the user guide lists every command.
 

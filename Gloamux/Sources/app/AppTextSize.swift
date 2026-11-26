@@ -24,6 +24,8 @@ enum AppTextSize {
 
     /// ⌘+, ⌘−, and ⌘0: the session's font while working in its terminal, and the app's text everywhere else.
     @MainActor static func zoomFocused(_ step: Double, window: NSWindow? = NSApp.keyWindow) {
+        // A web page zooms itself, as in a browser.
+        if let page = window?.firstResponder?.enclosingWebPage { page.zoom(Int(step)); return }
         if inSession(window) { TerminalPreferences.zoom(step) } else { zoom(step) }
     }
 

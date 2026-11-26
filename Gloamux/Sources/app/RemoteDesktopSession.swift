@@ -175,6 +175,15 @@ private final class DesktopWorker: @unchecked Sendable {
 
     nonisolated static func isFingerprint(_ value: String) -> Bool { DesktopMessage.isFingerprint(value) }
 
+    /// Takes the saved session's edited settings, so the next Connect uses them. A desktop that is connecting,
+    /// connected, or waiting for a certificate answer keeps the settings it started with. Returns whether it changed.
+    @discardableResult func useSavedProfile(_ saved: ContainerSession) -> Bool {
+        guard phase == .idle, worker == nil, pendingFingerprint == nil, saved.tool == profile.tool, saved != profile else { return false }
+        objectWillChange.send()
+        profile = saved
+        return true
+    }
+
     func connect(username: String, password: String) {
         guard phase == .idle, worker == nil, pendingFingerprint == nil else { return }
         error = nil

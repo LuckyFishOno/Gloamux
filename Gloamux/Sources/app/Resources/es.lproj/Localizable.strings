@@ -597,7 +597,6 @@
 "Show in Finder" = "Mostrar en el Finder";
 "Show in menu bar" = "Mostrar en la barra de menús";
 "Show Gloamux key" = "Mostrar clave de Gloamux";
-"Show or hide the focused pane's files on the right" = "Mostrar u ocultar a la derecha los archivos del panel activo";
 "Show or hide the focused server's files on the right" = "Mostrar u ocultar a la derecha los archivos del servidor activo";
 "Show output" = "Mostrar salida";
 "Show public key" = "Mostrar clave pública";
@@ -1280,7 +1279,7 @@
 "Another app uses this key. Choose a different one." = "Otra app usa esta tecla. Elige otra.";
 "⌥Space" = "⌥Espacio";
 "Show inline images" = "Mostrar imágenes en línea";
-"Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals." = "Las imágenes que envían programas como imgcat, chafa e img2sixel con gráficos sixel o el protocolo de imágenes de iTerm2 aparecen en el terminal. Se aplica a los terminales nuevos.";
+"Pictures that programs such as imgcat, chafa, img2sixel, and kitten icat send with sixel graphics, the iTerm2 image protocol, or the kitty graphics protocol appear in the terminal. Applies to new terminals." = "Las imágenes que envían programas como imgcat, chafa, img2sixel y kitten icat con gráficos sixel, el protocolo de imágenes de iTerm2 o el protocolo de gráficos de kitty aparecen en el terminal. Se aplica a los terminales nuevos.";
 "ZMODEM file transfer" = "Transferencia de archivos ZMODEM";
 "Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused." = "Al ejecutar sz en el servidor, sus archivos se guardan en este Mac; al ejecutar rz, se pregunta qué archivos enviar. Los comandos que un servidor pida ejecutar en este Mac siempre se rechazan.";
 "Save received files in" = "Guardar los archivos recibidos en";
@@ -1295,3 +1294,38 @@
 "Transfer failed: %@" = "La transferencia falló: %@";
 "The server asked to run a command on this Mac, which Gloamux never allows." = "El servidor pidió ejecutar un comando en este Mac, algo que Gloamux nunca permite.";
 "No rz is waiting in this tab. Run rz on the server first." = "No hay ningún rz esperando en esta pestaña. Ejecuta rz en el servidor primero.";
+
+/* Web pages and the browser panel */
+"%@ says" = "%@ dice";
+"Back" = "Atrás";
+"Browser" = "Navegador";
+"Clear website data" = "Borrar datos de sitios web";
+"Copy address" = "Copiar dirección";
+"Could not download %@" = "No se pudo descargar %@";
+"Downloaded %@" = "Se descargó %@";
+"Downloading %@" = "Descargando %@";
+"Search or enter a web address" = "Busca o escribe una dirección web";
+"Enter a web address, such as https://192.0.2.10." = "Escribe una dirección web, como https://192.0.2.10.";
+"Forward" = "Adelante";
+"Hide browser" = "Ocultar navegador";
+"More" = "Más";
+"Not encrypted" = "Sin cifrar";
+"Open in the default browser" = "Abrir en el navegador predeterminado";
+"Reload" = "Volver a cargar";
+"Sign in" = "Iniciar sesión";
+"Sign in to %@" = "Iniciar sesión en %@";
+"Stop loading" = "Detener la carga";
+"The page was not opened because its certificate is not trusted." = "La página no se abrió porque su certificado no es de confianza.";
+"The user name or password was not accepted." = "No se aceptó el nombre de usuario o la contraseña.";
+"This page says" = "Esta página dice";
+"This site's certificate changed" = "El certificado de este sitio cambió";
+"This site's certificate is not trusted" = "El certificado de este sitio no es de confianza";
+"User name" = "Nombre de usuario";
+"Zoom in" = "Ampliar";
+"Zoom out" = "Reducir";
+"The page stopped working. Reload to try again." = "La página dejó de funcionar. Vuelve a cargarla para intentarlo de nuevo.";
+"New page" = "Página nueva";
+"Close page" = "Cerrar página";
+"Pages in this panel keep their sign-ins and cookies only until Gloamux quits, apart from Safari." = "Las páginas de este panel guardan sus inicios de sesión y cookies solo hasta que se cierra Gloamux, aparte de Safari.";
+"Devices often use a certificate they made themselves. Compare this fingerprint with the one the device shows before trusting it. Gloamux then trusts this certificate for this address until it quits." = "Los dispositivos suelen usar un certificado creado por ellos mismos. Compara esta huella con la que muestra el dispositivo antes de confiar en él. Gloamux confía en este certificado para esta dirección hasta que se cierre.";
+"This page uses http, so the password crosses the network as plain text. Open it with https to protect it." = "Esta página usa http, así que la contraseña cruza la red como texto sin cifrar. Ábrela con https para protegerla.";

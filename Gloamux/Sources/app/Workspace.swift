@@ -68,6 +68,8 @@ struct HostKeyChange: Identifiable {
     /// Waits to reconnect after the connection was lost.
     var reconnectTask: Task<Void, Never>?
     var reconnectAttempts = 0
+    /// The tab has had a connection, so the next one starts on a cleared screen.
+    var hasConnected = false
     @Published var forwards: [SessionForward] = []
     @Published var forwardingRules: [ForwardingRule] = []
     @Published var forwardingErrors: [String] = []
@@ -147,6 +149,8 @@ struct HostKeyChange: Identifiable {
     @Published public var isLocal = false
     /// The local shell, Telnet connection, or serial port of a local tab.
     var localShell: (any TerminalTransport)?
+    /// The text area's size in pixels last sent to the shell, so a font change alone resends the size.
+    var reportedPixels = (width: 0, height: 0)
     var shell: SSHInteractiveShell?
     var shellOutput: Task<Void, Never>?
     var inputTask: Task<Void, Never>?
@@ -406,6 +410,12 @@ enum ConnectionState: Equatable {
     var transferWindow: FileTransferWindow?
     /// Set when a saved session that opens to its files has connected, so the layout can show them.
     @Published var filesRequest: FilesRequest?
+    /// The browser panel's pages, kept while the panel is closed so it opens where it was.
+    private(set) lazy var browser = BrowserPanel()
+    /// Asks the window to show (true) or hide (false) the browser panel, for `gloamux web show` and `hide`.
+    @Published var browserPanelRequest: Bool?
+    /// Whether the window shows the browser panel now.
+    var browserPanelShown = false
     @Published var sftpCommandRequest: SFTPCommandRequest?
     /// Saved sessions opened most recently, for the menu bar and the command palette.
     let recents: RecentSessions
@@ -461,6 +471,24 @@ enum ConnectionState: Equatable {
         runbooks = source?.runbooks ?? RunbookLibrary(folder: storage.appendingPathComponent("runbooks", isDirectory: true))
         selection = tabs[0].id
         observeWake()
+        // Published before the change lands, so the new list is passed along.
+        savedSessionsObserver = sessionTree.$nodes.dropFirst().sink { [weak self] nodes in
+            MainActor.assumeIsolated {
+                self?.applySavedDesktops(nodes)
+            }
+        }
+    }
+    private var savedSessionsObserver: AnyCancellable?
+    /// Gives open desktop tabs that are not connected their saved session's edited settings, from the form or the
+    /// CLI, so Connect uses the new host and port instead of the ones the tab opened with.
+    func applySavedDesktops(_ nodes: [SessionTreeNode]) {
+        for tab in tabs + sessionWindows.values.map(\.tab) {
+            guard let desktop = tab.desktop, let id = tab.savedSessionID,
+                  let saved = nodes.first(where: { $0.id == id })?.container, desktop.useSavedProfile(saved) else { continue }
+            tab.host = saved.target
+            tab.port = String(saved.effectivePort)
+            tab.container = saved
+        }
     }
     public var selected: SessionTab? { tabs.first { $0.id == selection } }
     func selectTab(_ id: UUID, focusTerminal: Bool = true) {
@@ -728,6 +756,7 @@ enum ConnectionState: Equatable {
             tab.localLaunch = launch
             do {
                 let shell = try LocalShell(rows: tab.screen.rows, columns: tab.screen.cols, launch: launch) { output(Array($0)) }
+                shell.resize(rows: tab.screen.rows, columns: tab.screen.cols, pixelWidth: tab.reportedPixels.width, pixelHeight: tab.reportedPixels.height)
                 pump.attach(shell)
                 tab.localShell = shell
                 localTerminalStarted(tab)
@@ -803,10 +832,12 @@ enum ConnectionState: Equatable {
         tab.password = ""; tab.keyPassphrase = ""; tab.jumpSecrets = [:]; tab.filesLoaded = false; tab.entries = []
         // Straight to the end state: a lost connection was up until now.
         tab.moveConnection(to: lost ? .lost : .disconnected)
+        // Whatever the shell's programs left (the alternate screen, a scroll region, colors) ends with them.
+        tab.screen.endProgram(); tab.screenRevision += 1
         if lost {
             tab.status = "Connection lost"
             tab.error = nil
-            tab.feed("\u{1b}[?1049l\u{1b}[?2004l\n" + T("Connection lost") + "\n")
+            tab.feed(T("Connection lost") + "\n")
         }
         for forward in forwards { await forward.handle.close() }
         await shell?.close()
@@ -899,6 +930,9 @@ enum ConnectionState: Equatable {
             tab.status = "Connected"
             noteHistory(tab, .connected)
             if let id = tab.savedSessionID, let key = tab.sessionKey { sessionTree.sessionKeys[id] = key }
+            // A new connection starts on a clear screen; the earlier one's text stays in the scrollback.
+            if tab.hasConnected { tab.screen.clearKeepingScrollback() }
+            tab.hasConnected = true
             tab.feed(T("Connected to") + " \(KnownHosts.endpoint(host: target.host, port: target.port))\n")
             tab.disconnectWatcher = Task { @MainActor [weak self, weak tab] in
                 await ssh.waitForDisconnect()
@@ -1035,7 +1069,7 @@ enum ConnectionState: Equatable {
                                                 term: TerminalPreferences.terminalType, environment: LocalLaunch.sshEnvironment(),
                                                 agentSocket: agent, x11: x11)
             guard tab.epoch == epoch else { await shell.close(); return }
-            try await shell.resize(rows: tab.screen.rows, columns: tab.screen.cols)
+            try await shell.resize(rows: tab.screen.rows, columns: tab.screen.cols, pixelWidth: tab.reportedPixels.width, pixelHeight: tab.reportedPixels.height)
             guard tab.epoch == epoch else { await shell.close(); return }
             tab.terminalID = UUID()
             tab.shell = shell; tab.terminalReady = true; tab.error = nil
@@ -1230,14 +1264,24 @@ enum ConnectionState: Equatable {
     }
     public func resizeTerminal(_ tab: SessionTab, rows: Int, columns: Int) {
         let rows = min(200, max(5, rows)), columns = min(400, max(20, columns))
-        guard rows != tab.screen.rows || columns != tab.screen.cols else { return }
-        tab.screen.resize(rows: rows, cols: columns); tab.screenRevision += 1
-        recordings.resize(tab, rows: rows, columns: columns)
-        tab.localShell?.resize(rows: rows, columns: columns)
+        // The size in pixels changes with the font as well, and image programs read it from the PTY.
+        let cell = tab.screen.cellSize
+        let pixels = (width: Int(cell.width * Double(columns)), height: Int(cell.height * Double(rows)))
+        let resized = rows != tab.screen.rows || columns != tab.screen.cols
+        guard resized || pixels != tab.reportedPixels else { return }
+        tab.reportedPixels = pixels
+        if resized {
+            tab.screen.resize(rows: rows, cols: columns); tab.screenRevision += 1
+            recordings.resize(tab, rows: rows, columns: columns)
+        }
+        tab.localShell?.resize(rows: rows, columns: columns, pixelWidth: pixels.width, pixelHeight: pixels.height)
         tab.resizeTask?.cancel()
         if let shell = tab.shell {
             tab.resizeTask = Task {
-                do { try await Task.sleep(nanoseconds: 80_000_000); try Task.checkCancellation(); try await shell.resize(rows: rows, columns: columns) } catch {}
+                do {
+                    try await Task.sleep(nanoseconds: 80_000_000); try Task.checkCancellation()
+                    try await shell.resize(rows: rows, columns: columns, pixelWidth: pixels.width, pixelHeight: pixels.height)
+                } catch {}
             }
         }
     }

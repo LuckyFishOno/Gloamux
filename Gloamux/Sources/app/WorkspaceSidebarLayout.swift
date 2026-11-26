@@ -2,12 +2,13 @@ import AppKit
 import SwiftUI
 
 enum SidebarWidth {
-    case left, files
+    case left, right
 
     var range: ClosedRange<Double> {
         switch self {
         case .left: return 200...520
-        case .files: return 220...560
+        // One width for every right panel; a web page needs room, so it can take all but the terminal's minimum.
+        case .right: return 240...4000
         }
     }
 
@@ -16,11 +17,6 @@ enum SidebarWidth {
     func clamp(_ width: Double, upTo available: Double = .infinity) -> Double {
         min(max(width, range.lowerBound), range.upperBound, max(0, available))
     }
-}
-
-enum TrailingSidebarSizing: Equatable {
-    case resizable
-    case fixed(Double)
 }
 
 struct WorkspaceSidebarWidths: Equatable {
@@ -37,7 +33,7 @@ struct WorkspaceSidebarWidths: Equatable {
 /// Owns the live widths so a drag relays out the columns without updating workspace preferences or toolbar content.
 struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View {
     let showsLeading: Bool
-    let trailing: TrailingSidebarSizing?
+    let showsTrailing: Bool
     let sidebarColor: Color
     let dividerColor: Color
     let leadingContent: Leading
@@ -45,12 +41,13 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
     let trailingContent: Trailing
 
     @AppStorage("leftSidebarWidth") private var savedLeft = 254.0
+    /// The width of every right panel: the browser, files, quick commands, and color themes.
     @AppStorage("filesSidebarWidth") private var savedRight = 252.0
     @State private var liveWidths: WorkspaceSidebarWidths?
 
     var body: some View {
         GeometryReader { geometry in
-            let dividerWidth = (showsLeading ? 1.0 : 0) + (trailing == nil ? 0 : 1.0)
+            let dividerWidth = (showsLeading ? 1.0 : 0) + (showsTrailing ? 1.0 : 0)
             let available = max(0, geometry.size.width - 340 - dividerWidth)
             let widths = preferredWidths.fitting(in: available, reservingRight: minimumRightWidth)
             HStack(spacing: 0) {
@@ -62,13 +59,9 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
                     handle(.left, widths: widths, available: available)
                 }
                 centerContent.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-                if let trailing {
+                if showsTrailing {
                     HStack(spacing: 0) {
-                        if trailing == .resizable {
-                            handle(.files, widths: widths, available: available)
-                        } else {
-                            Rectangle().fill(dividerColor).frame(width: 1)
-                        }
+                        handle(.right, widths: widths, available: available)
                         trailingContent.frame(width: widths.right)
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -76,27 +69,16 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
             }
         }
         .onChange(of: showsLeading) { _, _ in liveWidths = nil }
-        .onChange(of: trailing) { _, _ in liveWidths = nil }
+        .onChange(of: showsTrailing) { _, _ in liveWidths = nil }
     }
 
     private var preferredWidths: WorkspaceSidebarWidths {
         if let liveWidths { return liveWidths }
-        let right: Double
-        switch trailing {
-        case .resizable: right = SidebarWidth.files.clamp(savedRight)
-        case .fixed(let width): right = width
-        case nil: right = 0
-        }
+        let right = showsTrailing ? SidebarWidth.right.clamp(savedRight) : 0
         return WorkspaceSidebarWidths(left: showsLeading ? SidebarWidth.left.clamp(savedLeft) : 0, right: right)
     }
 
-    private var minimumRightWidth: Double {
-        switch trailing {
-        case .resizable: return SidebarWidth.files.range.lowerBound
-        case .fixed(let width): return width
-        case nil: return 0
-        }
-    }
+    private var minimumRightWidth: Double { showsTrailing ? SidebarWidth.right.range.lowerBound : 0 }
 
     private func handle(_ side: SidebarWidth, widths: WorkspaceSidebarWidths, available: Double) -> some View {
         let width = side == .left ? widths.left : widths.right
@@ -111,7 +93,7 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
         } finish: {
             guard let liveWidths else { return }
             if showsLeading, savedLeft != liveWidths.left { savedLeft = liveWidths.left }
-            if trailing == .resizable, savedRight != liveWidths.right { savedRight = liveWidths.right }
+            if showsTrailing, savedRight != liveWidths.right { savedRight = liveWidths.right }
             self.liveWidths = nil
         }
     }
