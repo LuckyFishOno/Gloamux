@@ -38,21 +38,26 @@ import AppKit
         for title in ["Open", "Rename", "Delete"] { menu.addItem(withTitle: title, action: nil, keyEquivalent: "") }
         var appearances: [NSAppearance.Name] = []
         var tints: [NSColor?] = []
-        let check = Timer(timeInterval: 0.3, repeats: false) { _ in
-            MainActor.assumeIsolated {
-                MenuTint.apply(style)
-                let open = NSApp.windows.filter(\.isVisible)
-                appearances = open.filter { String(describing: type(of: $0)).contains("Menu") }.compactMap { $0.appearance?.name }
-                if #available(macOS 26, *) {
-                    tints = open.filter { String(describing: type(of: $0)).contains("GlassEffectWindow") }
-                        .flatMap { Self.glass(in: $0.contentView?.superview) }.map(\.tintColor)
+        // A test process in the background sometimes gets no menu tracking, and popUp returns at once without
+        // showing the menu. Try again then; once the menu is open, everything below is checked as usual.
+        for _ in 0..<5 where appearances.isEmpty {
+            let check = Timer(timeInterval: 0.3, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    MenuTint.apply(style)
+                    let open = NSApp.windows.filter(\.isVisible)
+                    appearances = open.filter { String(describing: type(of: $0)).contains("Menu") }.compactMap { $0.appearance?.name }
+                    if #available(macOS 26, *) {
+                        tints = open.filter { String(describing: type(of: $0)).contains("GlassEffectWindow") }
+                            .flatMap { Self.glass(in: $0.contentView?.superview) }.map(\.tintColor)
+                    }
+                    menu.cancelTracking()
                 }
-                menu.cancelTracking()
             }
+            RunLoop.main.add(check, forMode: .common)
+            RunLoop.main.add(check, forMode: .eventTracking)
+            menu.popUp(positioning: nil, at: NSPoint(x: 20, y: 150), in: window.contentView)
+            check.invalidate()
         }
-        RunLoop.main.add(check, forMode: .common)
-        RunLoop.main.add(check, forMode: .eventTracking)
-        menu.popUp(positioning: nil, at: NSPoint(x: 20, y: 150), in: window.contentView)
 
         XCTAssertFalse(appearances.isEmpty, "The menu opened")
         XCTAssertTrue(appearances.allSatisfy { $0 == .darkAqua }, "A dark theme's menu is dark")
