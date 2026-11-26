@@ -525,11 +525,7 @@ private struct LocalFilePane: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(request.rename == nil ? T("New folder") : T("Rename")).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
-                HStack {
-                    Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                }
+                DialogActions(cancel: { naming = nil }, title: request.rename == nil ? T("Create") : T("Rename")) { finish(request) }
             }.padding(22).frame(width: 340)
         }
     }
@@ -683,11 +679,7 @@ private struct RemoteFilePane: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(request.rename == nil ? T("New remote folder") : T("Rename remote item")).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
-                HStack {
-                    Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button(request.rename == nil ? T("Create") : T("Rename")) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                }
+                DialogActions(cancel: { naming = nil }, title: request.rename == nil ? T("Create") : T("Rename")) { finish(request) }
             }.padding(22).frame(width: 340)
         }
     }

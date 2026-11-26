@@ -9,9 +9,6 @@ struct SessionTreeView: View {
     @State private var name = ""
     @State private var deleting: SessionTreeNode?
     @State private var connectionEditor: ConnectionEditRequest?
-    /// Where each visible row's header sits in the tree's own coordinate space, for finding the row under a drag.
-    @State private var rowFrames: [UUID: CGRect] = [:]
-    @State private var dragging: TreeDragState?
     static let space = "sessionTree"
     var importFrom: (FolderImportRequest.Source) -> Void = { _ in }
     @AppStorage(Reachability.key) private var reachabilityEnabled = true
@@ -81,43 +78,20 @@ struct SessionTreeView: View {
                         .buttonStyle(.plain).accessibilityLabel(T("Clear search"))
                 }
             }.padding(8).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
-            GeometryReader { bounds in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 3) {
-                        LazyVStack(alignment: .leading, spacing: 3) {
-                            ForEach(store.children(of: nil).filter { store.matches($0.id) }) { item in row(item) }
-                            if store.nodes.isEmpty {
-                                Text(T("Save a connection or create a folder using +.")).appFont(.caption).foregroundStyle(.secondary).padding(.vertical, 10)
-                            } else if !store.children(of: nil).contains(where: { store.matches($0.id) }) {
-                                Text(T("No matching sessions")).appFont(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 18)
-                            .frame(maxWidth: .infinity)
-                            .background(dragging?.spot == .root ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
-                            .contentShape(Rectangle())
-                            .onTapGesture { store.selection = nil }
-                            .contextMenu { rootMenu }
-                    }
-                    // Fills the visible area so the space under the rows takes clicks and drops, but a pixel short of it:
-                    // content exactly as tall as a fractional height (after the vault below opens or closes) makes
-                    // the scroll view show a scroller that takes width and truncates names.
-                    .frame(minHeight: max(0, bounds.size.height.rounded(.down) - 1), alignment: .topLeading)
-                    .coordinateSpace(name: Self.space)
-                    .onPreferenceChange(TreeRowFrames.self) { rowFrames = $0 }
-                    .overlay(alignment: .topLeading) {
-                        if let dragging, let node = store.node(dragging.id) {
-                            Label(node.name, systemImage: node.isFolder ? "folder.fill" : "terminal").lineLimit(1)
-                                .padding(.vertical, 4).padding(.horizontal, 8)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                                .shadow(radius: 3, y: 1).fixedSize()
-                                .offset(x: dragging.location.x + 10, y: dragging.location.y - 12)
-                                .allowsHitTesting(false)
+            SessionOutline(store: store, reachability: reachabilityEnabled ? model.reachability : nil,
+                           activate: { model.openSaved($0) }, menu: { contextMenu(for: $0) },
+                           delete: { deleting = $0 }, failed: { model.error = $0.localizedDescription })
+                .overlay(alignment: .topLeading) {
+                    Group {
+                        if store.nodes.isEmpty {
+                            Text(T("Save a connection or create a folder using +.")).padding(.vertical, 10)
+                        } else if !store.children(of: nil).contains(where: { store.matches($0.id) }) {
+                            Text(T("No matching sessions")).padding(.vertical, 4)
                         }
                     }
+                    .appFont(.caption).foregroundStyle(.secondary).padding(.horizontal, 6).allowsHitTesting(false)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-            }.frame(minHeight: 120, maxHeight: .infinity)
+                .frame(minHeight: 120, maxHeight: .infinity)
         }
         // Checks the SSH port of visible saved hosts now and then; the dots after their names show the result.
         .task(id: reachabilityEnabled) {
@@ -164,132 +138,74 @@ struct SessionTreeView: View {
         Button(T("Collapse all")) { perform { try store.expandAll(false) } }
     }
 
-    private func row(_ item: SessionTreeNode) -> AnyView {
-        AnyView(VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                if item.isFolder {
-                    Image(systemName: "chevron.right").appFont(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(item.expanded || !store.query.isEmpty ? 90 : 0))
-                        .frame(width: 14, height: 14)
-                } else { Color.clear.frame(width: 14, height: 14) }
-                Image(systemName: item.isFolder ? "folder.fill" : item.container?.tool.symbol ?? (item.connection?.isFTP == true ? "externaldrive.connected.to.line.below" : "terminal"))
-                    .foregroundStyle(item.isFolder ? .orange : .secondary)
-                Text(item.name).lineLimit(1)
-                if let environment = item.environment { EnvironmentBadge(environment: environment, compact: true) }
-                if reachabilityEnabled && !item.isFolder { ReachabilityDot(monitor: model.reachability, id: item.id) }
-                Spacer(minLength: 0)
-                if store.clipboard == item.id { Image(systemName: store.cutting ? "scissors" : "doc.on.doc").appFont(.caption) }
-            }
-            .padding(.vertical, 6).padding(.horizontal, 4).contentShape(Rectangle())
-            .background(store.selection == item.id ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
-            .background(GeometryReader { proxy in
-                Color.clear.preference(key: TreeRowFrames.self, value: [item.id: proxy.frame(in: .named(Self.space))])
-            })
-            .overlay { dropIndicator(for: item.id) }
-            .opacity(dragging?.id == item.id ? 0.45 : 1)
-            .modifier(SessionTreeRowInteraction(isFolder: item.isFolder, select: { store.selection = item.id }, toggle: {
-                // A folder opens and closes with a single click anywhere on its row, like a Finder sidebar section.
-                guard store.query.isEmpty else { return }
-                withAnimation(.easeOut(duration: 0.18)) { perform { try store.setExpanded(item.id, !item.expanded) } }
-            }, activate: { model.openSaved(item) },
-            drag: { location in dragging = TreeDragState(id: item.id, location: location, spot: spot(at: location, moving: item.id)) },
-            drop: { location in finishDrag(item.id, at: location) }))
-            .contextMenu {
-                if item.isFolder {
-                    Button(T("Open all in tabs")) { perform { try model.openSavedFolder(item.id) } }
-                    newItems(parent: item.id)
-                    Button(T("Save current connection here…")) { saveCurrent(parent: item.id) }.disabled(!canSaveCurrent)
-                    Button(T("Paste")) { perform { try store.paste(into: item.id) } }.disabled(store.clipboard == nil)
-                    exportMenu(T("Export folder"), root: item.id)
-                } else {
-                    Button(T("Open in new window")) { model.openSaved(item, inNewWindow: true) }
-                    Button(T("Open in tab")) { model.openSaved(item) }
-                    Button(T("Session properties…")) {
-                        if item.container != nil { model.editContainer(item) }
-                        else { connectionEditor = ConnectionEditRequest(item: item, parent: item.parent) }
-                    }
-                    Button(T("Session Log")) { model.showConnectionHistory(search: item.name) }
-                }
-                environmentMenu(item)
-                if !item.isFolder { AgentAccessToggle(agents: model.agents, item: item) }
-                Divider()
-                Button(T("Rename…")) { name = item.name; editor = TreeEditor(kind: .rename, item: item.id, parent: item.parent, tab: nil) }
-                Button(T("Copy")) { store.prepareClipboard(item.id, cut: false) }
-                Button(T("Cut")) { store.prepareClipboard(item.id, cut: true) }
-                Button(T("Delete…"), role: .destructive) { deleting = item }
-            }
-            if item.isFolder && (item.expanded || !store.query.isEmpty) {
-                ForEach(store.children(of: item.id).filter { store.matches($0.id) }) { child in
-                    row(child).padding(.leading, 14).transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        })
-    }
-    /// Tags a session or folder as production, staging, test, or development. Sessions inherit their folder's tag.
-    private func environmentMenu(_ item: SessionTreeNode) -> some View {
-        Menu(T("Environment")) {
-            Picker(T("Environment"), selection: Binding(get: { item.environment }, set: { environment in
-                perform { try store.setEnvironment(item.id, environment) }
-            })) {
-                Text(T(item.parent.flatMap { store.effectiveEnvironment($0) }.map { _ in "Same as folder" } ?? "None")).tag(SessionEnvironment?.none)
-                ForEach(SessionEnvironment.allCases) { environment in
-                    Text(T(environment.title)).tag(Optional(environment))
-                }
-            }
-            .pickerStyle(.inline)
+    /// The right-click menu of a row, or of the empty space under the rows when `item` is nil.
+    private func contextMenu(for item: SessionTreeNode?) -> NSMenu {
+        let menu = NSMenu()
+        func add(_ title: String, to menu: NSMenu = menu, enabled: Bool = true, on: Bool = false, _ run: @escaping () -> Void) {
+            menu.addItem(MenuAction(title, enabled: enabled, on: on, run))
         }
-    }
-
-    /// A blue line above or below the row, or a frame around a folder, where the dragged item would land.
-    @ViewBuilder private func dropIndicator(for id: UUID) -> some View {
-        if case let .row(target, placement)? = dragging?.spot, target == id {
-            switch placement {
-            case .into:
-                RoundedRectangle(cornerRadius: 5).strokeBorder(Color.accentColor, lineWidth: 1.5)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 5)).allowsHitTesting(false)
-            case .before, .after:
-                VStack(spacing: 0) {
-                    if placement == .after { Spacer(minLength: 0) }
-                    Capsule().fill(Color.accentColor).frame(height: 2).offset(y: placement == .before ? -2 : 2)
-                    if placement == .before { Spacer(minLength: 0) }
-                }.allowsHitTesting(false)
+        func addNewItems(parent: UUID?) {
+            add(T("New folder…")) { edit(.folder, parent: parent) }
+            add(T("New saved session…")) { connectionEditor = ConnectionEditRequest(parent: parent) }
+            add(T("New session from sftp command")) { model.showSFTPCommand() }
+            add(T(ContainerSession.Tool.rdp.title)) { model.openTool(.rdp, parent: parent) }
+            add(T(ContainerSession.Tool.vnc.title)) { model.openTool(.vnc, parent: parent) }
+        }
+        func addExport(_ title: String, root: UUID?, enabled: Bool = true) {
+            let formats = NSMenu()
+            add(T("Gloamux sessions file (for teammates, no passwords)…"), to: formats) { export(root, .gloamux) }
+            add(T("CSV file (for spreadsheets)…"), to: formats) { export(root, .csv) }
+            add(T("OpenSSH config (for ssh in any terminal)…"), to: formats) { export(root, .openSSH) }
+            let entry = NSMenuItem(title: title, action: nil, keyEquivalent: ""); entry.submenu = formats; entry.isEnabled = enabled
+            menu.addItem(entry)
+        }
+        guard let item else {
+            addNewItems(parent: nil)
+            menu.addItem(.separator())
+            add(T("Paste"), enabled: store.clipboard != nil) { perform { try store.paste(into: nil) } }
+            addExport(T("Export all sessions"), root: nil, enabled: !store.nodes.isEmpty)
+            add(T("Expand all")) { perform { try store.expandAll(true) } }
+            add(T("Collapse all")) { perform { try store.expandAll(false) } }
+            return menu
+        }
+        if item.isFolder {
+            add(T("Open all in tabs")) { perform { try model.openSavedFolder(item.id) } }
+            addNewItems(parent: item.id)
+            add(T("Save current connection here…"), enabled: canSaveCurrent) { saveCurrent(parent: item.id) }
+            add(T("Paste"), enabled: store.clipboard != nil) { perform { try store.paste(into: item.id) } }
+            addExport(T("Export folder"), root: item.id)
+        } else {
+            add(T("Open in new window")) { model.openSaved(item, inNewWindow: true) }
+            add(T("Open in tab")) { model.openSaved(item) }
+            add(T("Session properties…")) {
+                if item.container != nil { model.editContainer(item) }
+                else { connectionEditor = ConnectionEditRequest(item: item, parent: item.parent) }
+            }
+            add(T("Session Log")) { model.showConnectionHistory(search: item.name) }
+        }
+        // Sessions inherit their folder's tag, so "none" reads "Same as folder" under a tagged folder.
+        let environments = NSMenu()
+        add(T(item.parent.flatMap { store.effectiveEnvironment($0) }.map { _ in "Same as folder" } ?? "None"), to: environments,
+            on: item.environment == nil) { perform { try store.setEnvironment(item.id, nil) } }
+        environments.addItem(.separator())
+        for environment in SessionEnvironment.allCases {
+            add(T(environment.title), to: environments, on: item.environment == environment) { perform { try store.setEnvironment(item.id, environment) } }
+        }
+        let environmentItem = NSMenuItem(title: T("Environment"), action: nil, keyEquivalent: ""); environmentItem.submenu = environments
+        menu.addItem(environmentItem)
+        if !item.isFolder {
+            let allowed = model.agents.allowedSessions.contains(item.id)
+            add(T("Allow AI agents"), on: allowed) {
+                if allowed { model.agents.revoke(item.id, name: item.name) } else { model.agents.allow(item.id, name: item.name) }
             }
         }
+        menu.addItem(.separator())
+        add(T("Rename…")) { name = item.name; editor = TreeEditor(kind: .rename, item: item.id, parent: item.parent, tab: nil) }
+        add(T("Copy")) { store.prepareClipboard(item.id, cut: false) }
+        add(T("Cut")) { store.prepareClipboard(item.id, cut: true) }
+        add(T("Delete…")) { deleting = item }
+        return menu
     }
-
-    /// The row under `location`, and where on it the item would land; below the last row means the top level.
-    /// While sorted by name there is no order to change, so a drop only moves the item into a folder: onto a folder
-    /// means inside it, and onto a session means into that session's folder.
-    private func spot(at location: CGPoint, moving id: UUID) -> TreeDropSpot? {
-        if let (target, frame) = rowFrames.first(where: { $0.value.minY <= location.y && location.y < $0.value.maxY }),
-           let node = store.node(target) {
-            if store.sorting != .custom {
-                guard let folder = node.isFolder ? target : node.parent else {
-                    return store.canDrop(id, on: nil, .into) ? .root : nil
-                }
-                return store.canDrop(id, on: folder, .into) ? .row(folder, .into) : nil
-            }
-            let placement = SessionTreeDropPlacement.at(location.y - frame.minY, height: frame.height, isFolder: node.isFolder,
-                                                        expanded: node.expanded || !store.query.isEmpty)
-            return store.canDrop(id, on: target, placement) ? .row(target, placement) : nil
-        }
-        let bottom = rowFrames.values.map(\.maxY).max() ?? 0
-        return location.y >= bottom && store.canDrop(id, on: nil, .into) ? .root : nil
-    }
-
-    private func finishDrag(_ id: UUID, at location: CGPoint) {
-        let spot = spot(at: location, moving: id)
-        var transaction = Transaction(); transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            dragging = nil
-            switch spot {
-            case let .row(target, placement)?: perform { try store.drop(id, on: target, placement) }
-            case .root?: perform { try store.drop(id, on: nil, .into) }
-            case nil: break
-            }
-        }
-    }
-
     private func edit(_ kind: TreeEditor.Kind, parent: UUID?) {
         name = ""; editor = TreeEditor(kind: kind, item: nil, parent: parent, tab: nil)
     }
@@ -334,50 +250,16 @@ struct SessionTreeView: View {
     }
 }
 
-struct SessionTreeRowInteraction: ViewModifier {
-    var isFolder = false
-    let select: () -> Void
-    var toggle: () -> Void = {}
-    let activate: () -> Void
-    /// Called as a press moves at least a few points, with the pointer in the tree's coordinate space.
-    var drag: (CGPoint) -> Void = { _ in }
-    /// Called when that drag is released.
-    var drop: (CGPoint) -> Void = { _ in }
-
-    func body(content: Content) -> some View {
-        taps(content).simultaneousGesture(
-            DragGesture(minimumDistance: 4, coordinateSpace: .named(SessionTreeView.space))
-                .onChanged { drag($0.location) }.onEnded { drop($0.location) })
+/// A menu item that runs a closure.
+private final class MenuAction: NSMenuItem {
+    private let run: () -> Void
+    init(_ title: String, enabled: Bool, on: Bool, _ run: @escaping () -> Void) {
+        self.run = run
+        super.init(title: title, action: #selector(choose), keyEquivalent: "")
+        target = self; isEnabled = enabled; state = on ? .on : .off
     }
-
-    @ViewBuilder private func taps(_ content: Content) -> some View {
-        if isFolder {
-            // Folders have no double-click action, so a single click both selects and toggles at once.
-            content.onTapGesture { select(); toggle() }
-        } else {
-            // Selection must not wait for the double-click recognizer to fail.
-            content.onTapGesture(count: 2) { select(); activate() }
-                .simultaneousGesture(TapGesture().onEnded { select() })
-        }
-    }
-}
-
-enum TreeDropSpot: Equatable {
-    case row(UUID, SessionTreeDropPlacement)
-    case root
-}
-
-struct TreeDragState: Equatable {
-    let id: UUID
-    var location: CGPoint
-    var spot: TreeDropSpot?
-}
-
-private struct TreeRowFrames: PreferenceKey {
-    static let defaultValue: [UUID: CGRect] = [:]
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue()) { $1 }
-    }
+    required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    @objc private func choose() { run() }
 }
 
 private struct TreeEditor: Identifiable {
@@ -398,7 +280,7 @@ struct SessionNameSheet: View {
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 6) {
                 Text(title).appFont(.headline)
                 if showsConnectionInfo { InfoButton(T("Host, account and proxy settings only. Passwords are excluded.")) }
@@ -411,14 +293,10 @@ struct SessionNameSheet: View {
                     .onSubmit { if canSave { onSave() } }
                     .accessibilityLabel(T("Name"))
             }
-            HStack {
-                Button(T("Cancel"), action: onCancel).keyboardShortcut(.cancelAction)
-                Spacer()
-                Button(T("Save"), action: onSave).buttonStyle(.appProminent).disabled(!canSave)
-            }
+            DialogActions(cancel: onCancel, title: T("Save"), enabled: canSave, confirm: onSave)
         }
-        .padding(24)
-        .frame(width: 380)
+        .padding(20)
+        .frame(width: 360)
     }
 
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

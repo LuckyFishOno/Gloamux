@@ -142,11 +142,7 @@ struct ConnectionEditor: View {
                 Label(T(error), systemImage: "exclamationmark.circle").foregroundStyle(.red)
                     .appFont(.callout).textSelection(.enabled)
             }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Save"), action: save).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-            }
+            DialogActions(cancel: { dismiss() }, title: T("Save"), confirm: save)
         }
         .padding(24)
         .frame(width: 540)
@@ -274,12 +270,8 @@ struct ConnectionEditor: View {
             if let masterPasswordError {
                 Label(T(masterPasswordError), systemImage: "exclamationmark.circle").foregroundStyle(.red).appFont(.callout)
             }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { enteringMasterPassword = false }.keyboardShortcut(.cancelAction)
-                Button(T("Save"), action: checkMasterPassword).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .disabled(masterPassword.isEmpty || verifying)
-            }
+            DialogActions(cancel: { enteringMasterPassword = false }, title: T("Save"), enabled: !(masterPassword.isEmpty || verifying),
+                          confirm: checkMasterPassword)
         }
         .padding(24)
         .frame(width: 380)
@@ -667,12 +659,9 @@ struct KeyGeneratorSheet: View {
                     SecureField(T("Confirm passphrase"), text: $confirmation).disabled(passphrase.isEmpty)
                 }
                 if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
-                HStack {
-                    Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                    Spacer()
+                DialogActions(cancel: { dismiss() }, title: T("Generate"), enabled: !(working || name.isEmpty || passphrase != confirmation),
+                              confirm: generate) {
                     if working { ProgressView().controlSize(.small) }
-                    Button(T("Generate"), action: generate).buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                        .disabled(working || name.isEmpty || passphrase != confirmation)
                 }
             }
         }

@@ -228,11 +228,8 @@ struct OutputTriggerSettings: View {
                 }
             }
             if let error { Text(T(error)).foregroundStyle(.red).appFont(.callout) }
-            HStack {
-                Button(T("Cancel")) { editing = false; error = nil }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button(T("Save")) { perform { try store.save(draft); editing = false } }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .disabled(draft.pattern.isEmpty)
+            DialogActions(cancel: { editing = false; error = nil }, title: T("Save"), enabled: !draft.pattern.isEmpty) {
+                perform { try store.save(draft); editing = false }
             }
         }
         .padding(20).frame(width: 440)

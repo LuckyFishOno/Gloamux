@@ -90,6 +90,7 @@ Naming:
 
 ### Session tree
 
+- The session tree is an AppKit `NSOutlineView` (`SessionOutline`), so dragging uses the system drag session: it scrolls at the edges and follows the scroll wheel. `SessionOutlineDrop.resolve` turns the outline's proposal into a parent and a sibling to move in front of, and a drop between rows in a name-sorted tree first calls `SessionTreeStore.keepShownOrder()`. The right-click menu is built in AppKit by `SessionTreeView.contextMenu(for:)`, and dialogs end with the shared `DialogActions` row.
 - An item in `sessions.json` may carry an `order` once the user drags items into place. `SessionTreeStore.children(of:)` lists ordered items first, then unordered ones, folders first and by name, so older catalogs keep their order.
 - `drop(_:on:_:)` applies a drag and renumbers that folder by the custom order, even while the tree is sorted by name.
 - The catalog's optional `sorting` field (`nameAscending` or `nameDescending`; absent means custom) picks how `children(of:)` lists items.

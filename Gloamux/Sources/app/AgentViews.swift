@@ -54,14 +54,9 @@ struct AgentReview: ViewModifier {
                     Label(T("This session reconnected or closed, so the command can no longer run."), systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
-                HStack {
-                    Button(T("Decline")) { model.answerAgentProposal(tab, run: false) }
-                        .keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button(T("Run")) { model.answerAgentProposal(tab, run: true) }
-                        .buttonStyle(.appProminent)
-                        .disabled(stale || tab.readOnly)
-                        .accessibilityIdentifier("agentRunButton")
+                DialogActions(cancelTitle: T("Decline"), cancel: { model.answerAgentProposal(tab, run: false) }, title: T("Run"),
+                              enabled: !(stale || tab.readOnly), returnConfirms: false, identifier: "agentRunButton") {
+                    model.answerAgentProposal(tab, run: true)
                 }
             }
             .padding(24)

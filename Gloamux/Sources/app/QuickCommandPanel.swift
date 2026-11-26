@@ -116,15 +116,9 @@ struct QuickCommandPanel: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(minHeight: 56, idealHeight: 76, maxHeight: 120)
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { confirmation = nil }.keyboardShortcut(.cancelAction)
-                Button(T("Run command")) {
-                    approvedRun = request
-                    confirmation = nil
-                }
-                .buttonStyle(.appProminent)
-                .accessibilityIdentifier("quickCommandConfirmRun")
+            DialogActions(cancel: { confirmation = nil }, title: T("Run command"), returnConfirms: false, identifier: "quickCommandConfirmRun") {
+                approvedRun = request
+                confirmation = nil
             }
         }
         .padding(20)
@@ -170,17 +164,11 @@ private struct QuickCommandEditor: View {
                 .accessibilityIdentifier("quickCommandText")
             Text(T(error ?? "Use one line. Saved commands are stored locally as plain text."))
                 .appFont(.callout).foregroundStyle(error == nil ? Color.secondary : .red)
-            HStack {
+            DialogActions(cancel: { dismiss() }, title: T("Save"), returnConfirms: false, identifier: "quickCommandSave",
+                          confirm: { commit { try store.save(QuickCommand(id: id, name: name, text: text)) } }) {
                 if editing {
                     Button(T("Delete"), role: .destructive) { confirmsDeletion = true }
                 }
-                Spacer()
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Save")) {
-                    commit { try store.save(QuickCommand(id: id, name: name, text: text)) }
-                }
-                .buttonStyle(.appProminent)
-                .accessibilityIdentifier("quickCommandSave")
             }
         }
         .textFieldStyle(.roundedBorder)

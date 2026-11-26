@@ -105,3 +105,42 @@ struct AppPicker<Value: Hashable, Content: View, Title: View>: View {
         }
     }
 }
+
+/// The buttons at the foot of every Gloamux dialog, so they look and sit the same everywhere: other controls on the
+/// leading side, then Cancel and the main action at the trailing edge, at least the same width, the main action last
+/// and filled. Escape cancels; Return confirms unless `returnConfirms` is off, as for trusting a host key, where a
+/// stray Return must not decide.
+struct DialogActions<Extra: View>: View {
+    var cancelTitle = T("Cancel")
+    let cancel: () -> Void
+    let title: String
+    var enabled = true
+    /// A red main action, for one that replaces or runs something risky.
+    var warns = false
+    var returnConfirms = true
+    var identifier: String?
+    let confirm: () -> Void
+    @ViewBuilder var extra: () -> Extra
+
+    var body: some View {
+        HStack(spacing: 8) {
+            extra()
+            Spacer(minLength: 12)
+            Button(action: cancel) { Text(cancelTitle).frame(minWidth: 64) }
+                .buttonStyle(.app).keyboardShortcut(.cancelAction)
+            Button(action: confirm) { Text(title).frame(minWidth: 64) }
+                .buttonStyle(.appProminent).tint(warns ? .red : nil)
+                .keyboardShortcut(returnConfirms ? .defaultAction : nil)
+                .disabled(!enabled)
+                .accessibilityIdentifier(identifier ?? "")
+        }
+    }
+}
+
+extension DialogActions where Extra == EmptyView {
+    init(cancelTitle: String = T("Cancel"), cancel: @escaping () -> Void, title: String, enabled: Bool = true, warns: Bool = false,
+         returnConfirms: Bool = true, identifier: String? = nil, confirm: @escaping () -> Void) {
+        self.init(cancelTitle: cancelTitle, cancel: cancel, title: title, enabled: enabled, warns: warns, returnConfirms: returnConfirms,
+                  identifier: identifier, confirm: confirm) { EmptyView() }
+    }
+}

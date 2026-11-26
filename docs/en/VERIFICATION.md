@@ -4,6 +4,15 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.4 (build 13): session tree drag and drop, and dialog buttons (November 26, 2026)
+
+Built on `d2acdb0` (1.4.3 build 12). The session tree is now an AppKit outline view. Scrolling during a drag used to cancel the drag and leave its image stuck in the tree; the system drag session now scrolls at the edges and follows the scroll wheel. Folders can change places, also in a tree sorted by name, and every dialog ends with the same Cancel and main-action buttons.
+
+- **Unit tests.** `SessionTreeInteractionTests` covers drops between rows, onto folders and their edges, onto sessions, below the last row, into a folder's own subfolder (refused), and in a name-sorted tree, and keeps the shown order when it turns custom. A hosted outline in a key window takes queued real clicks: a folder click opens it and saves that, a click selects a session, and a double click opens it.
+- **App.** A renamed copy of the packaged app with an isolated workspace of 6 folders and 37 items: an item dragged from the bottom to the top edge scrolled the tree and landed in the right place on disk, search showed and restored folders, the selection showed in light and dark themes, and the rename dialog showed the new buttons.
+- `swift test`: **300 app tests passed** before the release commit. `release.sh build` reruns the suites on it.
+- Not checked by hand: the right-click menu, scrolling with the wheel during a drag, and every dialog other than rename.
+
 ## Gloamux 1.4.3 (build 12): how each `ssh` run in a terminal went (November 25, 2026)
 
 Built on `5421375` (1.4.2 build 11). After an `ssh` run in a connection's terminal, the Session Log records **SSH connected** or **SSH connection failed** with the reason `ssh` showed. `TypedSSH` reads the command and its messages; `CommandCapture` decides when a prompt waits below it, or when the next command runs.

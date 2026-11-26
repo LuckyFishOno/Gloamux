@@ -53,9 +53,8 @@ struct RemoteDesktopPane: View {
                     if let fingerprint = connection.pendingFingerprint {
                         Text(T("Verify the RDP server certificate fingerprint before trusting it."))
                         Text(fingerprint).appFont(.caption.monospaced()).textSelection(.enabled)
-                        HStack {
-                            Button(T("Cancel")) { connection.dismissFingerprint() }
-                            Button(T("Trust this certificate")) { trustCertificate() }
+                        DialogActions(cancel: { connection.dismissFingerprint() }, title: T("Trust this certificate"), returnConfirms: false) {
+                            trustCertificate()
                         }
                     } else if connection.phase == .connecting {
                         ProgressView(T("Connecting…"))
@@ -195,11 +194,8 @@ private struct GatewayHostKey: View {
                 Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
                 Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled)
-                HStack {
-                    Button(T("Cancel")) { gateway.answerHostKey(approve: false, knownHosts: model.knownHosts) }
-                    Spacer()
-                    Button(T("Trust and connect")) { gateway.answerHostKey(approve: true, knownHosts: model.knownHosts) }.buttonStyle(.appProminent)
-                }
+                DialogActions(cancel: { gateway.answerHostKey(approve: false, knownHosts: model.knownHosts) }, title: T("Trust and connect"),
+                              returnConfirms: false) { gateway.answerHostKey(approve: true, knownHosts: model.knownHosts) }
             }.padding(24).frame(width: 530)
         }
     }

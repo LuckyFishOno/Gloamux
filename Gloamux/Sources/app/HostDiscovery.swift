@@ -571,11 +571,9 @@ struct ContainerSessionEditor: View {
                     .padding(.vertical, 2)
                 }
             } else {
-                HStack {
-                    Button(T("Cancel"), action: cancel).keyboardShortcut(.cancelAction)
-                    Spacer()
+                DialogActions(cancel: cancel, title: T(editing == nil ? "Save" : "Save changes"),
+                              enabled: !(draft == nil || Optional(name).nonEmpty == nil), returnConfirms: false, confirm: { save() }) {
                     Button(T("Open")) { open() }.disabled(draft == nil)
-                    Button(T(editing == nil ? "Save" : "Save changes")) { save() }.buttonStyle(.appProminent).disabled(draft == nil || Optional(name).nonEmpty == nil)
                 }
             }
         }

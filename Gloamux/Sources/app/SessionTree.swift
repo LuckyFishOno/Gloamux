@@ -264,6 +264,20 @@ public enum SessionTreeSorting: String, Codable, CaseIterable, Sendable {
         guard sorting != self.sorting else { return }
         try write(nodes, sorting: sorting); self.sorting = sorting
     }
+    /// Keeps the order on screen as the custom order and switches to it, so a drag can rearrange a tree sorted by name.
+    public func keepShownOrder() throws {
+        guard sorting != .custom else { return }
+        var position: [UUID: Int] = [:]
+        func walk(_ parent: UUID?) {
+            for (index, item) in children(of: parent).enumerated() {
+                position[item.id] = index
+                if item.isFolder { walk(item.id) }
+            }
+        }
+        walk(nil)
+        let updated = nodes.map { item -> SessionTreeNode in var item = item; item.order = position[item.id] ?? item.order; return item }
+        try write(updated, sorting: .custom); nodes = updated; sorting = .custom
+    }
     public var destination: UUID? {
         guard let current = node(selection) else { return nil }
         return current.isFolder ? current.id : current.parent

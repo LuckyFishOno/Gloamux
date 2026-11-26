@@ -56,18 +56,13 @@ struct LoginChallengeSheet: View {
                     .onSubmit { advance(from: index) }
                 }
             }
-            HStack {
-                Button(T("Cancel")) { answer(nil) }.keyboardShortcut(.cancelAction)
-                Spacer()
+            DialogActions(cancel: { answer(nil) }, title: T("Connect"), identifier: "answerLoginButton", confirm: { answer(answers) }) {
                 if prompt.asksSessionKey {
                     Button(T("Paste"), systemImage: "doc.on.clipboard") {
                         if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty { answers = [text] }
                     }
                     .help(T("Paste from the clipboard"))
                 }
-                Button(T("Connect")) { answer(answers) }
-                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("answerLoginButton")
             }
         }
         .padding(24)

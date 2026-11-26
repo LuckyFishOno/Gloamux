@@ -60,12 +60,8 @@ struct ProfileImportView: View {
                 Spacer()
             }
             if let error { Text(T(error)).foregroundStyle(.red).textSelection(.enabled) }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Import")) { commit() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .disabled(draft?.entries.isEmpty != false || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            DialogActions(cancel: { dismiss() }, title: T("Import"),
+                          enabled: !(draft?.entries.isEmpty != false || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)) { commit() }
         }
         .padding(24)
         .frame(width: 600, height: 475)

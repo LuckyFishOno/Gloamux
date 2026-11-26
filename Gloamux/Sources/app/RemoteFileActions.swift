@@ -117,11 +117,7 @@ struct PermissionsSheet: View {
                     .onChange(of: octal) { _, text in if let value = UInt32(text, radix: 8), value <= 0o777, text.count == 3 { bits = value } }
                 Text(PermissionsSheet.symbolic(bits)).appFont(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
             }
-            HStack {
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button(T("Apply")) { apply(bits); dismiss() }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-            }
+            DialogActions(cancel: { dismiss() }, title: T("Apply")) { apply(bits); dismiss() }
         }
         .padding(22).frame(width: 340)
     }

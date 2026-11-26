@@ -1146,7 +1146,8 @@ struct SessionPane: View {
                 Text(prompt.endpoint).appFont(.headline)
                 Text(T("Compare this fingerprint with the server administrator before trusting this connection."))
                 Text(prompt.fingerprint).appFont(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier("hostFingerprint")
-                HStack { Button(T("Cancel")) { model.answerHostKey(tab, approve: false) }; Spacer(); Button(T("Trust and connect")) { model.answerHostKey(tab, approve: true) }.buttonStyle(.appProminent).accessibilityIdentifier("trustHostButton") }
+                DialogActions(cancel: { model.answerHostKey(tab, approve: false) }, title: T("Trust and connect"), returnConfirms: false,
+                              identifier: "trustHostButton") { model.answerHostKey(tab, approve: true) }
             }.padding(24).frame(width: 530)
         }
         .sheet(item: $reviewedHostKey) { change in
@@ -1157,14 +1158,10 @@ struct SessionPane: View {
                     .fixedSize(horizontal: false, vertical: true)
                 fingerprint(T("Saved fingerprint"), value: change.savedFingerprint)
                 fingerprint(T("New fingerprint"), value: change.receivedFingerprint)
-                HStack {
-                    Spacer()
-                    Button(T("Cancel")) { reviewedHostKey = nil }.keyboardShortcut(.cancelAction)
-                    Button(T("Update key and reconnect"), role: .destructive) {
-                        reviewedHostKey = nil
-                        Task { await model.updateHostKeyAndReconnect(tab, change: change) }
-                    }
-                    .accessibilityIdentifier("updateHostKeyButton")
+                DialogActions(cancel: { reviewedHostKey = nil }, title: T("Update key and reconnect"), warns: true, returnConfirms: false,
+                              identifier: "updateHostKeyButton") {
+                    reviewedHostKey = nil
+                    Task { await model.updateHostKeyAndReconnect(tab, change: change) }
                 }
             }
             .padding(24).frame(width: 555)

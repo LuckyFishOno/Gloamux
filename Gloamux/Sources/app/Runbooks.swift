@@ -438,13 +438,7 @@ private struct RunbookDocumentView: View {
                 Label(T("Without shell integration, Gloamux sends every block at once and cannot stop after a failure."), systemImage: "info.circle")
                     .foregroundStyle(.secondary).appFont(.callout)
             }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { confirming = nil }.keyboardShortcut(.cancelAction)
-                Button(T("Run")) { confirming = nil; run(blocks, in: tab) }
-                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .tint(risky ? .red : nil)
-            }
+            DialogActions(cancel: { confirming = nil }, title: T("Run"), warns: risky) { confirming = nil; run(blocks, in: tab) }
         }
         .padding(22).frame(width: 560)
     }

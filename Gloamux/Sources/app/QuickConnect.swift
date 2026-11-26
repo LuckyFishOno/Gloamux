@@ -125,13 +125,8 @@ struct QuickConnect: View {
                     .onChange(of: selection) { _, id in if let id { scroll.scrollTo(id) } }
                 }
             }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(T("Connect")) { connect() }
-                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                    .disabled(matches.isEmpty && SavedConnection.quickTarget(search) == nil)
-            }
+            DialogActions(cancel: { dismiss() }, title: T("Connect"),
+                          enabled: !(matches.isEmpty && SavedConnection.quickTarget(search) == nil)) { connect() }
         }
         .padding(22)
         .frame(width: 580, height: 435)

@@ -90,6 +90,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 
 ### 連線樹
 
+- 連線樹是 AppKit 的 `NSOutlineView`（`SessionOutline`），拖曳使用系統的拖曳工作階段：拖到邊緣會捲動，也會跟著滾輪。`SessionOutlineDrop.resolve` 把大綱提出的位置轉成上層資料夾與要排在前面的項目；依名稱排序時放在兩列之間，會先呼叫 `SessionTreeStore.keepShownOrder()`。右鍵選單由 `SessionTreeView.contextMenu(for:)` 用 AppKit 建立，對話框底部統一使用 `DialogActions` 按鈕列。
 - 使用者拖曳排列後，`sessions.json` 的項目可能帶有 `order`。`SessionTreeStore.children(of:)` 先列出有排序的項目，再列出沒排序的項目（資料夾優先、依名稱），所以舊目錄能保持原本的順序。
 - `drop(_:on:_:)` 套用拖曳，即使連線樹依名稱排序，也會依自訂順序重新編號該資料夾。
 - 目錄中可選的 `sorting` 欄位（`nameAscending` 或 `nameDescending`；沒有就是自訂）決定 `children(of:)` 如何列出項目。

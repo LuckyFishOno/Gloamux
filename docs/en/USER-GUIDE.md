@@ -102,8 +102,9 @@ For a terminal on this Mac, choose **File › New local terminal** (⌘T). With 
 ### The session tree
 
 - Click a folder to open or close it. Double-click a saved terminal connection to open it in a new tab.
-- Drag an item above or below another to reorder it, onto a folder to move it inside, or onto **Root folder** to move it to the top level.
-- The sort button next to **+** lists items in your custom order, **Name (ascending)**, or **Name (descending)**, with folders first. While sorted by name, dragging only moves an item into a folder, and the custom order is kept for when you switch back.
+- Use the arrow keys to move through the tree and to open or close folders. Return opens the selected connection or opens and closes the selected folder, and Delete asks before removing the selected item. Type a name to jump to it.
+- Drag an item between two rows to place it there, onto the middle of a folder to move it inside, or below the last row to move it to the top level. A folder's top and bottom edges place the item before or after that folder, so folders change places as easily as connections. The tree scrolls when you drag near its top or bottom edge, and a closed folder opens when you hold an item over it.
+- The sort button next to **+** lists items in your custom order, **Name (ascending)**, or **Name (descending)**, with folders first. Dragging an item between rows while sorted by name keeps the order on screen as your custom order and switches to **Custom**, so the item stays where you dropped it.
 - **Search sessions** filters the tree. Searching for a folder lists everything inside it.
 - A dot after each visible saved host shows whether its SSH port answers. See [Safety](#11-safety).
 

@@ -184,13 +184,9 @@ struct SFTPCommandSheet: View {
                 Label(T(shown), systemImage: "exclamationmark.circle").foregroundStyle(.red).appFont(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                Spacer()
-                Button(T("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+            DialogActions(cancel: { dismiss() }, title: T("Save and connect"), enabled: command != nil, identifier: "saveSFTPSession",
+                          confirm: { save(connects: true) }) {
                 Button(T("Save")) { save(connects: false) }.disabled(command == nil)
-                Button(T("Save and connect")) { save(connects: true) }
-                    .buttonStyle(.appProminent).keyboardShortcut(.defaultAction).disabled(command == nil)
-                    .accessibilityIdentifier("saveSFTPSession")
             }
         }
         .padding(24)

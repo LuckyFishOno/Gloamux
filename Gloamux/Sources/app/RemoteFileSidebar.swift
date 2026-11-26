@@ -303,12 +303,7 @@ private struct RemoteTreePanel: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(request.title).appFont(.headline)
                 TextField(T("Name"), text: $nameDraft).onSubmit { finish(request) }
-                HStack {
-                    Button(T("Cancel")) { naming = nil }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button(request.confirm) { finish(request) }.buttonStyle(.appProminent).keyboardShortcut(.defaultAction)
-                        .disabled(!Self.validName(nameDraft))
-                }
+                DialogActions(cancel: { naming = nil }, title: request.confirm, enabled: Self.validName(nameDraft)) { finish(request) }
             }.padding(22).frame(width: 340)
         }
     }

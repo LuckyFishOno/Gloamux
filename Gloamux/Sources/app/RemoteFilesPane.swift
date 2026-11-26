@@ -92,12 +92,12 @@ struct RemoteFilesPane: View {
                 if let selectedFile, let warning = FileNameCheck.warning(original: selectedFile, chosen: renameTo) {
                     Label(warning, systemImage: "exclamationmark.triangle.fill").appFont(.caption).foregroundStyle(.orange)
                 }
-                HStack { Button(T("Cancel")) { renameVisible = false }; Spacer(); Button(T("Rename")) {
+                DialogActions(cancel: { renameVisible = false }, title: T("Rename"), enabled: !renameTo.isEmpty) {
                     if let old = selectedFile, let new = FileNameCheck.confirm(original: old, chosen: renameTo) {
                         Task { await model.rename(tab, from: old, to: new); if tab.error == nil { selectedFile = new } }
                     }
                     renameVisible = false
-                }.disabled(renameTo.isEmpty) }
+                }
             }.padding(24).frame(width: 360)
         }
         .alert(T("Delete remote file?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
