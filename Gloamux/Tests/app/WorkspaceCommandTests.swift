@@ -56,6 +56,28 @@ import GloamuxNetwork
         catch WorkspaceError.invalid {}
     }
 
+    func testNewTabSettingTakesLocalFormOrASavedSession() async throws {
+        let model = try workspace()
+        let get = try await run(["settings", "get", "terminal.new-tab"], model) as? [String: Any]
+        XCTAssertEqual(get?["terminal.new-tab"] as? String, "local", "The default is a local terminal")
+        let web = try model.sessionTree.add(name: "web", parent: nil, connection: SavedConnection(host: "web.test", username: "u"))
+        let byName = try await run(["settings", "set", "terminal.new-tab", "web"], model) as? [String: Any]
+        XCTAssertEqual(byName?["terminal.new-tab"] as? String, web.uuidString, "A name is stored as the session's ID")
+        try await run(["settings", "set", "terminal.new-tab", web.uuidString.lowercased()], model)
+        XCTAssertEqual(WorkspaceCommand.preferences.string(forKey: TerminalPreferences.newTabKey), web.uuidString)
+        try await run(["settings", "set", "terminal.new-tab", "form"], model)
+        XCTAssertEqual(WorkspaceCommand.preferences.string(forKey: TerminalPreferences.newTabKey), "form")
+
+        let folder = try model.sessionTree.add(name: "Folder", parent: nil)
+        _ = try model.sessionTree.add(name: "web", parent: folder, connection: SavedConnection(host: "web2.test", username: "u"))
+        for bad in ["web", "Folder", folder.uuidString, "nowhere"] {
+            do { try await run(["settings", "set", "terminal.new-tab", bad], model); XCTFail("Accepted \(bad)") }
+            catch is WorkspaceCommand.Usage {} catch WorkspaceError.invalid {}
+        }
+        let reset = try await run(["settings", "reset", "terminal.new-tab"], model) as? [String: Any]
+        XCTAssertEqual(reset?["terminal.new-tab"] as? String, "local")
+    }
+
     func testTriggersCanBeAddedEditedDisabledAndRemoved() async throws {
         let model = try workspace()
         let added = try await run(["triggers", "add", "Build done", "BUILD (OK|FAILED)", "sound", "regex", "match-case"], model) as? [String: Any]

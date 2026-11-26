@@ -30,7 +30,7 @@ extension WorkspaceCommand {
         Setting(name: "terminal.font-size", key: TerminalPreferences.fontSizeKey, kind: .number(TerminalPreferences.fontSizes, TerminalPreferences.defaultFontSize)),
         Setting(name: "terminal.cursor", key: TerminalPreferences.cursorKey, kind: .choice(CursorShape.allCases.map(\.rawValue), CursorShape.block.rawValue)),
         Setting(name: "terminal.cursor-blinks", key: TerminalPreferences.blinkKey, kind: .bool(false)),
-        Setting(name: "terminal.new-tab-local", key: TerminalPreferences.newTabLocalKey, kind: .bool(false)),
+        Setting(name: "terminal.new-tab", key: TerminalPreferences.newTabKey, kind: .text(NewTabChoice.local.raw)),
         Setting(name: "terminal.opacity", key: TerminalPreferences.opacityKey, kind: .number(0.3...1, 1)),
         Setting(name: "terminal.scrollback", key: TerminalPreferences.scrollbackKey,
                 kind: .choice(TerminalPreferences.scrollbackChoices.map(String.init), String(TerminalPreferences.defaultScrollback))),
@@ -74,6 +74,20 @@ extension WorkspaceCommand {
         case .text(let fallback): return stored as? String ?? fallback
         case .list(let fallback, _): return stored as? [String] ?? fallback
         }
+    }
+
+    /// `local`, `form`, or a saved session by ID or by a name only one session has.
+    @MainActor static func newTabChoice(_ raw: String, _ tree: SessionTreeStore) throws -> NewTabChoice {
+        if raw == "local" { return .local }
+        if raw == "form" { return .form }
+        let sessions = tree.nodes.filter { !$0.isFolder }
+        if let found = sessions.first(where: { $0.id.uuidString.caseInsensitiveCompare(raw) == .orderedSame }) { return .saved(found.id) }
+        let named = sessions.filter { $0.name == raw }
+        guard named.count == 1 else {
+            throw named.isEmpty ? Usage("Use local, form, or a saved session's ID or name. Run gloamux sessions list.")
+                : WorkspaceError.invalid("More than one saved session is named \(raw). Use its ID.")
+        }
+        return .saved(named[0].id)
     }
 
     @MainActor static func settings(_ action: String, _ args: [String], _ model: WorkspaceModel, live: Bool) throws -> Any {
@@ -125,6 +139,8 @@ extension WorkspaceCommand {
             case .choice(let choices, _):
                 guard choices.contains(raw) else { throw Usage("Choose \(choices.joined(separator: ", ")).") }
                 stored = found.key == TerminalPreferences.scrollbackKey ? Int(raw) ?? TerminalPreferences.defaultScrollback : raw
+            case .text where found.key == TerminalPreferences.newTabKey:
+                stored = try newTabChoice(raw, model.sessionTree).raw
             case .text:
                 guard raw.count <= 128 else { throw Usage("Enter up to 128 characters.") }
                 if found.key == TerminalPreferences.fontKey, !raw.isEmpty, !TerminalPreferences.monospacedFamilies().contains(raw) {

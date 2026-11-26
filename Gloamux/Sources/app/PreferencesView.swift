@@ -139,6 +139,7 @@ private struct GeneralSettings: View {
     @ObservedObject var model: WorkspaceModel
     @AppStorage(WorkspaceModel.restoreTabsKey) private var reopenTabs = false
     @AppStorage(WorkspaceModel.lockIdleKey) private var lockAfter = 0
+    @AppStorage(MenuBarSettings.key) private var menuBar = true
     @ObservedObject private var updates = AppUpdates.shared
 
 
@@ -177,6 +178,12 @@ private struct GeneralSettings: View {
                     InfoButton(T("Covers every terminal after this long without using Gloamux. Sessions stay connected. Unlock with Touch ID or the Mac password. Lock at any time with ⌃⌘L."))
                 }
             }
+            Toggle(isOn: $menuBar) {
+                HStack(spacing: 6) {
+                    Text(T("Show in menu bar"))
+                    InfoButton(T("Quick connect, recent sessions, and saved tunnels from the menu bar."))
+                }
+            }
             if updates.isAvailable {
                 Toggle(isOn: Binding(get: { updates.checksAutomatically }, set: { updates.checksAutomatically = $0 })) {
                     HStack(spacing: 6) {
@@ -205,14 +212,13 @@ private struct GeneralSettings: View {
     }
 }
 
-/// Shell integration, notifications, the menu bar item, and how the terminal behaves: scrollback, the bell, pasting,
+/// What new tabs open, shell integration, notifications, and how the terminal behaves: scrollback, the bell, pasting,
 /// the mouse, the clipboard, and session logs.
 private struct TerminalSettings: View {
     @ObservedObject var model: WorkspaceModel
     @AppStorage(ShellIntegration.localKey) private var local = true
     @AppStorage(ShellIntegration.remoteKey) private var remote = false
     @AppStorage(ShellIntegration.notifyKey) private var notifyAfter = 10.0
-    @AppStorage(MenuBarSettings.key) private var menuBar = true
     @AppStorage(TerminalPreferences.scrollbackKey) private var scrollback = TerminalPreferences.defaultScrollback
     @AppStorage(TerminalPreferences.bellKey) private var bell = BellStyle.flash.rawValue
     @AppStorage(TerminalPreferences.pasteKey) private var confirmPaste = true
@@ -228,14 +234,17 @@ private struct TerminalSettings: View {
     @AppStorage(TerminalPreferences.keepAliveKey) private var keepAlive = 30
     @AppStorage(TerminalPreferences.terminalTypeKey) private var terminalType = "xterm-256color"
     @AppStorage(TerminalPreferences.reconnectKey) private var reconnect = true
-    @AppStorage(TerminalPreferences.newTabLocalKey) private var newTabLocal = false
+    @Environment(\.appTextScale) private var textScale
 
     var body: some View {
         Form {
-            Section {
-                Toggle(isOn: $newTabLocal) {
-                    label(T("New tabs open a local terminal"), T("The + buttons open a terminal on this Mac at once, without the New connection form. New connection (⇧⌘N) still opens the form."))
+            Section(T("New tabs")) {
+                NewTabPicker(tree: model.sessionTree)
+                Toggle(isOn: $confirmClose) {
+                    label(T("Confirm before closing"), T("Asks before closing a tab that is still connected, or a local terminal where a command is running."))
                 }
+            }
+            Section(T("Shell integration")) {
                 Toggle(isOn: $local) {
                     label(T("Local shell integration"), T("zsh reports each prompt, command, exit status, and folder. Then ⌘↑ and ⌘↓ jump between prompts, the pane header shows the last result, and ⌘T opens in the same folder. Applies to new terminals."))
                 }
@@ -252,11 +261,8 @@ private struct TerminalSettings: View {
                 } label: {
                     label(T("Notify after long commands"), T("Only for tabs you are not looking at. Needs shell integration."))
                 }
-                Toggle(isOn: $menuBar) {
-                    label(T("Show in menu bar"), T("Quick connect, recent sessions, and saved tunnels from the menu bar."))
-                }
             }
-            Section {
+            Section(T("SSH connections")) {
                 AppPicker(title: T("Check idle SSH connections"), selection: $keepAlive, current: Self.duration(keepAlive)) {
                     Text(T("Off")).tag(0)
                     Text("15 s").tag(15)
@@ -275,7 +281,7 @@ private struct TerminalSettings: View {
                     label(T("Reconnect automatically"), T("When a saved session loses its connection, Gloamux connects again after 2, 5, 10, 30, and 60 seconds. Sessions set to ask before each connection wait for you. After the Mac wakes, every connection is checked at once."))
                 }
             }
-            Section {
+            Section(T("Screen and input")) {
                 AppPicker(title: T("Scrollback"), selection: $scrollback, current: String(format: T("%@ lines"), scrollback.formatted())) {
                     ForEach(TerminalPreferences.scrollbackChoices, id: \.self) { lines in
                         Text(String(format: T("%@ lines"), lines.formatted())).tag(lines)
@@ -297,9 +303,6 @@ private struct TerminalSettings: View {
                 Toggle(isOn: $mouse) {
                     label(T("Send mouse to programs"), T("vim, tmux, htop, and similar programs get clicks, drags, and the scroll wheel. Hold Option to select text instead."))
                 }
-                Toggle(isOn: $confirmClose) {
-                    label(T("Confirm before closing"), T("Asks before closing a tab that is still connected, or a local terminal where a command is running."))
-                }
                 Toggle(isOn: $rightClickPaste) {
                     label(T("Right-click pastes"), T("As in PuTTY. Control-click still shows the menu."))
                 }
@@ -310,7 +313,7 @@ private struct TerminalSettings: View {
                     label(T("Let programs copy to the clipboard"), T("Programs can put text on this Mac's clipboard with OSC 52, such as yanking in vim or tmux over SSH. A server you connect to could also change your clipboard. Programs can never read it."))
                 }
             }
-            Section {
+            Section(T("Logs and history")) {
                 Toggle(isOn: $logEverySession) {
                     label(T("Log every session"), T("Saves what each terminal shows to a file, from when it opens until it closes. Likely secrets are masked. You can also start a log for one terminal from the Terminal menu."))
                 }
@@ -338,7 +341,8 @@ private struct TerminalSettings: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .scrollDisabled(true)
+        // The pane is taller than most screens leave room for, so it scrolls in a window of fixed height.
+        .frame(height: (520 * max(1, textScale)).rounded())
         .padding(-8)
     }
 
@@ -353,6 +357,49 @@ private struct TerminalSettings: View {
             InfoButton(info)
         }
     }
+}
+
+/// What the + buttons open: Default (a terminal on this Mac), the New connection form, or a saved session.
+private struct NewTabPicker: View {
+    @ObservedObject var tree: SessionTreeStore
+    @AppStorage(TerminalPreferences.newTabKey) private var choice = NewTabChoice.local.raw
+
+    /// Saved sessions in tree order, each with the folders it sits in.
+    private var sessions: [(id: UUID, title: String)] {
+        tree.connections(in: nil).map { node in
+            var names = [node.name], parent = node.parent
+            while let id = parent, let folder = tree.node(id) { names.insert(folder.name, at: 0); parent = folder.parent }
+            return (node.id, names.joined(separator: " › "))
+        }
+    }
+
+    var body: some View {
+        let sessions = sessions
+        // A saved session that was deleted falls back to the default, so the picker shows that.
+        let shown: String = switch NewTabChoice(choice) {
+        case .form: NewTabChoice.form.raw
+        case .saved(let id) where sessions.contains { $0.id == id }: id.uuidString
+        default: NewTabChoice.local.raw
+        }
+        AppPicker(title: T("New tabs open"), selection: Binding(get: { shown }, set: { choice = $0 }),
+                  current: shown == NewTabChoice.local.raw ? Self.defaultTitle : shown == NewTabChoice.form.raw ? T("New connection form")
+                    : sessions.first { $0.id.uuidString == shown }?.title ?? Self.defaultTitle) {
+            Text(Self.defaultTitle).tag(NewTabChoice.local.raw)
+            Text(T("New connection form")).tag(NewTabChoice.form.raw)
+            if !sessions.isEmpty {
+                Divider()
+                ForEach(sessions, id: \.id) { Text($0.title).tag($0.id.uuidString) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(T("New tabs open")).fixedSize(horizontal: false, vertical: true)
+                InfoButton(T("What the + buttons open. Default is a terminal on this Mac. A saved session connects at once; if it is deleted, the default opens. New connection (⇧⌘N) still opens the form."))
+            }
+        }
+        .accessibilityIdentifier("newTabPicker")
+    }
+
+    static var defaultTitle: String { T("Default (127.0.0.1)") }
 }
 
 /// The terminal font, its size, the cursor, and the background's opacity.

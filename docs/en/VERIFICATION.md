@@ -4,6 +4,17 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.6 (build 15): what new tabs open, a steady terminal screen, and pickers (November 26, 2026)
+
+Built on `1b57fc3` (1.4.5 build 14).
+
+- **New tabs.** **Settings › Terminal › New tabs open** chooses what the **+** buttons open: **Default (127.0.0.1)**, a terminal on this Mac; the **New connection form**; or a saved session. The CLI setting `terminal.new-tab` replaces `terminal.new-tab-local`. Tests cover the default, the form, a saved session, a deleted session and a folder falling back to the default, and the CLI taking an ID or a name used by only one session.
+- **Settings › Terminal** is grouped under five headings and scrolls. **Show in menu bar** moved to **Settings › General**.
+- **Pickers.** On macOS 15 and later a picker opens its menu when the click is released, so a click on its name no longer opens and closes the menu at once. A test clicks the name and the arrows and checks that the menu stays open and that choosing an item sets the value.
+- **Terminal screen.** The view keeps the whole screen in sight instead of only the cursor's row, so running `top` again, or a prompt after `clear`, no longer shows scrollback lines above it with its last rows cut off. Typing, Return included, scrolls back down from the scrollback even with text selected. The viewport is a whole number of rows tall, and its padding lies outside the scrolling area. A test checks the screen's first and last rows at the edges, a short screen staying whole at the top, and Return from the scrollback.
+- **Tests.** Swift: 527 tests, 8 skipped, 0 failures, before the release run. The Swift and Rust suites run again in `release.sh build` on the release commit.
+- **On the Mac.** In a packaged copy, the Settings window showed the grouped Terminal pane and the picker as one button, and a fresh terminal showed its first line whole under the top padding. The user ran `top` twice by hand on an earlier build of this change, before the padding was moved to the top. Not checked: the opened picker menu, which needs a full-screen capture.
+
 ## Gloamux 1.4.5 (build 14): daily update checks on by default (November 26, 2026)
 
 Built on `39970bc` (1.4.4 build 13). The app's `Info.plist` now sets `SUEnableAutomaticChecks`, so Gloamux checks GitHub for a new version once a day without first asking. A user who turned **Check for updates automatically** off keeps that choice, because Sparkle reads the saved setting before the bundle default.

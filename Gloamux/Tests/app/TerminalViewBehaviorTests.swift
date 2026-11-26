@@ -54,6 +54,62 @@ import Terminal
         XCTAssertEqual(sent.last, 13)
     }
 
+    func testTheScreenStaysInViewBelowTheScrollbackAndTypingReturnsToIt() throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        addTeardownBlock { window.close() }
+        let scroll = TerminalScrollView(frame: window.contentView!.bounds)
+        scroll.hasVerticalScroller = true
+        let view = TerminalTextView(frame: scroll.bounds)
+        view.textContainerInset = NSSize(width: 18, height: 0)
+        view.textContainer?.widthTracksTextView = false
+        view.textContainer?.containerSize = NSSize(width: 100000, height: CGFloat.greatestFiniteMagnitude)
+        scroll.documentView = view
+        window.contentView?.addSubview(scroll)
+        let lineHeight = view.fonts.lineHeight
+        scroll.lineHeight = lineHeight
+        let clip = scroll.contentView
+        let above = scroll.isFlipped ? clip.frame.minY - scroll.bounds.minY : scroll.bounds.maxY - clip.frame.maxY
+        let below = scroll.isFlipped ? scroll.bounds.maxY - clip.frame.maxY : clip.frame.minY - scroll.bounds.minY
+        XCTAssertEqual(above, TerminalScrollView.padding, "The padding above is outside the scrolling area, and no more than that.")
+        XCTAssertGreaterThanOrEqual(below, TerminalScrollView.padding, "Below it gets what is left over.")
+        XCTAssertEqual((clip.frame.height / lineHeight).truncatingRemainder(dividingBy: 1), 0, accuracy: 0.001, "It is a whole number of lines tall.")
+        var prompt = TerminalLineRenderer(background: .black, foreground: .white, ansi: Array(repeating: .gray, count: 16)) { _, fallback, _ in fallback }
+        var cells = Array(repeating: Cell.blank, count: 40)
+        for (index, character) in "$ ".enumerated() { cells[index].character = character }
+        view.showTerminalLines([prompt.line(cells, cursorColumn: nil, cursorColor: nil)], dropped: 0, firstChanged: 0, cursorLine: 0, cursorColumnOffset: 2)
+        view.scrollToScreen()
+        XCTAssertEqual(clip.bounds.minY, 0, "A short screen stays at the top, its first line whole.")
+        let rows = Int(clip.bounds.height / lineHeight)
+        var renderer = TerminalLineRenderer(background: .black, foreground: .white, ansi: Array(repeating: .gray, count: 16)) { _, fallback, _ in fallback }
+        let lines = (0..<(200 + rows)).map { number -> NSAttributedString in
+            var cells = Array(repeating: Cell.blank, count: 40)
+            for (index, character) in "line \(number)".enumerated() { cells[index].character = character }
+            return renderer.line(cells, cursorColumn: nil, cursorColor: nil)
+        }
+        // A program such as top leaves the cursor on the screen's first row.
+        view.showTerminalLines(lines, dropped: 0, firstChanged: 0, cursorLine: 200, cursorColumnOffset: 0)
+        window.makeFirstResponder(view)
+        view.inputEnabled = true
+        var sent: [UInt8] = []
+        view.input = { sent += $0 }
+
+        view.scrollToScreen()
+        XCTAssertEqual(clip.bounds.minY, CGFloat(200) * lineHeight, accuracy: 1, "The screen's first row is at the top; no scrollback line shows above it.")
+        XCTAssertEqual(clip.bounds.maxY, CGFloat(200 + rows) * lineHeight, accuracy: 1, "And its last row is whole at the bottom.")
+
+        // Scrolled up into the scrollback, with text selected, Return still brings the screen back.
+        clip.scroll(to: NSPoint(x: 0, y: 0)); scroll.reflectScrolledClipView(clip)
+        view.setSelectedRange(NSRange(location: 0, length: 4))
+        let enter = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                                                   characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+        view.keyDown(with: enter)
+        XCTAssertEqual(sent, [13])
+        XCTAssertEqual(clip.bounds.minY, CGFloat(200) * lineHeight, accuracy: 1)
+        XCTAssertTrue(view.followsNextUpdate, "The output that answers the key is followed too.")
+    }
+
     func testFindHighlightsMatchesAndSteps() {
         let (_, view, _) = makeTerminal(lines: ["error one", "ok", "Error two", "error three"], rows: 4)
         var status = view.find(TerminalSearch(query: "error"), mode: .latest)

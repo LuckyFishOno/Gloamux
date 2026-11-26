@@ -80,30 +80,64 @@ struct AppPicker<Value: Hashable, Content: View, Title: View>: View {
         self.label = label()
     }
 
+    @State private var anchor = MenuAnchor.Box()
+
     var body: some View {
         LabeledContent {
-            Menu {
-                Picker(selection: $selection) { content } label: { Text(title) }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-            } label: {
-                HStack(spacing: 6) {
-                    Text(current).lineLimit(1).truncationMode(.tail)
-                    if fills { Spacer(minLength: 4) }
-                    Image(systemName: "chevron.up.chevron.down").imageScale(.small).fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+            Group {
+                if #available(macOS 15, *) {
+                    // A plain button that opens the menu once it is released. A SwiftUI Menu opens on the press, and a
+                    // press on its text could close the menu again at once.
+                    Button(action: showMenu) { face }
+                        .background(MenuAnchor(box: anchor))
+                } else {
+                    Menu { choices } label: { face }
+                        .menuStyle(.button)
+                        .menuIndicator(.hidden)
                 }
             }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
             .buttonStyle(AppButtonStyle(kind: .menu))
             .fixedSize(horizontal: !fills, vertical: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
             .accessibilityLabel(title)
             .accessibilityValue(current)
         } label: {
             label
         }
     }
+
+    private var choices: some View {
+        Picker(selection: $selection) { content } label: { Text(title) }
+            .pickerStyle(.inline)
+            .labelsHidden()
+    }
+
+    private var face: some View {
+        HStack(spacing: 6) {
+            Text(current).lineLimit(1).truncationMode(.tail)
+            if fills { Spacer(minLength: 4) }
+            Image(systemName: "chevron.up.chevron.down").imageScale(.small).fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// Opens the choices just below the button, with the current one checked.
+    @available(macOS 15, *)
+    private func showMenu() {
+        guard let view = anchor.view else { return }
+        let menu = NSHostingMenu(rootView: choices)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.isFlipped ? view.bounds.maxY + 4 : -4), in: view)
+    }
+}
+
+/// An empty view behind a control, so an AppKit menu can open next to it.
+private struct MenuAnchor: NSViewRepresentable {
+    final class Box { weak var view: NSView? }
+    let box: Box
+    func makeNSView(context: Context) -> NSView { let view = NSView(); box.view = view; return view }
+    func updateNSView(_ view: NSView, context: Context) { box.view = view }
 }
 
 /// The buttons at the foot of every Gloamux dialog, so they look and sit the same everywhere: other controls on the

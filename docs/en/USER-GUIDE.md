@@ -80,7 +80,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 3. Fill in the host, port, and username, and choose **Connect**.
 4. After the connection works, choose **Save** to keep it in the tree. Gloamux asks for a name.
 
-For a terminal on this Mac, choose **File › New local terminal** (⌘T). With **New tabs open a local terminal** on in **Settings › Terminal**, the **+** buttons open a local terminal at once instead of the form.
+For a terminal on this Mac, choose **File › New local terminal** (⌘T). The **+** buttons open what **New tabs open** in **Settings › Terminal** names: **Default (127.0.0.1)**, a terminal on this Mac; the **New connection form**; or one of your saved sessions, which connects at once. A saved session that was deleted opens the default instead. **New connection** (⇧⌘N) always opens the form.
 
 ### SSH connection form
 
@@ -558,18 +558,20 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 | **Language** (`language`) | The interface language, or the Mac's. |
 | **Reopen tabs at launch** (`workspace.reopen-tabs`) | Opens the sessions and local terminals that were open when Gloamux quit. Each connects on its own. |
 | **Lock the workspace** (`workspace.lock-after-minutes`) | Locks the workspace after this long without use, or **Never**. |
+| **Show in menu bar** (`menu-bar-extra`) | The menu bar icon with quick connect, recent sessions, and tunnels. |
 | **Check for updates automatically** | Checks GitHub for a new version once a day. |
 | **All settings** · **Export** / **Import** | Saves or restores everything in one file. See [Backup](#all-settings-in-one-file). |
 
 ### Terminal
 
+The settings are grouped under **New tabs**, **Shell integration**, **SSH connections**, **Screen and input**, and **Logs and history**, and the pane scrolls.
+
 | Setting | What it does |
 |---|---|
-| **New tabs open a local terminal** (`terminal.new-tab-local`) | The **+** buttons open a local terminal at once instead of the New connection form. |
+| **New tabs open** (`terminal.new-tab`) | What the **+** buttons open: **Default (127.0.0.1)**, a terminal on this Mac (`local`); the **New connection form** (`form`); or a saved session, which connects at once. The CLI takes the session's ID or a name only one session has. |
 | **Local shell integration** (`shell-integration.local`) | zsh reports prompts, commands, exit status, and folders. |
 | **SSH shell integration** (`shell-integration.ssh`) | Types a one-line hook into bash or zsh after an SSH terminal opens. |
 | **Notify after long commands** (`notify-after-seconds`) | Notifies when a command that ran this long finishes in a tab you are not looking at, or **Off**. |
-| **Show in menu bar** (`menu-bar-extra`) | The menu bar icon with quick connect, recent sessions, and tunnels. |
 | **Check idle SSH connections** (`ssh.keepalive-seconds`) | After this long without output, asks the server for a reply, so routers keep the connection open and a dead one is noticed. |
 | **Terminal type** (`terminal.type`) | The `TERM` value SSH sessions report. Change it only when a server lacks `xterm-256color`. |
 | **Reconnect automatically** (`ssh.reconnect`) | Reconnects dropped saved sessions after 2, 5, 10, 30, and 60 seconds. |

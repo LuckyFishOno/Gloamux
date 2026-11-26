@@ -617,10 +617,17 @@ enum ConnectionState: Equatable {
         selectTab(tab.id)
         return tab
     }
-    /// The + buttons: the New connection form, or a local terminal for those who set new tabs to open one.
+    /// The + buttons open what Settings › Terminal names: a local terminal, the New connection form, or a saved
+    /// session. A saved session that is gone, or cannot open in a tab, gives a local terminal.
     /// New connection itself (⇧⌘N) always opens the form.
     @discardableResult func newTab() -> SessionTab {
-        TerminalPreferences.newTabOpensLocal ? addLocalTab() : newConnectionTab()
+        switch TerminalPreferences.newTab {
+        case .local: return addLocalTab()
+        case .form: return newConnectionTab()
+        case .saved(let id):
+            if let node = sessionTree.node(id), !node.isFolder, let tab = openSaved(node) { return tab }
+            return addLocalTab()
+        }
     }
     @discardableResult public func addLocalTab(select: Bool = true) -> SessionTab {
         addLocalTab(select: select, launch: nil)

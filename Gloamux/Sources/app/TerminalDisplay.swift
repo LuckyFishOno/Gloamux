@@ -49,13 +49,16 @@ struct TerminalDisplay: NSViewRepresentable {
         text.isRichText = false; text.isVerticallyResizable = true; text.isHorizontallyResizable = true
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = false
         text.textContainer?.containerSize = NSSize(width: 100000, height: CGFloat.greatestFiniteMagnitude)
-        text.textContainerInset = NSSize(width: 18, height: 16)
+        // The padding above and below lies outside the scrolling area (see TerminalScrollView), so scrollback never
+        // shows through it.
+        text.textContainerInset = NSSize(width: 18, height: 0)
         // Lay out only the visible part of a long scrollback.
         text.layoutManager?.allowsNonContiguousLayout = true
         text.input = { bytes in model.typeTerminal(tab, bytes: bytes) }
         if resizes { text.sizeChanged = { rows, cols in model.resizeTerminal(tab, rows: rows, columns: cols) } }
         text.openLink = { [weak tab] link in TerminalLinks.open(link, local: tab?.isLocal ?? false) }
         scroll.documentView = text
+        scroll.lineHeight = text.fonts.lineHeight
         return scroll
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) {
@@ -89,6 +92,7 @@ struct TerminalDisplay: NSViewRepresentable {
         }
         let fonts = TerminalFonts.make(name: fontName, size: min(max(fontSize, TerminalPreferences.fontSizes.lowerBound), TerminalPreferences.fontSizes.upperBound))
         view.fonts = fonts
+        (scroll as? TerminalScrollView)?.lineHeight = fonts.lineHeight
         view.screen = screen
         view.applicationCursorKeys = screen.applicationCursorKeys
         view.bracketedPaste = screen.bracketedPaste
@@ -174,7 +178,12 @@ struct TerminalDisplay: NSViewRepresentable {
         if coordinator.revision != tab.screenRevision {
             coordinator.revision = tab.screenRevision
             // Stay on a search result or a selection instead of following new output.
-            if view.selectedRange().length == 0 && !view.hasFindResult { view.scrollRangeToVisible(view.terminalInsertionRange) }
+            // Typing follows the output even then. The view keeps the whole screen in sight, not just the cursor's row:
+            // a program that parks the cursor near the top, such as top, or a prompt after clear, still shows the screen.
+            if view.followsNextUpdate || (view.selectedRange().length == 0 && !view.hasFindResult) {
+                view.followsNextUpdate = false
+                view.scrollToScreen()
+            }
         }
     }
 
@@ -245,7 +254,24 @@ final class TerminalTextView: NSTextView {
         }
     }
     private(set) var terminalInsertionRange = NSRange(location: 0, length: 0)
+    /// Set by typing, so the next update follows the output even with text selected.
+    var followsNextUpdate = false
     private var lastSize = NSSize.zero
+
+    /// Scrolls to the bottom, where the terminal's screen fills the view.
+    func scrollToScreen() {
+        guard let storage = textStorage, let clip = enclosingScrollView?.contentView else { return }
+        scrollRangeToVisible(NSRange(location: storage.length, length: 0))
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: max(0, frame.height - clip.bounds.height)))
+        enclosingScrollView?.reflectScrolledClipView(clip)
+    }
+
+    /// Sends typing to the terminal and brings the screen back into view, as other terminals do.
+    private func type(_ bytes: [UInt8]) {
+        followsNextUpdate = true
+        scrollToScreen()
+        input?(bytes)
+    }
     override var acceptsFirstResponder: Bool { true }
     override var shouldDrawInsertionPoint: Bool { false }
     // Dropping a tab on the terminal splits the pane, so the text view must not take drops itself.
@@ -366,20 +392,20 @@ final class TerminalTextView: NSTextView {
            let bytes = TerminalKeyboard.metaBytes(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers ?? "",
                                                   control: event.modifierFlags.contains(.control),
                                                   applicationCursorKeys: applicationCursorKeys) {
-            input?(bytes); return
+            type(bytes); return
         }
         // While an input method is composing, every key belongs to it, Return and the arrows included.
         if !hasMarkedText(), let bytes = TerminalKeyboard.bytes(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers ?? "",
                                                               control: event.modifierFlags.contains(.control),
                                                               applicationCursorKeys: applicationCursorKeys) {
-            input?(bytes); return
+            type(bytes); return
         }
         interpretKeyEvents([event])
     }
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         guard inputEnabled else { return }
         let text = (insertString as? NSAttributedString)?.string ?? (insertString as? String) ?? ""
-        unmarkText(); input?(Array(text.utf8))
+        unmarkText(); type(Array(text.utf8))
     }
     override func cut(_ sender: Any?) { copy(sender) }
     override func paste(_ sender: Any?) {
@@ -392,7 +418,7 @@ final class TerminalTextView: NSTextView {
     }
     private func send(paste text: String) {
         guard let bytes = TerminalKeyboard.pasteBytes(text, bracketed: bracketedPaste) else { NSSound.beep(); return }
-        input?(bytes)
+        type(bytes)
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self else { return false }
@@ -540,7 +566,8 @@ final class TerminalTextView: NSTextView {
         lastSize = viewport
         pendingResize?.cancel()
         guard !inLiveResize else { return }
-        let rows = Int((viewport.height - 32) / fonts.lineHeight), cols = Int((viewport.width - 36) / fonts.cellWidth)
+        // The scroll view makes the viewport a whole number of rows tall.
+        let rows = Int((viewport.height / fonts.lineHeight + 0.01).rounded(.down)), cols = Int((viewport.width - 36) / fonts.cellWidth)
         let work = DispatchWorkItem { [weak self] in self?.sizeChanged?(max(5, rows), max(20, cols)) }
         pendingResize = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
@@ -872,6 +899,36 @@ final class TerminalScrollView: NSScrollView {
     override var scrollerStyle: NSScroller.Style {
         get { .overlay }
         set { super.scrollerStyle = .overlay }
+    }
+
+    /// Space above and below the text. It sits outside the clip view, so nothing scrolls through it.
+    static let padding: CGFloat = 16
+
+    /// The terminal's line height. The clip view is a whole number of lines tall, so at the bottom it shows exactly the
+    /// screen's rows: no part of a scrollback line above them, and none of them cut off. What is left over goes below.
+    var lineHeight: CGFloat = 0 {
+        didSet { if lineHeight != oldValue { tile() } }
+    }
+
+    override func tile() {
+        super.tile()
+        let frame = contentView.frame
+        guard frame.height > Self.padding * 2 else { return }
+        let available = frame.height - Self.padding * 2
+        let height = lineHeight > 0 ? max(lineHeight, (available / lineHeight).rounded(.down) * lineHeight) : available
+        // The padding stays the same at the top; what is left over goes to the bottom.
+        let y = isFlipped ? frame.minY + Self.padding : frame.maxY - Self.padding - height
+        contentView.frame = NSRect(x: frame.minX, y: y, width: frame.width, height: height)
+    }
+
+    /// With a see-through background the scroll view does not paint it, so the padding is painted here like the text area.
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard !drawsBackground else { return }
+        backgroundColor.setFill()
+        let clip = contentView.frame
+        NSBezierPath(rect: NSRect(x: bounds.minX, y: clip.maxY, width: bounds.width, height: bounds.maxY - clip.maxY)).fill()
+        NSBezierPath(rect: NSRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: clip.minY - bounds.minY)).fill()
     }
 
     private lazy var flashView: NSView = {

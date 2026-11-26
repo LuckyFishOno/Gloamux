@@ -64,21 +64,34 @@ import XCTest
                        "an unsaved connection is left out")
     }
 
-    func testNewTabsOpenALocalTerminalWhenSetAndNewConnectionKeepsTheForm() async throws {
-        let key = TerminalPreferences.newTabLocalKey
+    func testNewTabsOpenTheChosenConnectionAndNewConnectionKeepsTheForm() async throws {
+        let key = TerminalPreferences.newTabKey
         let saved = UserDefaults.standard.object(forKey: key)
         defer { if let saved { UserDefaults.standard.set(saved, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
         let model = try WorkspaceModel(storage: storage())
 
         UserDefaults.standard.removeObject(forKey: key)
-        let form = model.newTab()
-        XCTAssertFalse(form.isLocal, "By default a new tab is the New connection form")
-        XCTAssertNotNil(form.newConnectionType)
-
-        UserDefaults.standard.set(true, forKey: key)
         let local = model.newTab()
-        XCTAssertTrue(local.isLocal)
+        XCTAssertTrue(local.isLocal, "By default a new tab is a terminal on this Mac")
         XCTAssertEqual(model.selection, local.id)
+
+        UserDefaults.standard.set(NewTabChoice.form.raw, forKey: key)
+        let form = model.newTab()
+        XCTAssertFalse(form.isLocal)
+        XCTAssertNotNil(form.newConnectionType, "Form opens the New connection form")
+
+        let node = try model.sessionTree.add(name: "web", parent: nil, connection: SavedConnection(host: "web.example", username: "me"))
+        UserDefaults.standard.set(NewTabChoice.saved(node).raw, forKey: key)
+        let opened = model.newTab()
+        opened.savedConnectionTask?.cancel()
+        XCTAssertEqual(opened.savedSessionID, node, "A chosen saved session opens in the new tab")
+        XCTAssertFalse(opened.isLocal)
+
+        try model.sessionTree.remove(node)
+        XCTAssertTrue(model.newTab().isLocal, "A deleted saved session falls back to the default")
+        let folder = try model.sessionTree.add(name: "Folder", parent: nil)
+        UserDefaults.standard.set(NewTabChoice.saved(folder).raw, forKey: key)
+        XCTAssertTrue(model.newTab().isLocal, "A folder is not a connection")
         XCTAssertFalse(model.newConnectionTab().isLocal, "New connection still opens the form")
         for tab in model.tabs where tab.isLocal { await model.closeTab(tab) }
     }

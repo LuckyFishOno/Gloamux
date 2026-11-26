@@ -3,6 +3,28 @@ import CoreText
 import Foundation
 import Terminal
 
+/// What the + buttons open: a terminal on this Mac (the default), the New connection form, or a saved session.
+/// Stored as "local", "form", or the saved session's ID.
+enum NewTabChoice: Hashable {
+    case local, form, saved(UUID)
+
+    init(_ raw: String?) {
+        switch raw {
+        case "form": self = .form
+        case let raw?: self = UUID(uuidString: raw).map(NewTabChoice.saved) ?? .local
+        case nil: self = .local
+        }
+    }
+
+    var raw: String {
+        switch self {
+        case .local: "local"
+        case .form: "form"
+        case .saved(let id): id.uuidString
+        }
+    }
+}
+
 /// Terminal settings shared by the Settings window, the terminal view, and the workspace.
 enum TerminalPreferences {
     static let fontKey = "Gloamux.terminal.font"
@@ -24,7 +46,7 @@ enum TerminalPreferences {
     static let terminalTypeKey = "Gloamux.terminal.type"
     static let terminalTypes = ["xterm-256color", "xterm", "screen-256color", "tmux-256color", "linux", "vt220", "vt100"]
     static let reconnectKey = "Gloamux.ssh.reconnect"
-    static let newTabLocalKey = "Gloamux.terminal.newTabOpensLocal"
+    static let newTabKey = "Gloamux.terminal.newTab"
 
     static let defaultFontSize = 13.0
     static let fontSizes = 6.0...72.0
@@ -39,8 +61,8 @@ enum TerminalPreferences {
     }
     static var cursor: CursorShape { defaults.string(forKey: cursorKey).flatMap(CursorShape.init(rawValue:)) ?? .block }
     static var cursorBlinks: Bool { defaults.bool(forKey: blinkKey) }
-    /// The + buttons open a terminal on this Mac instead of the New connection form.
-    static var newTabOpensLocal: Bool { defaults.bool(forKey: newTabLocalKey) }
+    /// What the + buttons open.
+    static var newTab: NewTabChoice { NewTabChoice(defaults.string(forKey: newTabKey)) }
     static var opacity: Double { min(max(defaults.object(forKey: opacityKey) as? Double ?? 1, 0.3), 1) }
     static var scrollback: Int { defaults.object(forKey: scrollbackKey) as? Int ?? defaultScrollback }
     static var bell: BellStyle { defaults.string(forKey: bellKey).flatMap(BellStyle.init(rawValue:)) ?? .flash }

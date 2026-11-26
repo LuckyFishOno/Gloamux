@@ -11,7 +11,7 @@ public struct DesktopView: View {
     @State var showingSignIns = false
     @AppStorage("showsConnectionTree") var showsTree = true
     @AppStorage("showsComposeBar") var showsCompose = true
-    @AppStorage(TerminalPreferences.newTabLocalKey) var newTabOpensLocal = false
+    @AppStorage(TerminalPreferences.newTabKey) var newTabChoice = NewTabChoice.local.raw
     @AppStorage("sideRailPanel") var railPanel = SideRailPanel.sessions
     /// The Mac layout's remote file tree on the right, which follows the focused pane.
     @AppStorage("showsRemoteFilesSidebar") var showsFilesSidebar = true
@@ -337,7 +337,7 @@ public struct DesktopView: View {
                         Image(systemName: "plus").appFont(.system(size: 12, weight: .medium)).frame(width: 28, height: min(28, chrome.height)).contentShape(Rectangle())
                     }
                     .buttonStyle(StripPlusStyle())
-                    .help(T(newTabOpensLocal ? "New local terminal" : "New connection"))
+                    .help(newTabHelp)
                     .frame(width: addWidth)
                     Spacer(minLength: 0)
                 }
@@ -485,6 +485,17 @@ public struct DesktopView: View {
         }
         .help(T("Switch between file transfer, the terminal, and the session log"))
         .accessibilityIdentifier("workspaceModePicker")
+    }
+
+    /// What the + button opens, as Settings › Terminal names it.
+    var newTabHelp: String {
+        switch NewTabChoice(newTabChoice) {
+        case .form: return T("New connection")
+        case .saved(let id):
+            if let node = model.sessionTree.node(id), !node.isFolder { return String(format: T("Open %@"), node.name) }
+            return T("New local terminal")
+        case .local: return T("New local terminal")
+        }
     }
 
     var newConnectionMenu: some View {

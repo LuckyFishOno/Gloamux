@@ -4,7 +4,7 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.4.5 (build 14)**。
+目前版本：**Gloamux 1.4.6 (build 15)**。
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
