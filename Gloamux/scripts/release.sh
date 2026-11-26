@@ -85,6 +85,7 @@ build)
     [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "$version" ] || fail "app version is not $version"
     [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "$build" ] || fail "build number is not $build"
     [ "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$plist")" = "$feed_url" ] || fail "the update feed is not $feed_url"
+    [ "$(/usr/libexec/PlistBuddy -c 'Print :SUEnableAutomaticChecks' "$plist" 2>/dev/null)" = "true" ] || fail "daily update checks are not on by default"
     [ "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$plist")" = "$(sed -n 's/^update_key=//p' Gloamux/scripts/package-app.sh)" ] ||
         fail "the app's update key does not match package-app.sh"
     [ -f "$app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle" ] || fail "Sparkle.framework is missing"

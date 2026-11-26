@@ -471,7 +471,7 @@ AI 代理可以：
 ## 16. 更新
 
 - **Gloamux › 檢查更新** 會到 GitHub 查詢新版本、顯示更新內容，用 Gloamux 內建的金鑰驗證簽章後安裝，再重新開啟 Gloamux。
-- 第二次開啟 Gloamux 時，它會詢問是否每天自動檢查一次。可以在 **設定 › 一般** 的 **自動檢查更新** 改變。
+- Gloamux 預設每天檢查一次新版本，不會先詢問。要停止，請在 **設定 › 一般** 關閉 **自動檢查更新**。已經關閉的人，更新後仍維持關閉。
 - 更新檢查透過 HTTPS 向 GitHub 取得更新清單。請求的 User-Agent 包含 App 與 Sparkle 版本，GitHub 也會收到網路請求和來源 IP。Gloamux 維持關閉 Sparkle 系統資訊蒐集。見[資料保護](DATA-PROTECTION.md)。
 - 更新功能從 Gloamux 1.1 開始提供。Gloamux 1.0 沒有更新功能，請用新版 DMG 手動替換一次。
 

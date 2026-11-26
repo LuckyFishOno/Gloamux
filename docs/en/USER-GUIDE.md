@@ -471,7 +471,7 @@ What an agent can do:
 ## 16. Updates
 
 - **Gloamux › Check for Updates** looks for a newer release on GitHub, shows what changed, and installs it after checking its signature against the key built into Gloamux. Then Gloamux reopens.
-- The second time Gloamux opens, it asks whether to check automatically once a day. **Check for updates automatically** in **Settings › General** changes that.
+- Gloamux checks for a new version once a day without asking first. Turn **Check for updates automatically** off in **Settings › General** to stop that. A copy where you turned it off keeps that choice after updating.
 - Update checks request the feed from GitHub over HTTPS. The User-Agent includes the app and Sparkle versions. GitHub receives the network request and source IP. Gloamux leaves Sparkle system profiling disabled. See [Data protection](DATA-PROTECTION.md).
 - Updates start with Gloamux 1.1. Gloamux 1.0 has no updater, so replace it once with the newer DMG.
 

@@ -4,6 +4,14 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.4.5 (build 14): daily update checks on by default (November 26, 2026)
+
+Built on `39970bc` (1.4.4 build 13). The app's `Info.plist` now sets `SUEnableAutomaticChecks`, so Gloamux checks GitHub for a new version once a day without first asking. A user who turned **Check for updates automatically** off keeps that choice, because Sparkle reads the saved setting before the bundle default.
+
+- **Package.** A packaged copy carries `SUEnableAutomaticChecks` as `true`, and `plutil -lint` passed. `release.sh build` now refuses a bundle without it.
+- The Swift and Rust suites run in `release.sh build` on the release commit.
+- Not checked live: a fresh install skipping Sparkle's question and checking on its own, and an installed copy updating through **Check for Updates**.
+
 ## Gloamux 1.4.4 (build 13): session tree drag and drop, and dialog buttons (November 26, 2026)
 
 Built on `d2acdb0` (1.4.3 build 12). The session tree is now an AppKit outline view. Scrolling during a drag used to cancel the drag and leave its image stuck in the tree; the system drag session now scrolls at the edges and follows the scroll wheel. Folders can change places, also in a tree sorted by name, and every dialog ends with the same Cancel and main-action buttons.

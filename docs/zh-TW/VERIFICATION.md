@@ -4,6 +4,14 @@
 
 本頁依版本記錄每次發布背後的檢查，最新的在前。原始的 2026 年 11 月 24 日架構與壓力測試基準，使用 `b1e4638` 之上、收錄於 Gloamux 1.2 (build 3) 的修改，測試套件位於 `build/Gloamux.app`。
 
+## Gloamux 1.4.5 (build 14)：預設開啟每日檢查更新（2026 年 11 月 26 日）
+
+以 `39970bc`（1.4.4 build 13）為基礎。App 的 `Info.plist` 現在設定 `SUEnableAutomaticChecks`，Gloamux 會每天到 GitHub 檢查一次新版本，不先詢問。已經關閉 **自動檢查更新** 的使用者會保留原本的選擇，因為 Sparkle 會先讀取已儲存的設定，再看 App 內建的預設值。
+
+- **打包。** 打包的副本帶有值為 `true` 的 `SUEnableAutomaticChecks`，`plutil -lint` 通過。`release.sh build` 現在會拒絕沒有這個設定的 App。
+- Swift 與 Rust 測試套件由 `release.sh build` 在發布 commit 上執行。
+- 沒有實際檢查：全新安裝是否略過 Sparkle 的詢問並自行檢查，以及已安裝的版本透過 **檢查更新** 升級。
+
 ## Gloamux 1.4.4 (build 13)：連線樹拖放與對話框按鈕（2026 年 11 月 26 日）
 
 以 `d2acdb0`（1.4.3 build 12）為基礎。連線樹改用 AppKit 大綱檢視。以前拖曳中捲動會取消拖曳，拖曳的圖像卡在連線樹裡；現在改用系統的拖曳工作階段，拖到邊緣會捲動，也會跟著滾輪。資料夾可以互換位置，依名稱排序時也可以；所有對話框底部都是相同的取消與主要按鈕。

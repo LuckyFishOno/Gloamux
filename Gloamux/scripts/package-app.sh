@@ -5,8 +5,8 @@ build_path=${1:-/tmp/gloamux-build}
 output_dir=${2:-"$project_dir/../build"}
 # The latest release's version and build. Local builds use the same numbers, and the release commit raises them
 # (docs/en/RELEASING.md). GLOAMUX_VERSION and GLOAMUX_BUILD override them for one build.
-version=${GLOAMUX_VERSION:-1.4.4}
-build_number=${GLOAMUX_BUILD:-13}
+version=${GLOAMUX_VERSION:-1.4.5}
+build_number=${GLOAMUX_BUILD:-14}
 # Sparkle reads the update feed from here and installs only downloads signed with the matching private key, which
 # stays in the release maintainer's login Keychain (docs/en/RELEASING.md). GLOAMUX_FEED_URL points a test build elsewhere.
 feed_url=${GLOAMUX_FEED_URL:-https://github.com/LuckyFishOno/Gloamux/releases/latest/download/appcast.xml}
@@ -87,6 +87,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>SUFeedURL</key><string>$feed_url</string>
 <key>SUPublicEDKey</key><string>$update_key</string>
+<key>SUEnableAutomaticChecks</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>CFBundleURLTypes</key><array><dict>

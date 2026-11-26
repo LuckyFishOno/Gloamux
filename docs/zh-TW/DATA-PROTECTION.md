@@ -50,7 +50,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。資料�
 | 設定備份 | 使用者選的 `.gloamuxconfig` 檔及其 `.sha256` | S1 與 S2 | 寫成 `0600`。原樣帶上以主密碼加密的 `password-vault.json`；主密碼、這台 Mac 記住的密碼和 Secure Enclave 金鑰都不包含在內。只有備份含密碼庫時，還原才會取代密碼庫，而且會先把目前的密碼庫複製到 `Backups/`。 | 備份的其他部分是明文。拿到檔案的人可以用密碼庫的 PBKDF2 成本離線猜測主密碼，所以密碼庫的強度取決於那組密碼。`.sha256` 檔只能偵測損壞，無法偵測蓄意修改。 |
 | 外觀與版面 | `appearance.json`、`layout.json` | L | `0600`。 | 無。 |
 | 語言 | `UserDefaults` | L | 系統預設值。 | 無。 |
-| 更新偏好與上次檢查時間 | `UserDefaults`（`SUEnableAutomaticChecks`、`SULastCheckTime`） | L | 系統預設值。Sparkle 透過 HTTPS 從 GitHub 下載更新清單和 DMG，只安裝 EdDSA 簽章符合 `SUPublicEDKey` 的 DMG。請求的 User-Agent 包含 App 與 Sparkle 版本，GitHub 會收到請求和來源 IP。系統資訊蒐集預設關閉。更新清單和版本說明透過 HTTPS 取得，DMG 帶有 EdDSA 簽章。見 [Sparkle 設定文件](https://sparkle-project.org/documentation/customization/)。 | 版本是 ad hoc 簽署，沒有經過公證。簽署金鑰放在發布者的登入鑰匙圈；金鑰遺失時，使用者必須手動重新安裝。 |
+| 更新偏好與上次檢查時間 | `UserDefaults`（`SUEnableAutomaticChecks`、`SULastCheckTime`） | L | 系統預設值。App 的 `Info.plist` 預設開啟每日檢查，不先詢問；使用者關閉後，選擇會保留在 `UserDefaults`。Sparkle 透過 HTTPS 從 GitHub 下載更新清單和 DMG，只安裝 EdDSA 簽章符合 `SUPublicEDKey` 的 DMG。請求的 User-Agent 包含 App 與 Sparkle 版本，GitHub 會收到請求和來源 IP。系統資訊蒐集預設關閉。更新清單和版本說明透過 HTTPS 取得，DMG 帶有 EdDSA 簽章。見 [Sparkle 設定文件](https://sparkle-project.org/documentation/customization/)。 | 版本是 ad hoc 簽署，沒有經過公證。簽署金鑰放在發布者的登入鑰匙圈；金鑰遺失時，使用者必須手動重新安裝。 |
 
 ### 其他發現
 
