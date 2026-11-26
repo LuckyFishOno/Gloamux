@@ -134,6 +134,7 @@ struct GloamuxApplication: SwiftUI.App {
     /// Starts Sparkle in a packaged app, after the command-line paths above have already exited.
     func applicationDidFinishLaunching(_ notification: Notification) {
         SparkleUpdates.start()
+        DropdownWindow.shared.start()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
@@ -308,6 +309,7 @@ struct WorkspaceWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let window, notification.object as? NSWindow === window else { return }
             store.close(window)
+            DropdownWindow.shared.closed(window)
             self.window = nil
             workspace = nil
         }
@@ -321,6 +323,8 @@ struct WorkspaceWindow: View {
             workspace = store.attach(attached)
             applicationDelegate.newWindow = { openWindow(id: WorkspaceWindowID.main) }
             applicationDelegate.workspaces = { [weak store] in store?.openWindows ?? [] }
+            DropdownWindow.shared.openWindow = { openWindow(id: WorkspaceWindowID.main) }
+            DropdownWindow.shared.adopt(attached)
             if arguments.contains("--show-preferences") { openWindow(id: SettingsWindow.id) }
             if arguments.contains("--show-command-palette") { store.workspace?.showCommandPalette() }
             if let index = arguments.firstIndex(of: "--preview-theme"), index + 1 < arguments.count, let model = store.workspace {

@@ -52,7 +52,11 @@ public struct SSHConnectionSettings: Equatable, Sendable {
     public var host: String
     public var port: Int
     public var username: String
-    public init(host: String, port: Int = 22, username: String) { self.host = host; self.port = port; self.username = username }
+    /// The key exchanges offered: Modern, or Compatible for servers that have only finite-field Diffie-Hellman.
+    public var algorithms: SSHAlgorithmSet = .modern
+    public init(host: String, port: Int = 22, username: String, algorithms: SSHAlgorithmSet = .modern) {
+        self.host = host; self.port = port; self.username = username; self.algorithms = algorithms
+    }
 
     public init(profile: SessionProfile) throws {
         guard !profile.connection.host.isEmpty else { throw SSHError.invalidSettings("session has no host") }
@@ -471,6 +475,8 @@ public actor SSHSession {
         userAuth.watcher = watcher
         var config = SSHClientConfiguration(userAuthDelegate: userAuth, serverAuthDelegate: serverAuth)
         config.transportProtectionSchemes.append(SHA2AES128CTR.self)
+        // Finite-field groups come after the elliptic-curve ones, so a server that has both uses the faster exchange.
+        config.keyExchangeAlgorithms += settings.algorithms.keyExchanges
 
         return config
     }

@@ -13,7 +13,7 @@ import XCTest
 
     func testDefaultRegularAndBoldFontsResolveNerdSymbols() {
         let fonts = TerminalFonts.make(name: "", size: 13)
-        for base in [fonts.regular, fonts.bold] {
+        for base in [fonts.regular, fonts.bold, fonts.italic, fonts.boldItalic] {
             for character in symbols {
                 let text = String(character) as NSString
                 let actual = CTFontCreateForString(base as CTFont, text, CFRange(location: 0, length: text.length))
@@ -94,7 +94,7 @@ import XCTest
 
     func testCustomTextFontsKeepTheirFaceAndOrdinaryUnicodeFallback() {
         let fonts = TerminalFonts.make(name: "Menlo", size: 17)
-        for font in [fonts.regular, fonts.bold] {
+        for font in [fonts.regular, fonts.bold, fonts.italic, fonts.boldItalic] {
             XCTAssertEqual(font.familyName, "Menlo")
             for character in "中🐟✔" {
                 let text = String(character) as NSString

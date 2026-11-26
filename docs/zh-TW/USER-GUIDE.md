@@ -97,6 +97,7 @@
 | **連線後顯示遠端檔案** | 連線時打開檔案側欄。 |
 | **啟動命令** | shell 開啟後自動輸入的指令。 |
 | **檔案傳輸** | **SFTP，沒有 SFTP 時用 SCP**、**只用 SFTP** 或 **只用 SCP**。 |
+| **SSH 演算法** | **新式** 只提供橢圓曲線金鑰交換。**相容** 另外提供 `diffie-hellman-group16-sha512` 與 `diffie-hellman-group14-sha256`，供較舊的伺服器與網路設備使用。只提供 SHA-1 金鑰交換或 `ssh-rsa` 主機金鑰的伺服器仍無法連線。 |
 | **信任的憑證** | FTPS 伺服器憑證中你核對過的 SHA-256 指紋。 |
 
 ### 連線樹
@@ -133,6 +134,7 @@
 - 密碼、Ed25519、ECDSA 或 RSA 金鑰、`ssh-agent` 的金鑰，或這台 Mac Secure Enclave 裡的 Gloamux 金鑰。
 - 伺服器自己提出的問題（keyboard-interactive），例如輸入密碼後的驗證碼，會顯示在對話框中。連線的密碼會回答第一個密碼問題。答案絕不會被儲存。
 - 已存連線設定裡的 **登入方式** 可選 **密碼或金鑰**、**每次回答伺服器的問題**（不存密碼，所有問題都會顯示）或 **每次輸入 session key**。
+- 和 OpenSSH 的 `SendEnv LANG LC_*` 一樣，Gloamux 會把這台 Mac 的語系設定（`LANG` 與 `LC_*`）和常用終端模式（包括 UTF-8 輸入）提供給 shell，讓接受這些設定的伺服器正確顯示非 ASCII 文字並處理退格。
 
 ### SFTP 閘道與 session key
 
@@ -191,7 +193,7 @@
 
 ### 金鑰
 
-- **選擇私鑰** 使用現有的私鑰，例如 EC2 的 `.pem` 檔。選單提供 **選擇金鑰檔** 和 **產生新金鑰檔**。產生功能會在 `~/.ssh` 寫入 Ed25519 私鑰和 `.pub` 公鑰檔，可設定密語和註解。私鑰保留在 Mac，公鑰放進伺服器的 `~/.ssh/authorized_keys`。
+- **選擇私鑰** 使用現有的私鑰，例如 EC2 的 `.pem` 檔：OpenSSH、PEM（PKCS#1、SEC1 和 PKCS#8）或 PuTTY `.ppk` 格式的 Ed25519、ECDSA 或 RSA 金鑰。選單提供 **選擇金鑰檔** 和 **產生新金鑰檔**。產生功能會在 `~/.ssh` 寫入 Ed25519 私鑰和 `.pub` 公鑰檔，可設定密語和註解。私鑰保留在 Mac，公鑰放進伺服器的 `~/.ssh/authorized_keys`。
 - **建立公鑰** 會在這台 Mac 的 Secure Enclave 建立 P-256 金鑰。**查看公鑰** 顯示這把 Gloamux 金鑰的 OpenSSH 公鑰，與旁邊所選的私鑰檔各自獨立。按 **這條連線使用此金鑰** 即可使用 Secure Enclave 金鑰。**重新產生** 會取代它，伺服器也需要更新公鑰。
 - 用 × 移除金鑰前會先詢問。已存連線會停止使用它；密碼庫解鎖時，該帳號的已存密碼和金鑰密語也會一併刪除。
 - 仍會要求 Touch ID 的舊版 Secure Enclave 金鑰會顯示 **需要 Touch ID**，改用 Gloamux 金鑰即可停止詢問。
@@ -207,11 +209,21 @@
 ### 基本操作
 
 - 用滑鼠選取文字時，游標仍跟著 shell。寬度改變時，文字會重新換行。
+- 有新輸出時畫面會停在最底部，即使選取了文字也一樣。往上捲動就會停在原處，捲回最底部後再繼續跟著輸出。按住滑鼠選取時畫面不會動，放開後才補上新輸出。
 - 輸入法的組字會直接顯示在游標上。
 - ⌘-按一下可開啟連結，包括程式標記的連結（OSC 8）和一般網址。
 - vim、tmux、htop 這類程式可以收到滑鼠點按、拖曳和滾輪；按住 Option 則改為選取文字。
 - 貼上多行文字時會先顯示內容，讓你檢查或修改。
-- 響鈴會讓終端閃一下或發出聲音，並標記你沒在看的分頁。
+- 拷貝時，終端自動換行的列會接回同一行，每行結尾的空白會去掉。按兩下可選取整段路徑或主機名稱，包括 `/ - + \ ~ _ .`。
+- 按鍵送出的內容與 xterm、iTerm2 相同：Shift-Tab、F1 到 F12、Insert、Home、End、Page Up/Down，方向鍵與功能鍵搭配 Shift、Option、Control（例如 Control-← 送出 `ESC [1;5D`），⌃2、⌃6、⌃-、⌃/ 送出控制字元。八個基本色的粗體字會改用亮色顯示，斜體字使用字型的斜體（沒有斜體時改為傾斜），淡色字會調暗。
+- 八種基本色的粗體字會像 xterm 一樣改用亮色顯示，斜體和淡色文字會以傾斜和變暗的樣子顯示。
+- 響鈴會讓終端閃一下或發出聲音，並標記你沒在看的分頁。Gloamux 在背景時也會跳動 Dock 圖示。
+- 選取即拷貝、中鍵貼上、按兩下時的單字字元，以及貼上時去掉空白或接成一行，都在 [設定 › 終端](#終端)。
+- **終端 › 從歷史貼上**（⇧⌘H）列出 Gloamux 開啟以來從終端拷貝或貼進終端的文字，新的在前。含有可辨識密鑰的文字一律不保留。
+- **終端 › 拷貝模式**（⇧⌘C）用鍵盤在文字中移動：方向鍵或 `h j k l`，`w`、`b` 以單字移動，`0`、`$` 到行首行尾，Control-U、Control-D 移動半個畫面，`g`、`G` 到最上與最下，`v` 開始選取，`y` 或 Return 拷貝，Escape 或 `q` 離開。
+- **終端 › 顯示時間戳記**（⇧⌘E）在每行旁邊顯示它最後變動的時間。
+- `imgcat`、`chafa`、`img2sixel` 等程式以 sixel 圖形或 iTerm2 圖片協定傳送的圖片會顯示在終端中，並跟著文字捲動。
+- 在伺服器上執行 `sz 檔案` 會把檔案存到這台 Mac（預設在「下載項目」，可另選資料夾）；執行 `rz` 會詢問要傳送哪些檔案。終端上方的列會顯示進度，並有 **取消**；取消下載後不會留下不完整的檔案，畫面上也不會出現殘留的資料。已存在的檔案會保留，新檔名加上編號。伺服器要求在這台 Mac 上執行的指令一律拒絕。
 - **終端 › 文字編碼** 可以把連線切換成 UTF-8、Big5、GB18030、Shift JIS、EUC-JP、EUC-KR 或 ISO Latin 1，已存連線會記住。
 - **終端 › 唯讀** 讓你的輸入不會送到這個連線。
 
@@ -508,6 +520,9 @@ AI 代理可以：
 | | **儲存輸出** | ⇧⌘S |
 | | **在文字編輯器打開輸出** | |
 | | **唯讀** | |
+| | **從歷史貼上** | ⇧⌘H |
+| | **拷貝模式** | ⇧⌘C |
+| | **顯示時間戳記** | ⇧⌘E |
 | | **匯入配色** / **匯入醒目提示** / **改回預設顏色** | |
 | | **文字編碼** | |
 | | **Runbook** | |
@@ -539,6 +554,10 @@ AI 代理可以：
 | ⌥⌘R | 開始或停止錄影 |
 | ⌥⌘L | 開始或停止連線紀錄 |
 | ⇧⌘S | 儲存輸出 |
+| ⇧⌘H | 從歷史貼上 |
+| ⇧⌘C | 拷貝模式 |
+| ⇧⌘E | 顯示時間戳記 |
+| 在設定中選擇 | 從任何 App 顯示或隱藏下拉視窗 |
 | ⌘+、⌘−、⌘0 | 工作階段字級 |
 | ⌥⌘+、⌥⌘−、⌥⌘0 | App 字級 |
 | ⌃⌘L | 鎖定工作區 |
@@ -559,6 +578,7 @@ AI 代理可以：
 | **啟動時重新打開分頁**（`workspace.reopen-tabs`） | 打開 Gloamux 結束時開著的連線和本機終端，各自獨立連線。 |
 | **鎖定工作區**（`workspace.lock-after-minutes`） | 一段時間沒有使用後鎖定工作區，或 **永不**。 |
 | **顯示在選單列**（`menu-bar-extra`） | 選單列圖示，含快速連線、最近的連線和通道。 |
+| **下拉視窗**（`dropdown-hotkey`） | 一個按鍵（⌃\`、⌥\`、⌥空白鍵或 F12），在任何 App 中按下就會在螢幕頂端顯示 Gloamux 視窗，再按一次隱藏。隱藏時分頁仍保持開啟。若另一個 App 已使用該鍵，會顯示警告。`gloamux layout dropdown` 效果相同。 |
 | **自動檢查更新** | 每天到 GitHub 檢查一次新版本。 |
 | **全部設定** · **輸出** / **匯入** | 把所有內容存成一個檔案，或從檔案還原。見[備份](#全部設定存成一個檔案)。 |
 
@@ -577,6 +597,16 @@ AI 代理可以：
 | **自動重新連線**（`ssh.reconnect`） | 中斷的已存連線在 2、5、10、30 和 60 秒後重新連線。 |
 | **回捲行數**（`terminal.scrollback`） | 每個終端保留在畫面上方的行數。 |
 | **響鈴**（`terminal.bell`） | **閃一下**、**音效** 或 **關閉**。 |
+| **響鈴時跳動 Dock 圖示**（`terminal.bell-bounces-dock`） | Gloamux 在背景時。預設開啟。 |
+| **寬度不明確的字元以雙寬顯示**（`terminal.ambiguous-wide`） | 希臘字母、西里爾字母、框線字元與 ① 等符號佔兩格，符合許多中文、日文、韓文伺服器的預期。套用於新的終端。 |
+| **顯示內嵌圖片**（`terminal.inline-images`） | sixel 與 iTerm2 內嵌圖片。預設開啟。套用於新的終端。 |
+| **ZMODEM 檔案傳輸**（`terminal.zmodem`） | 伺服器上執行 `sz` 或 `rz` 時開始傳輸。預設開啟。 |
+| **接收的檔案存放於**（`terminal.zmodem-folder`） | `sz` 傳來的檔案存放位置。未設定時為「下載項目」。 |
+| **單字字元**（`terminal.word-characters`） | 除了字母與數字之外，按兩下時視為單字一部分的字元。預設 `/-+\~_.`。 |
+| **選取即拷貝**（`terminal.copy-on-select`） | 選取文字時立即拷貝。 |
+| **中鍵貼上**（`terminal.middle-click-paste`） | 預設開啟。 |
+| **貼上時去掉前後空白**（`terminal.paste-trims`） | 去掉貼上文字前後的空白與換行。 |
+| **貼上為一行**（`terminal.paste-joins-lines`） | 以空格把貼上的多行接成一行。 |
 | **貼上多行前先確認**（`terminal.confirm-multiline-paste`） | 送出含換行的貼上內容前先顯示。 |
 | **滑鼠操作交給程式**（`terminal.mouse-reporting`） | vim、tmux 和 htop 可以收到點按、拖曳和滾輪。 |
 | **關閉前確認**（`terminal.confirm-close`） | 關閉已連線的分頁，或正在執行指令的本機終端前先詢問。 |
@@ -599,6 +629,9 @@ AI 代理可以：
 | **游標**（`terminal.cursor`） | **方塊**、**底線** 或 **直線**。 |
 | **游標閃爍**（`terminal.cursor-blinks`） | vim 這類程式執行時仍可改變它。 |
 | **背景不透明度**（`terminal.opacity`） | 低於 100% 時，視窗後方的內容會模糊地透出來。 |
+| **字型連字**（`terminal.ligatures`） | 在有連字的字型中把 `->`、`!=` 等字元組合顯示為一個符號。預設關閉，讓每個字元保持在自己的格子。 |
+| **行距**（`terminal.line-spacing`）／**字距**（`terminal.character-spacing`） | 字型原本間距的 0.8 到 2.0 倍。 |
+| **最小對比度**（`terminal.minimum-contrast`） | 1（關閉）到 7。文字顏色太接近背景時，會調亮或調暗到這個 WCAG 對比度。 |
 
 ### 觸發
 
@@ -648,7 +681,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 | `gloamux history` | `list [COUNT [SEARCH]]`、`show`、`log ID PATH`、`export PATH.csv\|PATH.json`、`remove`、`clear`。 |
 | `gloamux sessions` | `list`、`show`、`mkdir`、`add`、`edit`、`options`、`add-other`、`edit-other`、`serial-ports`、`rename`、`move`、`remove`、`env`、`auth`、`cert`、`from-sftp`、`import`、`export`。 |
 | `gloamux hosts` | `list`、`history`、`clear-history`、`trust`、`replace`、`remove`、`export`（輸出成 `known_hosts`）、`discover bonjour\|tailscale\|aws`。 |
-| `gloamux tabs` | `list`、`show`、`open`、`open-window`、`connect`、`local`、`select`、`rename`、`duplicate`、`close`、`disconnect`、`reconnect`、`split`、`unsplit`、`broadcast`、`multiexec`、`window`、`attach`、`read`、`send`、`run`、`readonly`、`log`、`record`、`encoding`、`integration`、`view`、`colors`、`highlights`。需要 App 正在執行。 |
+| `gloamux tabs` | `list`、`show`、`open`、`open-window`、`connect`、`local`、`select`、`rename`、`duplicate`、`close`、`disconnect`、`reconnect`、`split`、`unsplit`、`broadcast`、`multiexec`、`window`、`attach`、`read`、`send`、`run`、`paste-history`、`readonly`、`timestamps`、`copy-mode`、`zmodem`（`status`、`send PATH...` 回應 `rz`、`cancel`）、`log`、`record`、`encoding`、`integration`、`view`、`colors`、`highlights`。需要 App 正在執行。 |
 | `gloamux forwards` | `list`、`add`、`remove`（已存規則）；`live-list`、`start`、`stop`（執行中的轉發）。類型：`local`、`remote`、`dynamic`。 |
 | `gloamux commands` | `list`、`add`、`edit`、`remove`、`send`、`run`（常用指令）。 |
 | `gloamux triggers` | `list`、`add`、`edit`、`enable`、`disable`、`remove`。動作：`notify`、`sound`、`mark`。 |
@@ -656,7 +689,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 | `gloamux recordings` | `list`、`export`（輸出成 `.cast`）、`remove`。 |
 | `gloamux appearance` | `list`、`get`、`set THEME_ID`。 |
 | `gloamux settings` | `list`、`get`、`set`、`reset`。名稱見[設定一覽](#19-設定一覽)。 |
-| `gloamux layout` | `get`、`set default\|classic\|workbench`。 |
+| `gloamux layout` | `get`、`set default\|classic\|workbench`、`dropdown`（顯示或隱藏下拉視窗）。 |
 | `gloamux config` | `export PATH`、`import PATH`（先結束 Gloamux）。 |
 | `gloamux mcp` | 透過 MCP 把允許的連線提供給 AI 代理。 |
 | `gloamux agents` | `status`、`history`、`clear-history`、`revoke`、`off`。 |
@@ -675,6 +708,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 gloamux sessions add "Work server" ssh server.example.com deploy
 gloamux sessions options "Work server" jump=Bastion x11=on
 gloamux sessions options "Work server" jump=Bastion,Inner   # 先經 Bastion，再經 Inner
+gloamux sessions options "Old switch" algorithms=compatible
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite

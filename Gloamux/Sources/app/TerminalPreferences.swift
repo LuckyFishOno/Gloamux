@@ -47,6 +47,24 @@ enum TerminalPreferences {
     static let terminalTypes = ["xterm-256color", "xterm", "screen-256color", "tmux-256color", "linux", "vt220", "vt100"]
     static let reconnectKey = "Gloamux.ssh.reconnect"
     static let newTabKey = "Gloamux.terminal.newTab"
+    static let copyOnSelectKey = "Gloamux.terminal.copyOnSelect"
+    static let middleClickPasteKey = "Gloamux.terminal.middleClickPaste"
+    static let bellDockKey = "Gloamux.terminal.bellBouncesDock"
+    static let ambiguousWideKey = "Gloamux.terminal.ambiguousWide"
+    static let pasteTrimKey = "Gloamux.terminal.pasteTrims"
+    static let lineSpacingKey = "Gloamux.terminal.lineSpacing"
+    static let characterSpacingKey = "Gloamux.terminal.characterSpacing"
+    static let ligaturesKey = "Gloamux.terminal.ligatures"
+    static let inlineImagesKey = "Gloamux.terminal.inlineImages"
+    static let zmodemKey = "Gloamux.terminal.zmodem"
+    static let zmodemFolderKey = "Gloamux.terminal.zmodemFolder"
+    static let minimumContrastKey = "Gloamux.terminal.minimumContrast"
+    static let spacings = 0.8...2.0
+    static let contrasts = 1.0...7.0
+    static let pasteJoinKey = "Gloamux.terminal.pasteJoinsLines"
+    static let wordCharactersKey = "Gloamux.terminal.wordCharacters"
+    /// Characters iTerm2 counts as part of a word by default, besides letters and digits.
+    static let defaultWordCharacters = "/-+\\~_."
 
     static let defaultFontSize = 13.0
     static let fontSizes = 6.0...72.0
@@ -73,6 +91,40 @@ enum TerminalPreferences {
     static var confirmsClose: Bool { defaults.object(forKey: confirmCloseKey) as? Bool ?? true }
     static var rightClickPastes: Bool { defaults.bool(forKey: rightClickPasteKey) }
     static var optionIsMeta: Bool { defaults.bool(forKey: optionMetaKey) }
+    /// Selecting text with the mouse copies it, as iTerm2 does.
+    static var copiesOnSelect: Bool { defaults.bool(forKey: copyOnSelectKey) }
+    /// The middle mouse button pastes, as in iTerm2 and Tabby.
+    static var middleClickPastes: Bool { defaults.object(forKey: middleClickPasteKey) as? Bool ?? true }
+    /// The bell bounces the Dock icon once while Gloamux is in the background.
+    static var bellBouncesDock: Bool { defaults.object(forKey: bellDockKey) as? Bool ?? true }
+    /// East Asian ambiguous-width characters, such as Greek, Cyrillic, box drawing, and ①, take two cells.
+    static var ambiguousIsWide: Bool { defaults.bool(forKey: ambiguousWideKey) }
+    /// Pasting leaves out spaces and line breaks around the text.
+    static var pasteTrims: Bool { defaults.bool(forKey: pasteTrimKey) }
+    /// Pasting turns line breaks into spaces, so the text arrives as one line.
+    static var pasteJoinsLines: Bool { defaults.bool(forKey: pasteJoinKey) }
+    /// Line height and cell width as a multiple of the font's own, as iTerm2's vertical and horizontal spacing.
+    static var lineSpacing: Double { clamp(defaults.object(forKey: lineSpacingKey) as? Double ?? 1, spacings) }
+    static var characterSpacing: Double { clamp(defaults.object(forKey: characterSpacingKey) as? Double ?? 1, spacings) }
+    /// Fonts such as Fira Code join characters like -> and != into one symbol. Off by default, as in iTerm2 and Tabby.
+    static var ligatures: Bool { defaults.bool(forKey: ligaturesKey) }
+    /// Sixel and iTerm2 inline images; on unless turned off. Applies to terminals opened afterwards.
+    static var inlineImages: Bool { defaults.object(forKey: inlineImagesKey) as? Bool ?? true }
+    /// ZMODEM transfers start when sz or rz runs on the server; on unless turned off.
+    static var zmodem: Bool { defaults.object(forKey: zmodemKey) as? Bool ?? true }
+    /// Where files from sz are saved: the chosen folder, or Downloads.
+    static var zmodemFolder: URL {
+        if let path = defaults.string(forKey: zmodemFolderKey)?.trimmingCharacters(in: .whitespaces), !path.isEmpty {
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        }
+        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
+    }
+    /// The lowest contrast ratio (WCAG, 1 to 7) between text and its background; 1 leaves colors as the theme sets them.
+    static var minimumContrast: Double { clamp(defaults.object(forKey: minimumContrastKey) as? Double ?? 1, contrasts) }
+    static func clamp(_ value: Double, _ range: ClosedRange<Double>) -> Double { min(max(value, range.lowerBound), range.upperBound) }
+    /// Characters a double-click selects as part of a word, besides letters and digits.
+    static var wordCharacters: String { defaults.string(forKey: wordCharactersKey) ?? defaultWordCharacters }
     /// Seconds without output before a session is checked; 0 turns the check off.
     static var keepAliveInterval: Int { defaults.object(forKey: keepAliveKey) as? Int ?? 30 }
     /// TERM for SSH sessions.
@@ -86,6 +138,8 @@ enum TerminalPreferences {
     static func newScreen() -> TerminalScreen {
         var options = TerminalOptions()
         options.scrollbackSize = scrollback
+        options.cjkAmbiguousAsWide = ambiguousIsWide
+        options.inlineImages = inlineImages
         return TerminalScreen(options: options)
     }
 
@@ -112,10 +166,21 @@ enum BellStyle: String, CaseIterable { case flash, sound, off }
 
 enum TerminalLogFormat: String, CaseIterable { case text, raw }
 
-/// The terminal font in regular and bold, and the size of one cell. Built once per family and size.
+/// The terminal font in regular, bold, italic, and bold italic, and the size of one cell. Built once per family, size,
+/// spacing, and ligature setting.
 struct TerminalFonts: Equatable {
     let regular: NSFont
     let bold: NSFont
+    let italic: NSFont
+    let boldItalic: NSFont
+    /// The family has no italic face, so italic text is slanted instead, as iTerm2 does.
+    let slantsItalic: Bool
+    /// Space added after each cell for character spacing; wide characters get it twice.
+    let extraWidth: CGFloat
+    /// Raises text so extra line spacing is split above and below it.
+    let baselineOffset: CGFloat
+    /// Ligatures and contextual alternates are on.
+    let ligatures: Bool
     let cellWidth: CGFloat
     let lineHeight: CGFloat
     let key: String
@@ -138,10 +203,25 @@ struct TerminalFonts: Equatable {
         return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 
+    /// Turns off the ligatures and contextual alternates that fonts such as Fira Code use to join characters.
+    private static func withoutLigatures(_ font: NSFont) -> NSFont {
+        let off: [[NSFontDescriptor.FeatureKey: Int]] = [
+            [.typeIdentifier: kLigaturesType, .selectorIdentifier: kCommonLigaturesOffSelector],
+            [.typeIdentifier: kLigaturesType, .selectorIdentifier: kRareLigaturesOffSelector],
+            [.typeIdentifier: kContextualAlternatesType, .selectorIdentifier: kContextualAlternatesOffSelector],
+        ]
+        let descriptor = font.fontDescriptor.addingAttributes([.featureSettings: off])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
+    }
+
     static var current: TerminalFonts { make(name: TerminalPreferences.fontName, size: TerminalPreferences.fontSize) }
 
-    static func make(name: String, size: Double) -> TerminalFonts {
-        let key = "\(name)|\(size)"
+    static func make(name: String, size: Double, lineSpacing: Double = TerminalPreferences.lineSpacing,
+                     characterSpacing: Double = TerminalPreferences.characterSpacing,
+                     ligatures: Bool = TerminalPreferences.ligatures) -> TerminalFonts {
+        let lineSpacing = TerminalPreferences.clamp(lineSpacing, TerminalPreferences.spacings)
+        let characterSpacing = TerminalPreferences.clamp(characterSpacing, TerminalPreferences.spacings)
+        let key = "\(name)|\(size)|\(lineSpacing)|\(characterSpacing)|\(ligatures)"
         if let cached = cache[key] { return cached }
         let size = CGFloat(size)
         var regular = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
@@ -150,12 +230,24 @@ struct TerminalFonts: Equatable {
             regular = font
             bold = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
         }
-        // Converting to bold can discard the cascade, so add it after both text faces have been chosen.
-        regular = withSymbols(regular)
-        bold = withSymbols(bold)
-        let fonts = TerminalFonts(regular: regular, bold: bold,
-                                  cellWidth: ("M" as NSString).size(withAttributes: [.font: regular]).width,
-                                  lineHeight: NSLayoutManager().defaultLineHeight(for: regular), key: key)
+        var italic = NSFontManager.shared.convert(regular, toHaveTrait: .italicFontMask)
+        var boldItalic = NSFontManager.shared.convert(bold, toHaveTrait: .italicFontMask)
+        let slants = !NSFontManager.shared.traits(of: italic).contains(.italicFontMask)
+        if slants { italic = regular; boldItalic = bold }
+        // Converting to bold can discard the cascade, so add it after the text faces have been chosen.
+        func prepared(_ font: NSFont) -> NSFont { withSymbols(ligatures ? font : withoutLigatures(font)) }
+        regular = prepared(regular)
+        bold = prepared(bold)
+        italic = prepared(italic)
+        boldItalic = prepared(boldItalic)
+        let advance = ("M" as NSString).size(withAttributes: [.font: regular]).width
+        let natural = NSLayoutManager().defaultLineHeight(for: regular)
+        let lineHeight = lineSpacing == 1 ? natural : (natural * lineSpacing).rounded()
+        let cellWidth = advance * characterSpacing
+        let fonts = TerminalFonts(regular: regular, bold: bold, italic: italic, boldItalic: boldItalic, slantsItalic: slants,
+                                  extraWidth: cellWidth - advance, baselineOffset: max(0, ((lineHeight - natural) / 2).rounded(.down)),
+                                  ligatures: ligatures,
+                                  cellWidth: cellWidth, lineHeight: lineHeight, key: key)
         cache[key] = fonts
         return fonts
     }

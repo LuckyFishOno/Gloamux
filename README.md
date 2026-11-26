@@ -4,7 +4,7 @@
 
 **A native macOS workspace for SSH, file transfer, and remote desktops.**
 
-Current release: **Gloamux 1.4.6 (build 15)**.
+Current release: **Gloamux 1.5 (build 16)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
@@ -80,8 +80,8 @@ New connection lists Local, SSH, RDP, VNC, and Other connection. A remote deskto
 
 ## Features
 
-- **Terminal** · Tabs, drag-to-split panes, local shell, shell integration (prompt marks, command status, notifications), find, logs, recordings with secrets masked, and 73 themes.
-- **SSH** · Passwords, Ed25519, ECDSA, and RSA keys, `ssh-agent`, Secure Enclave keys, keyboard-interactive (PAM) sign-in, gateways that take a session key in place of the user name, up to eight jump hosts listed in order with a route that shows each hop, SOCKS and HTTP proxies, port forwarding, agent forwarding, and X11 through XQuartz.
+- **Terminal** · Tabs, drag-to-split panes, local shell, shell integration (prompt marks, command status, notifications), find, logs, recordings with secrets masked, and 73 themes. Keyboard copy mode, paste history, line timestamps, sixel and iTerm2 inline images, `sz` and `rz` (ZMODEM), and a dropdown window on a hotkey.
+- **SSH** · Passwords, Ed25519, ECDSA, and RSA keys, `ssh-agent`, Secure Enclave keys, keyboard-interactive (PAM) sign-in, gateways that take a session key in place of the user name, up to eight jump hosts listed in order with a route that shows each hop, SOCKS and HTTP proxies, port forwarding, agent forwarding, X11 through XQuartz, and a Compatible key exchange setting for older servers and network devices.
 - **Files** · A file sidebar that follows the focused pane, a two-pane transfer view with a resumable queue, Quick Look, and editing remote files in Mac apps, over SFTP, SCP, FTP, and FTPS. Paste an `sftp` command once to keep it as a session.
 - **Remote desktop** · RDP with Network Level Authentication and VNC, including macOS Screen Sharing, in a Gloamux tab, with an optional SSH tunnel and a shared clipboard.
 - **Other connections** · Serial ports, Telnet, Mosh, Docker containers, Kubernetes pods, and AWS Systems Manager sessions.

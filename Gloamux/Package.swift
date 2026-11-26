@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/orlandos-nl/Citadel.git", from: "0.12.0"),
+        .package(url: "https://github.com/attaswift/BigInt.git", from: "5.2.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.104.0"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.35.0"),
         // Vendored with TLS session resumption for FTPS; see Vendor/swift-nio-ssl/VENDORED.md.
@@ -37,7 +38,7 @@ let package = Package(
         .target(name: "Terminal", dependencies: ["GloamuxShared", "Formats"], path: "Sources/terminal"),
         .target(name: "ShellIntents", path: "Sources/intents"),
         .target(name: "MasterPassword", dependencies: ["GloamuxShared", "Profiles"], path: "Sources/master-password"),
-        .target(name: "Ssh", dependencies: [.product(name: "Citadel", package: "Citadel"), "GloamuxShared", "MasterPassword", "GloamuxNetwork", "Profiles", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOSOCKS", package: "swift-nio-extras"), .product(name: "Crypto", package: "swift-crypto"), .product(name: "_CryptoExtras", package: "swift-crypto")], path: "Sources/ssh"),
+        .target(name: "Ssh", dependencies: [.product(name: "Citadel", package: "Citadel"), "GloamuxShared", "MasterPassword", "GloamuxNetwork", "Profiles", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOSOCKS", package: "swift-nio-extras"), .product(name: "Crypto", package: "swift-crypto"), .product(name: "_CryptoExtras", package: "swift-crypto"), .product(name: "BigInt", package: "BigInt")], path: "Sources/ssh"),
         .target(name: "FileTransfer", dependencies: ["GloamuxShared", "Ssh", .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSSL", package: "swift-nio-ssl"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "Crypto", package: "swift-crypto")], path: "Sources/file-transfer"),
         .target(name: "App", dependencies: ["LocalPTY", "GloamuxShared", "FileTransfer", "Highlight", "MasterPassword", "Ssh", "Terminal", "Profiles", "Formats", "GloamuxNetwork", "ShellIntents"], path: "Sources/app", resources: [.process("Resources")]),
         .executableTarget(name: "GloamuxApp", dependencies: ["GloamuxShared", "Formats", "GloamuxNetwork", "Highlight", "Profiles", "Terminal", "MasterPassword", "Ssh", "FileTransfer", "App", "ShellIntents", .product(name: "Sparkle", package: "Sparkle")], path: "Sources/GloamuxApp"),
@@ -47,7 +48,7 @@ let package = Package(
         .testTarget(name: "ProfilesTests", dependencies: ["GloamuxShared", "Profiles"], path: "Tests/profiles"),
         .testTarget(name: "TerminalTests", dependencies: ["GloamuxShared", "Terminal"], path: "Tests/terminal"),
         .testTarget(name: "MasterPasswordTests", dependencies: ["GloamuxShared", "MasterPassword"], path: "Tests/master-password"),
-        .testTarget(name: "SshTests", dependencies: ["GloamuxShared", "Ssh", "GloamuxNetwork", "FileTransfer", .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "Crypto", package: "swift-crypto"), .product(name: "_CryptoExtras", package: "swift-crypto")], path: "Tests/ssh"),
+        .testTarget(name: "SshTests", dependencies: ["GloamuxShared", "Ssh", "GloamuxNetwork", "FileTransfer", .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "Crypto", package: "swift-crypto"), .product(name: "_CryptoExtras", package: "swift-crypto"), .product(name: "BigInt", package: "BigInt")], path: "Tests/ssh"),
         .testTarget(name: "FileTransferTests", dependencies: ["GloamuxShared", "FileTransfer", "Ssh", "GloamuxNetwork", "App", .product(name: "NIOEmbedded", package: "swift-nio"), .product(name: "NIOTLS", package: "swift-nio"), .product(name: "NIOSSL", package: "swift-nio-ssl"), .product(name: "Citadel", package: "Citadel"), .product(name: "NIOSSH", package: "swift-nio-ssh"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOPosix", package: "swift-nio"), .product(name: "NIOSOCKS", package: "swift-nio-extras")], path: "Tests/file-transfer"),
         .testTarget(name: "AppTests", dependencies: ["GloamuxShared", "App", "MasterPassword", "GloamuxNetwork"], path: "Tests/app")
     ]

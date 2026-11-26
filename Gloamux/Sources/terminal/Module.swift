@@ -28,6 +28,8 @@ public struct TerminalOptions: Equatable, Sendable {
     /// BackspaceSends: true sends DEL (0x7F), false sends Ctrl+H (0x08).
     public var backspaceSendsDelete = true
     public var type: TerminalType = .xterm
+    /// Shows pictures sent with sixel graphics or the iTerm2 inline image protocol.
+    public var inlineImages = true
     public init() {}
 }
 
@@ -121,6 +123,13 @@ public final class TerminalScreen {
     /// OSC 8 link targets. Index 0 means no link.
     public private(set) var links: [String] = [""]
     private var linkIndex: [String: UInt16] = [:]
+    /// Pictures shown with sixel or OSC 1337, oldest first.
+    public private(set) var images: [TerminalImage] = []
+    private var nextImageID = 1
+    /// One cell's size in points, which the display sets, so a picture covers as many cells as its pixels need.
+    public var cellSize: (width: Double, height: Double) = (8, 16)
+    /// A file sent in parts with `MultipartFile=`, `FilePart=`, and `FileEnd`.
+    private var multipart: (arguments: [String: String], data: Data)?
 
     private var style = CellStyle()
     private var scrollTop = 0, scrollBottom: Int
@@ -130,9 +139,10 @@ public final class TerminalScreen {
     private var lineDrawing = false
 
     // Parser state
-    private enum State { case ground, escape, escapeIntermediate, csi, osc, oscEscape, string, stringEscape }
+    private enum State { case ground, escape, escapeIntermediate, csi, osc, oscEscape, string, stringEscape, dcs, dcsEscape }
     private var state = State.ground
-    private var params = "", intermediates = "", oscText = ""
+    private var params = "", intermediates = ""
+    private var oscBytes: [UInt8] = [], dcsBytes: [UInt8] = []
     private var utf8: [UInt8] = [], utf8Need = 0
 
     public init(options: TerminalOptions = TerminalOptions()) {
@@ -218,7 +228,8 @@ public final class TerminalScreen {
         case .osc:
             if b == 0x07 { finishOSC(); return }
             if b == 0x1B { state = .oscEscape; return }
-            if oscText.unicodeScalars.count < Self.maximumOSCLength { oscText.unicodeScalars.append(Unicode.Scalar(b)) }
+            if oscBytes.count < Self.maximumOSCLength
+                || (oscBytes.count < Self.maximumImageOSCLength && oscBytes.starts(with: Self.imageOSCPrefix)) { oscBytes.append(b) }
             return
         case .oscEscape:
             if b == 0x5C { finishOSC() } else { state = .ground; byte(0x1B); byte(b) }
@@ -228,6 +239,13 @@ public final class TerminalScreen {
             return
         case .stringEscape:
             state = b == 0x5C ? .ground : .string; return
+        case .dcs:
+            if b == 0x1B { state = .dcsEscape } else if b == 0x18 || b == 0x1A { state = .ground; dcsBytes = [] }
+            else if dcsBytes.count < Self.maximumDCSLength { dcsBytes.append(b) }
+            return
+        case .dcsEscape:
+            if b == 0x5C { finishDCS() } else { state = .ground; dcsBytes = []; byte(0x1B); byte(b) }
+            return
         default: break
         }
         if b < 0x20 || b == 0x7F { control(b); return }
@@ -284,8 +302,9 @@ public final class TerminalScreen {
         state = .ground
         switch b {
         case 0x5B: state = .csi; params = ""; intermediates = ""
-        case 0x5D: state = .osc; oscText = ""
-        case 0x50, 0x5F, 0x5E, 0x58: state = .string
+        case 0x5D: state = .osc; oscBytes = []
+        case 0x50: state = .dcs; dcsBytes = []
+        case 0x5F, 0x5E, 0x58: state = .string
         case 0x20...0x2F: intermediates = String(UnicodeScalar(b)); state = .escapeIntermediate
         case 0x37: saveCursor()
         case 0x38: restoreCursor()
@@ -321,15 +340,111 @@ public final class TerminalScreen {
 
     private func finishOSC() {
         state = .ground
-        let parts = oscText.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
-        let text = String(decoding: Array(oscText.unicodeScalars.map { UInt8(truncatingIfNeeded: $0.value) }), as: UTF8.self)
+        let bytes = oscBytes
+        oscBytes = []
+        let separator = bytes.firstIndex(of: 0x3B)
+        let code = String(decoding: bytes[..<(separator ?? bytes.endIndex)], as: UTF8.self)
+        if code == "1337" {
+            if let separator { iTermImage(bytes[(separator + 1)...]) }
+            return
+        }
+        let text = String(decoding: bytes, as: UTF8.self)
         let value = text.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
-        if let code = parts.first, code == "0" || code == "2", value.count == 2 { title = String(value[1]); events.append(.title(title)) }
-        else if parts.first == "7", value.count == 2, let path = Self.directory(fromOSC7: String(value[1])) { workingDirectory = path }
-        else if parts.first == "133" { commandMark(value.count == 2 ? String(value[1]) : "") }
-        else if parts.first == "8" { hyperlink(value.count == 2 ? String(value[1]) : "") }
-        else if parts.first == "52" { clipboard(value.count == 2 ? String(value[1]) : "") }
-        else { count("OSC " + (parts.first.map(String.init) ?? "")) }
+        if code == "0" || code == "2", value.count == 2 { title = String(value[1]); events.append(.title(title)) }
+        else if code == "7", value.count == 2, let path = Self.directory(fromOSC7: String(value[1])) { workingDirectory = path }
+        else if code == "133" { commandMark(value.count == 2 ? String(value[1]) : "") }
+        else if code == "8" { hyperlink(value.count == 2 ? String(value[1]) : "") }
+        else if code == "52" { clipboard(value.count == 2 ? String(value[1]) : "") }
+        else { count("OSC " + code) }
+    }
+
+    /// A DCS string. Only sixel graphics (`DCS P1;P2;P3 q DATA ST`) are shown.
+    private func finishDCS() {
+        state = .ground
+        let bytes = dcsBytes
+        dcsBytes = []
+        guard let final = bytes.firstIndex(where: { (0x40...0x7E).contains($0) }) else { count("DCS"); return }
+        guard bytes[final] == 0x71, bytes[..<final].allSatisfy({ (0x30...0x3F).contains($0) }) else {
+            count("DCS " + String(UnicodeScalar(bytes[final]))); return
+        }
+        guard options.inlineImages, let image = SixelDecoder.decode(bytes[(final + 1)...]) else { return }
+        let cell = cellSize
+        let columns = max(1, Int((Double(image.width) / cell.width).rounded(.up)))
+        let rows = max(1, Int((Double(image.height) / cell.height).rounded(.up)))
+        place(.rgba(image.pixels, width: image.width, height: image.height), bytes: image.pixels.count, columns: min(columns, cols), rows: rows,
+              stretches: false, cursorBelow: true)
+    }
+
+    /// OSC 1337 `File=ARGS:BASE64`, or the same file in parts. Only files marked `inline=1` are shown; others would be
+    /// downloads, which are not taken from a terminal.
+    private func iTermImage(_ body: ArraySlice<UInt8>) {
+        let colon = body.firstIndex(of: 0x3A) ?? body.endIndex
+        let head = String(decoding: body[..<colon], as: UTF8.self)
+        let payload = colon < body.endIndex ? body[(colon + 1)...] : []
+        func decoded(_ bytes: ArraySlice<UInt8>) -> Data? { Data(base64Encoded: Data(bytes), options: .ignoreUnknownCharacters) }
+        if head.hasPrefix("File=") {
+            multipart = nil
+            show(InlineImages.arguments(head.dropFirst(5)), decoded(payload))
+        } else if head.hasPrefix("MultipartFile=") {
+            multipart = (InlineImages.arguments(head.dropFirst(14)), Data())
+        } else if head.hasPrefix("FilePart="), var part = multipart {
+            let chunk = Data(base64Encoded: String(head.dropFirst(9)), options: .ignoreUnknownCharacters) ?? Data()
+            guard part.data.count + chunk.count <= InlineImages.maximumFileBytes else { multipart = nil; return }
+            part.data.append(chunk)
+            multipart = part
+        } else if head == "FileEnd", let part = multipart {
+            multipart = nil
+            show(part.arguments, part.data)
+        } else {
+            count("OSC 1337 " + (head.split(separator: "=").first.map(String.init) ?? ""))
+        }
+    }
+
+    private func show(_ arguments: [String: String], _ data: Data?) {
+        guard options.inlineImages, arguments["inline"] == "1", let data, data.count <= InlineImages.maximumFileBytes,
+              let pixels = InlineImages.pixelSize(of: data),
+              pixels.width <= InlineImages.maximumSixelSide, pixels.height <= InlineImages.maximumSixelSide else { return }
+        let preserves = arguments["preserveaspectratio"] != "0"
+        let size = InlineImages.cells(pixels: pixels, width: arguments["width"], height: arguments["height"], preserves: preserves,
+                                      cell: cellSize, columns: cols)
+        place(.encoded(data), bytes: pixels.width * pixels.height * 4, columns: min(size.columns, cols), rows: size.rows, stretches: !preserves,
+              cursorBelow: arguments["donotmovecursor"] == "1" ? nil : false)
+    }
+
+    /// Puts a picture at the cursor, scrolling so all of it fits. `cursorBelow` true leaves the cursor on the line
+    /// under it, as sixel does; false leaves it after the picture's last row, as iTerm2 does; nil leaves it in place.
+    private func place(_ content: TerminalImage.Content, bytes: Int, columns: Int, rows height: Int, stretches: Bool, cursorBelow: Bool?) {
+        if wrapPending { cursorCol = 0; lineFeed() }
+        let row = cursorRow, column = cursorCol
+        for _ in 1..<max(1, height) { lineFeed() }
+        let top = absoluteLine(ofRow: cursorRow) - (height - 1)
+        let image = TerminalImage(id: nextImageID, content: content, line: top, column: column, columns: max(1, min(columns, cols - column)),
+                                  rows: height, stretches: stretches, alternate: usingAlternate, byteCount: bytes)
+        nextImageID += 1
+        images.append(image)
+        pruneImages()
+        switch cursorBelow {
+        case true?: lineFeed(); cursorCol = column
+        case false?:
+            let end = column + image.columns
+            if end >= cols { cursorCol = cols - 1; wrapPending = autowrap } else { cursorCol = end }
+        case nil: cursorRow = row; cursorCol = column
+        }
+    }
+
+    /// Drops pictures that scrolled out of the kept lines, then the oldest past the count and size limits.
+    private func pruneImages() {
+        let first = trimmedLines
+        images.removeAll { $0.line + $0.rows <= first }
+        while images.count > InlineImages.maximumImages || images.reduce(0, { $0 + $1.byteCount }) > InlineImages.maximumTotalBytes {
+            images.removeFirst()
+        }
+    }
+
+    /// Removes the pictures that have a row in `lines` on the screen being shown.
+    private func removeImages(lines: Range<Int>) {
+        let alternate = usingAlternate
+        images.removeAll { $0.alternate == alternate && $0.line < lines.upperBound && $0.line + $0.rows > lines.lowerBound }
     }
 
     /// Reads the path from an OSC 7 report such as `file://host/home/me/My%20Files`.
@@ -457,6 +572,11 @@ public final class TerminalScreen {
 
     /// Longer OSC strings are cut off; the largest is a 1 MB OSC 52 clipboard write in base64.
     static let maximumOSCLength = 1_400_000
+    /// OSC 1337 inline images may be longer: a 10 MB file in base64.
+    static let maximumImageOSCLength = InlineImages.maximumFileBytes * 4 / 3 + 4096
+    static let imageOSCPrefix = Array("1337;".utf8)
+    /// A sixel image of the largest size in many colors.
+    static let maximumDCSLength = 32 * 1_048_576
 
     private static let lineDrawingMap: [Character: Character] = [
         "j": "┘", "k": "┐", "l": "┌", "m": "└", "n": "┼", "q": "─", "t": "├", "u": "┤", "v": "┴", "w": "┬", "x": "│", "a": "▒", "`": "◆", "~": "·", "f": "°", "g": "±", "y": "≤", "z": "≥", "{": "π", "|": "≠", "}": "£",
@@ -591,6 +711,7 @@ public final class TerminalScreen {
         cursorRow = 0; cursorCol = 0; cursorVisible = true; applicationCursorKeys = o.applicationCursorKeys
         style = CellStyle(); scrollTop = 0; scrollBottom = rows - 1; autowrap = true; wrapPending = false; originMode = false; insertMode = false
         lineDrawing = false; bracketedPaste = false; resetTabs(); title = ""; scrollback = sb
+        images = []; multipart = nil
         mouseTracking = .off; sgrMouse = false; reportsFocus = false; cursorShape = nil; cursorBlinks = nil
     }
 
@@ -629,7 +750,8 @@ public final class TerminalScreen {
             case 0: for c in cursorCol..<cols { g[cursorRow][c] = b }; for r in (cursorRow + 1)..<max(rows, cursorRow + 1) { g[r] = Array(repeating: b, count: cols) }
             case 1: for r in 0..<cursorRow { g[r] = Array(repeating: b, count: cols) }; for c in 0...cursorCol { g[cursorRow][c] = b }
             case 2: g = Array(repeating: Array(repeating: b, count: cols), count: rows)
-            case 3: trimmedLines += scrollback.count; scrollback = []
+                removeImages(lines: absoluteLine(ofRow: 0)..<absoluteLine(ofRow: rows))
+            case 3: removeImages(lines: trimmedLines..<absoluteLine(ofRow: 0)); trimmedLines += scrollback.count; scrollback = []
             default: break
             }
             grid = g
@@ -666,7 +788,7 @@ public final class TerminalScreen {
         case "n":
             if raw(0) == 6 { events.append(.reply(Array("\u{1B}[\(cursorRow + 1 - (originMode ? scrollTop : 0));\(cursorCol + 1)R".utf8))) }
             else if raw(0) == 5 { events.append(.reply(Array("\u{1B}[0n".utf8))) }
-        case "c": events.append(.reply(Array("\u{1B}[?62;22c".utf8)))
+        case "c": events.append(.reply(Array((options.inlineImages ? "\u{1B}[?62;4;22c" : "\u{1B}[?62;22c").utf8)))
         case "t": count("CSI t (window ops)")
         default: count("CSI \(params)\(final)")
         }
@@ -712,6 +834,7 @@ public final class TerminalScreen {
     private func switchScreen(_ alt: Bool, clear: Bool) {
         guard alt != usingAlternate else { return }
         if alt && clear { alternate = Array(repeating: Array(repeating: Cell.blank, count: cols), count: rows) }
+        if !alt { images.removeAll { $0.alternate } }
         usingAlternate = alt
         wrapPending = false
     }
@@ -836,6 +959,12 @@ public final class TerminalScreen {
             mark.outputLine = mark.outputLine.map(moved)
             mark.endLine = mark.endLine.map(moved)
             return mark
+        }
+        images = images.map { image in
+            guard !image.alternate else { return image }
+            var image = image
+            image.line = moved(image.line)
+            return image
         }
         scrollback = lines
         if scrollback.count > options.scrollbackSize {

@@ -17,6 +17,10 @@ struct TerminalDisplay: NSViewRepresentable {
     @AppStorage(TerminalPreferences.blinkKey) private var blinkSetting = false
     @AppStorage(TerminalPreferences.opacityKey) private var opacity = 1.0
     @AppStorage(TerminalPreferences.mouseKey) private var reportsMouse = true
+    @AppStorage(TerminalPreferences.lineSpacingKey) private var lineSpacing = 1.0
+    @AppStorage(TerminalPreferences.characterSpacingKey) private var characterSpacing = 1.0
+    @AppStorage(TerminalPreferences.ligaturesKey) private var ligatures = false
+    @AppStorage(TerminalPreferences.minimumContrastKey) private var minimumContrast = 1.0
 
     init(tab: SessionTab, model: WorkspaceModel, resizes: Bool = true) {
         self.tab = tab; self.model = model; self.resizes = resizes
@@ -90,10 +94,24 @@ struct TerminalDisplay: NSViewRepresentable {
             coordinator.navigation = request.nonce
             DispatchQueue.main.async { [weak view] in view?.perform(request.action, marks: screen.commandMarks, trimmed: screen.trimmedLines) }
         }
-        let fonts = TerminalFonts.make(name: fontName, size: min(max(fontSize, TerminalPreferences.fontSizes.lowerBound), TerminalPreferences.fontSizes.upperBound))
+        let fonts = TerminalFonts.make(name: fontName, size: min(max(fontSize, TerminalPreferences.fontSizes.lowerBound), TerminalPreferences.fontSizes.upperBound),
+                                       lineSpacing: lineSpacing, characterSpacing: characterSpacing, ligatures: ligatures)
         view.fonts = fonts
         (scroll as? TerminalScrollView)?.lineHeight = fonts.lineHeight
         view.screen = screen
+        view.lineTime = { [weak tab] index in tab.flatMap { $0.lineTimes.time(of: screen.trimmedLines + index) } }
+        view.showsTimestamps = tab.showsTimestamps
+        screen.cellSize = (Double(fonts.cellWidth), Double(fonts.lineHeight))
+        view.firstLine = screen.trimmedLines
+        view.images = screen.images.filter { $0.alternate == screen.usingAlternate }
+        // Copy mode starts and ends outside the view update, so the tab can follow at once.
+        view.copyModeEnded = { [weak tab] in if tab?.copyMode == true { tab?.copyMode = false } }
+        if tab.copyMode != (view.copyMode != nil) {
+            DispatchQueue.main.async { [weak view, weak tab] in
+                guard let view, let tab else { return }
+                if tab.copyMode { view.startCopyMode() } else { view.endCopyMode(copying: false) }
+            }
+        }
         view.applicationCursorKeys = screen.applicationCursorKeys
         view.bracketedPaste = screen.bracketedPaste
         view.reportsMouse = reportsMouse && resizes
@@ -101,15 +119,33 @@ struct TerminalDisplay: NSViewRepresentable {
         let theme = model.theme
         let cursorVisible = tab.terminalReady && screen.cursorVisible
         let alpha = min(max(opacity, 0.3), 1)
-        let styleKey = "\(theme.id)|\(fonts.key)|\(alpha)"
+        let contrast = TerminalPreferences.clamp(minimumContrast, TerminalPreferences.contrasts)
+        let styleKey = "\(theme.id)|\(fonts.key)|\(alpha)|\(contrast)"
         let background = tab.colorScheme.map { nsColor($0.background) } ?? theme.terminalBackground.nsColor
-        if coordinator.revision != tab.screenRevision || coordinator.styleKey != styleKey || coordinator.cursorVisible != cursorVisible {
-            redraw(view, scroll: scroll, coordinator: coordinator, fonts: fonts, background: background, alpha: alpha, styleKey: styleKey,
-                   cursorVisible: cursorVisible)
+        let updateCursor = { [cursorSetting, blinkSetting] (view: TerminalTextView) in
+            view.updateCursor(shape: screen.cursorShape ?? CursorShape(rawValue: cursorSetting) ?? .block,
+                              blinks: screen.cursorBlinks ?? blinkSetting, color: theme.cursor.nsColor, visible: cursorVisible,
+                              background: background)
         }
-        view.updateCursor(shape: screen.cursorShape ?? CursorShape(rawValue: cursorSetting) ?? .block,
-                          blinks: screen.cursorBlinks ?? blinkSetting, color: theme.cursor.nsColor, visible: cursorVisible,
-                          background: background)
+        let changed = coordinator.revision != tab.screenRevision || coordinator.styleKey != styleKey || coordinator.cursorVisible != cursorVisible
+        if view.selectingWithMouse {
+            // The text, its scroll position, and the cursor on it wait for the button: see `selectingWithMouse`. Nothing
+            // is redrawn meanwhile, so the latest update still sees every change since the last redraw.
+            view.heldUpdate = { [weak view, weak scroll] in
+                guard let view, let scroll else { return }
+                if changed {
+                    redraw(view, scroll: scroll, coordinator: coordinator, fonts: fonts, background: background, alpha: alpha,
+                           styleKey: styleKey, cursorVisible: cursorVisible)
+                }
+                updateCursor(view)
+            }
+        } else {
+            if changed {
+                redraw(view, scroll: scroll, coordinator: coordinator, fonts: fonts, background: background, alpha: alpha, styleKey: styleKey,
+                       cursorVisible: cursorVisible)
+            }
+            updateCursor(view)
+        }
         if tab.bellFlash != coordinator.flash {
             coordinator.flash = tab.bellFlash
             (scroll as? TerminalScrollView)?.flash()
@@ -141,7 +177,8 @@ struct TerminalDisplay: NSViewRepresentable {
         }
         let oldCursor = coordinator.cursorLine.map { $0 - dropped }
         var renderer = TerminalLineRenderer(background: background, foreground: foreground, ansi: ansi, color: color,
-                                            link: { screen.link($0) }, fonts: fonts)
+                                            link: { screen.link($0) }, fonts: fonts,
+                                            minimumContrast: TerminalPreferences.clamp(minimumContrast, TerminalPreferences.contrasts))
         var lines: [NSAttributedString] = []; lines.reserveCapacity(rows.count)
         var firstChanged = rows.count
         for (index, row) in rows.enumerated() {
@@ -170,6 +207,8 @@ struct TerminalDisplay: NSViewRepresentable {
         scroll.drawsBackground = alpha >= 1
         scroll.backgroundColor = view.backgroundColor
         view.selectedTextAttributes = [.backgroundColor: theme.selection.nsColor]
+        // Read before the new lines make the view taller.
+        let wasAtBottom = view.showsScreenBottom
         view.showTerminalLines(lines, dropped: dropped, firstChanged: firstChanged, cursorLine: cursorLine,
                                cursorColumnOffset: renderer.lastCursorOffset)
         coordinator.rows = rows; coordinator.lines = lines; coordinator.cursorLine = cursorLine
@@ -177,10 +216,11 @@ struct TerminalDisplay: NSViewRepresentable {
         coordinator.cursorVisible = cursorVisible
         if coordinator.revision != tab.screenRevision {
             coordinator.revision = tab.screenRevision
-            // Stay on a search result or a selection instead of following new output.
-            // Typing follows the output even then. The view keeps the whole screen in sight, not just the cursor's row:
-            // a program that parks the cursor near the top, such as top, or a prompt after clear, still shows the screen.
-            if view.followsNextUpdate || (view.selectedRange().length == 0 && !view.hasFindResult) {
+            // Follow new output while the bottom is in sight, as other terminals do, even with text selected: scrolling
+            // up into the scrollback, or a search result, keeps the view where it is. Typing follows the output always.
+            // The view keeps the whole screen in sight, not just the cursor's row: a program that parks the cursor near
+            // the top, such as top, or a prompt after clear, still shows the screen.
+            if view.followsNextUpdate || (wasAtBottom && !view.hasFindResult) {
                 view.followsNextUpdate = false
                 view.scrollToScreen()
             }
@@ -266,6 +306,12 @@ final class TerminalTextView: NSTextView {
         enclosingScrollView?.reflectScrolledClipView(clip)
     }
 
+    /// True when the screen's last row is in sight, give or take a line, so new output should keep it there.
+    var showsScreenBottom: Bool {
+        guard let clip = enclosingScrollView?.contentView else { return true }
+        return clip.bounds.maxY >= frame.height - fonts.lineHeight * 1.5
+    }
+
     /// Sends typing to the terminal and brings the screen back into view, as other terminals do.
     private func type(_ bytes: [UInt8]) {
         followsNextUpdate = true
@@ -283,15 +329,45 @@ final class TerminalTextView: NSTextView {
     func redactedSelection() -> String? {
         let selection = selectedRange()
         guard selection.length > 0 else { return nil }
-        let full = string as NSString
         let limit = 65_536
+        let part = joinedText(near: selection, limit: limit)
+        let end = NSMaxRange(selection), length = (string as NSString).length
+        return SecretRedaction.redact(part(selection.location, end), before: part(max(0, selection.location - limit), selection.location),
+                                      after: part(end, min(length, end + limit)))
+    }
+
+    /// What Copy puts on the clipboard, as iTerm2 copies: rows the terminal wrapped joined into one line, and the blank
+    /// cells at the end of each line left out.
+    func copiedSelection() -> String? {
+        let selection = selectedRange()
+        guard selection.length > 0 else { return nil }
+        let text = joinedText(near: selection, limit: 0)(selection.location, NSMaxRange(selection))
+        return text.components(separatedBy: "\n").map { line in
+            var line = Substring(line)
+            while line.last == " " { line.removeLast() }
+            return String(line)
+        }.joined(separator: "\n")
+    }
+    /// Where Copy and Paste go; tests use a private one.
+    var pasteboard = NSPasteboard.general
+    override func copy(_ sender: Any?) {
+        guard let text = copiedSelection() else { return }
+        PasteHistory.shared.add(text)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    /// Reads text between two offsets with the line breaks of rows the terminal wrapped removed. Only breaks within
+    /// `limit` characters of `selection` are checked.
+    private func joinedText(near selection: NSRange, limit: Int) -> (Int, Int) -> String {
+        let full = string as NSString
         var lineStart = 0, line = 0
         var wraps = IndexSet()
         while lineStart < full.length {
             let newline = full.range(of: "\n", range: NSRange(location: lineStart, length: full.length - lineStart))
             guard newline.location != NSNotFound else { break }
             // The view can be a moment behind the screen, so a row counts only while it still shows the same text.
-            if let screen, newline.location + limit > selection.location, newline.location < NSMaxRange(selection) + limit,
+            if let screen, newline.location + limit >= selection.location, newline.location <= NSMaxRange(selection) + limit,
                let cells = screen.row(absolute: screen.trimmedLines + line), cells.last?.wraps == true,
                String(cells.filter { $0.width != 0 }.map(\.character)) == full.substring(with: NSRange(location: lineStart, length: newline.location - lineStart)) {
                 wraps.insert(newline.location)
@@ -299,21 +375,83 @@ final class TerminalTextView: NSTextView {
             lineStart = newline.location + 1
             line += 1
         }
-        func part(_ start: Int, _ end: Int) -> String {
+        return { start, end in
             var text = "", position = start
-            for newline in wraps.intersection(IndexSet(integersIn: start..<end)) {
+            for newline in wraps.intersection(IndexSet(integersIn: start..<max(start, end))) {
                 text += full.substring(with: NSRange(location: position, length: newline - position))
                 position = newline + 1
             }
             return text + full.substring(with: NSRange(location: position, length: end - position))
         }
-        let end = NSMaxRange(selection)
-        return SecretRedaction.redact(part(selection.location, end), before: part(max(0, selection.location - limit), selection.location),
-                                      after: part(end, min(full.length, end + limit)))
+    }
+
+    /// Double-click selects a word with the characters in Settings (iTerm2's by default) counted as part of one, so a
+    /// path or a host name with dots and dashes is selected whole.
+    override func selectionRange(forProposedRange proposedCharRange: NSRange, granularity: NSSelectionGranularity) -> NSRange {
+        guard granularity == .selectByWord, proposedCharRange.length <= 1 else {
+            return super.selectionRange(forProposedRange: proposedCharRange, granularity: granularity)
+        }
+        let text = string as NSString, words = TerminalPreferences.wordCharacters
+        func isWord(_ index: Int) -> Bool {
+            guard index >= 0, index < text.length, let scalar = UnicodeScalar(text.character(at: index)) else { return false }
+            return CharacterSet.alphanumerics.contains(scalar) || words.unicodeScalars.contains(scalar)
+        }
+        let location = proposedCharRange.location
+        guard isWord(location) else { return super.selectionRange(forProposedRange: proposedCharRange, granularity: granularity) }
+        var start = location, end = location + 1
+        while isWord(start - 1) { start -= 1 }
+        while isWord(end) { end += 1 }
+        return NSRange(location: start, length: end - start)
     }
 
     /// UTF-16 length of each line on screen, so an update can find where its first changed line starts.
-    private var lineLengths: [Int] = []
+    private(set) var lineLengths: [Int] = []
+    /// Terminal › Copy mode, while it is on, and what to do when it ends.
+    var copyMode: TerminalCopyMode?
+    var copyModeEnded: (() -> Void)?
+    /// Terminal › Show timestamps, and when each line last changed by its index in the view.
+    var showsTimestamps = false { didSet { if showsTimestamps != oldValue { needsDisplay = true } } }
+    var lineTime: (Int) -> Date? = { _ in nil }
+    /// Pictures from sixel and OSC 1337 on the screen being shown, and the absolute number of the view's first line.
+    var images: [TerminalImage] = [] {
+        didSet {
+            guard images.map(\.id) != oldValue.map(\.id) || images.map(\.line) != oldValue.map(\.line) else { return }
+            let kept = Set(images.map(\.id))
+            decodedImages = decodedImages.filter { kept.contains($0.key) }
+            needsDisplay = true
+        }
+    }
+    var firstLine = 0
+    var decodedImages: [Int: NSImage] = [:]
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        if !images.isEmpty { drawImages(in: dirtyRect) }
+        if showsTimestamps { drawTimestamps(in: dirtyRect) }
+    }
+
+    /// Draws each visible line's time at its right end, over the text, in the line's own height.
+    private func drawTimestamps(in dirtyRect: NSRect) {
+        guard let manager = layoutManager, let container = textContainer, !lineLengths.isEmpty else { return }
+        let glyphs = manager.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -textContainerOrigin.x, dy: -textContainerOrigin.y), in: container)
+        guard glyphs.length > 0 else { return }
+        var number = line(containing: manager.characterIndexForGlyph(at: glyphs.location))
+        let font = NSFont.monospacedDigitSystemFont(ofSize: max(9, fonts.regular.pointSize - 2), weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+        let fill = (backgroundColor.usingColorSpace(.sRGB) ?? backgroundColor).withAlphaComponent(0.9)
+        let now = Date()
+        manager.enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, _, _ in
+            defer { number += 1 }
+            guard let date = self.lineTime(number) else { return }
+            let text = LineTimes.label(date, now: now) as NSString
+            let size = text.size(withAttributes: attributes)
+            let x = self.bounds.maxX - size.width - 10
+            let y = rect.minY + self.textContainerOrigin.y + (rect.height - size.height) / 2
+            fill.setFill()
+            NSRect(x: x - 4, y: rect.minY + self.textContainerOrigin.y, width: size.width + 8, height: rect.height).fill()
+            text.draw(at: NSPoint(x: x, y: y), withAttributes: attributes)
+        }
+    }
 
     /// Replaces only what changed: lines that scrolled off the top, then everything from the first
     /// changed line down. Untouched lines keep their layout, which keeps long scrollback cheap.
@@ -385,6 +523,7 @@ final class TerminalTextView: NSTextView {
     // MARK: Keyboard and paste
 
     override func keyDown(with event: NSEvent) {
+        if copyMode != nil, !event.modifierFlags.contains(.command) { copyModeKey(event); return }
         guard inputEnabled else { return }
         if event.modifierFlags.contains(.command) { super.keyDown(with: event); return }
         // Option as Meta: Option-key sends Escape and the key, for Emacs and readline word commands.
@@ -397,7 +536,9 @@ final class TerminalTextView: NSTextView {
         // While an input method is composing, every key belongs to it, Return and the arrows included.
         if !hasMarkedText(), let bytes = TerminalKeyboard.bytes(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers ?? "",
                                                               control: event.modifierFlags.contains(.control),
-                                                              applicationCursorKeys: applicationCursorKeys) {
+                                                              applicationCursorKeys: applicationCursorKeys,
+                                                              shift: event.modifierFlags.contains(.shift),
+                                                              option: event.modifierFlags.contains(.option)) {
             type(bytes); return
         }
         interpretKeyEvents([event])
@@ -407,9 +548,19 @@ final class TerminalTextView: NSTextView {
         let text = (insertString as? NSAttributedString)?.string ?? (insertString as? String) ?? ""
         unmarkText(); type(Array(text.utf8))
     }
+    /// Voice Control, dictation, and other assistive apps set the selected text or the whole value through
+    /// accessibility. The transcript belongs to the remote program, so their text is typed into it instead.
+    override func setAccessibilitySelectedText(_ text: String?) {
+        guard inputEnabled, let text, !text.isEmpty else { return }
+        type(Array(text.utf8))
+    }
+    override func setAccessibilityValue(_ value: Any?) { }
     override func cut(_ sender: Any?) { copy(sender) }
     override func paste(_ sender: Any?) {
-        guard inputEnabled, let text = NSPasteboard.general.string(forType: .string) else { return }
+        guard inputEnabled, let copied = pasteboard.string(forType: .string) else { return }
+        let text = TerminalKeyboard.prepared(paste: copied, trims: TerminalPreferences.pasteTrims, joinsLines: TerminalPreferences.pasteJoinsLines)
+        guard !text.isEmpty else { return }
+        PasteHistory.shared.add(copied)
         if TerminalPreferences.confirmsMultilinePaste, TerminalKeyboard.isMultiline(text), let window {
             PastePreview.confirm(text, in: window) { [weak self] edited in self?.send(paste: edited) }
             return
@@ -621,8 +772,23 @@ final class TerminalTextView: NSTextView {
         }
         window?.makeFirstResponder(self)
         if sendsMouse(event) { pressedButton = .left; report(.left, .press, event); return }
+        selectingWithMouse = true
         super.mouseDown(with: event)
+        selectingWithMouse = false
+        // NSTextView tracks the drag inside mouseDown, so the selection is final here.
+        selectionFinished()
+        if let update = heldUpdate { heldUpdate = nil; update() }
+    }
+    /// True while the left button is down to select text. AppKit keeps where the button went down as a character
+    /// offset and ends the selection under the pointer, so output must not change the text or scroll it until the
+    /// button is up: a line moving under a plain click used to select it, and Copy on select copied it.
+    private(set) var selectingWithMouse = false
+    /// The latest view update that arrived while selecting, run once the button is up.
+    var heldUpdate: (() -> Void)?
+    /// After a mouse selection: an empty one returns to the cursor, and a real one is copied when Copy on select is on.
+    func selectionFinished() {
         if selectedRange().length == 0 { setSelectedRange(terminalInsertionRange) }
+        else if TerminalPreferences.copiesOnSelect { copy(nil) }
     }
     override func mouseDragged(with event: NSEvent) {
         if pressedButton != nil { report(pressedButton ?? .left, .drag, event); return }
@@ -648,6 +814,7 @@ final class TerminalTextView: NSTextView {
     }
     override func otherMouseDown(with event: NSEvent) {
         if sendsMouse(event) { pressedButton = .middle; report(.middle, .press, event); return }
+        if event.buttonNumber == 2, TerminalPreferences.middleClickPastes { window?.makeFirstResponder(self); paste(nil); return }
         super.otherMouseDown(with: event)
     }
     override func otherMouseUp(with event: NSEvent) {
@@ -847,6 +1014,17 @@ public enum TerminalKeyboard {
         return text.contains("\n") || text.contains("\r")
     }
 
+    /// Pasted text with the spaces and line breaks around it left out, and its line breaks turned into spaces, as
+    /// Settings asks.
+    static func prepared(paste text: String, trims: Bool, joinsLines: Bool) -> String {
+        var text = text
+        if trims { text = text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if joinsLines {
+            text = text.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+        }
+        return text
+    }
+
     static func pasteBytes(_ text: String, bracketed: Bool) -> [UInt8]? {
         var payload = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r")
         if bracketed {
@@ -868,24 +1046,49 @@ public enum TerminalKeyboard {
         return [0x1B] + Array(characters.utf8)
     }
 
-    public static func bytes(keyCode: UInt16, characters: String, control: Bool, applicationCursorKeys: Bool = false) -> [UInt8]? {
+    /// What a key sends, as xterm and iTerm2 send it. Shift, Option, and Control on the cursor, editing, and function keys
+    /// add xterm's modifier parameter (2 Shift, 3 Option, 5 Control, and their sums), as in `ESC [1;5D` for Control-←.
+    public static func bytes(keyCode: UInt16, characters: String, control: Bool, applicationCursorKeys: Bool = false,
+                             shift: Bool = false, option: Bool = false) -> [UInt8]? {
         if control, let value = characters.lowercased().unicodeScalars.first?.value, (0x40...0x7f).contains(value) || value == 0x20 { return [UInt8(value & 0x1f)] }
-        let arrow = applicationCursorKeys ? "\u{1b}O" : "\u{1b}["
+        // Control with a digit or a symbol, as xterm and iTerm2 send them: ⌃2 NUL, ⌃6 RS, ⌃- and ⌃/ US.
+        if control, let byte = ["2": 0x00, "6": 0x1e, "-": 0x1f, "/": 0x1f][characters] as UInt8? { return [byte] }
+        let modifier = 1 + (shift ? 1 : 0) + (option ? 2 : 0) + (control ? 4 : 0)
+        /// `ESC [ 1 ; m X` with modifiers; otherwise `ESC O X` in application mode or `ESC [ X`.
+        func cursor(_ final: String, application: Bool = applicationCursorKeys) -> String {
+            modifier > 1 ? "\u{1b}[1;\(modifier)\(final)" : (application ? "\u{1b}O" : "\u{1b}[") + final
+        }
+        /// `ESC [ n ~`, or `ESC [ n ; m ~` with modifiers.
+        func tilde(_ number: Int) -> String { modifier > 1 ? "\u{1b}[\(number);\(modifier)~" : "\u{1b}[\(number)~" }
         let value: String
         switch keyCode {
         case 36, 76: value = "\r"
-        case 48: value = "\t"
+        case 48: value = shift ? "\u{1b}[Z" : "\t"
         case 51: value = "\u{7f}"
         case 53: value = "\u{1b}"
-        case 123: value = arrow + "D"
-        case 124: value = arrow + "C"
-        case 125: value = arrow + "B"
-        case 126: value = arrow + "A"
-        case 115: value = "\u{1b}[H"
-        case 119: value = "\u{1b}[F"
-        case 116: value = "\u{1b}[5~"
-        case 121: value = "\u{1b}[6~"
-        case 117: value = "\u{1b}[3~"
+        case 123: value = cursor("D")
+        case 124: value = cursor("C")
+        case 125: value = cursor("B")
+        case 126: value = cursor("A")
+        case 115: value = cursor("H")
+        case 119: value = cursor("F")
+        case 114: value = tilde(2)
+        case 117: value = tilde(3)
+        case 116: value = tilde(5)
+        case 121: value = tilde(6)
+        // F1 to F4 send SS3 P to S, as xterm does; with modifiers, CSI 1;m P to S.
+        case 122: value = cursor("P", application: true)
+        case 120: value = cursor("Q", application: true)
+        case 99: value = cursor("R", application: true)
+        case 118: value = cursor("S", application: true)
+        case 96: value = tilde(15)
+        case 97: value = tilde(17)
+        case 98: value = tilde(18)
+        case 100: value = tilde(19)
+        case 101: value = tilde(20)
+        case 109: value = tilde(21)
+        case 103: value = tilde(23)
+        case 111: value = tilde(24)
         default: return nil
         }
         return Array(value.utf8)
@@ -1059,10 +1262,13 @@ struct TerminalLineRenderer {
     /// UTF-16 offset of the cursor within the last line built with a cursor column.
     private(set) var lastCursorOffset: Int?
 
+    /// The lowest contrast ratio between text and its background; 1 leaves colors alone.
+    let minimumContrast: Double
+
     init(background: NSColor, foreground: NSColor, ansi: [NSColor], color: @escaping (TerminalColor, NSColor, [NSColor]) -> NSColor,
-         link: @escaping (UInt16) -> String? = { _ in nil }, fonts: TerminalFonts = .standard) {
+         link: @escaping (UInt16) -> String? = { _ in nil }, fonts: TerminalFonts = .standard, minimumContrast: Double = 1) {
         self.background = background; self.foreground = foreground; self.ansi = ansi; self.color = color; self.link = link
-        self.fonts = fonts
+        self.fonts = fonts; self.minimumContrast = minimumContrast
         let paragraph = NSMutableParagraphStyle()
         paragraph.minimumLineHeight = fonts.lineHeight
         paragraph.maximumLineHeight = fonts.lineHeight
@@ -1071,11 +1277,21 @@ struct TerminalLineRenderer {
 
     mutating func attributes(_ style: CellStyle) -> [NSAttributedString.Key: Any] {
         if let cached = cache[style] { return cached }
-        var cellForeground = color(style.foreground, foreground, ansi)
+        // Bold text in one of the eight basic colors shows in its bright version, as xterm and iTerm2 do by default.
+        var foregroundColor = style.foreground
+        if style.bold, case .indexed(let index) = foregroundColor, index < 8 { foregroundColor = .indexed(index + 8) }
+        var cellForeground = color(foregroundColor, foreground, ansi)
         var cellBackground = color(style.background, background, ansi)
         if style.inverse { swap(&cellForeground, &cellBackground) }
-        var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: style.invisible ? cellBackground : cellForeground,
-            .font: style.bold ? fonts.bold : fonts.regular, .paragraphStyle: paragraph]
+        // Faint text is drawn halfway to its background, as in xterm and iTerm2.
+        var text = style.faint ? (cellForeground.blended(withFraction: 0.5, of: cellBackground) ?? cellForeground) : cellForeground
+        if minimumContrast > 1 { text = Self.contrasting(text, on: cellBackground, ratio: minimumContrast) }
+        let font = style.italic ? (style.bold ? fonts.boldItalic : fonts.italic) : (style.bold ? fonts.bold : fonts.regular)
+        var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: style.invisible ? cellBackground : text,
+            .font: font, .paragraphStyle: paragraph, .ligature: fonts.ligatures ? 1 : 0]
+        if fonts.extraWidth != 0 { attributes[.kern] = fonts.extraWidth }
+        if fonts.baselineOffset != 0 { attributes[.baselineOffset] = fonts.baselineOffset }
+        if style.italic && fonts.slantsItalic { attributes[.obliqueness] = 0.2 }
         // The default background is the view's own, so it can be see-through; only colored cells paint their own.
         if style.background != .default || style.inverse { attributes[.backgroundColor] = cellBackground }
         if style.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
@@ -1090,9 +1306,37 @@ struct TerminalLineRenderer {
 
     /// A private-use prompt icon still occupies the parser's cell width when its fallback font has different
     /// advances. Resolve the actual face explicitly: measuring the primary font would measure a missing glyph.
+    /// WCAG relative luminance.
+    static func luminance(_ color: NSColor) -> Double {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return 0 }
+        func linear(_ value: CGFloat) -> Double {
+            let value = Double(value)
+            return value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+    }
+    static func contrast(_ first: NSColor, _ second: NSColor) -> Double {
+        let (a, b) = (luminance(first), luminance(second))
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+    /// The text color moved toward white or black, whichever the background allows more of, until it reaches `ratio`.
+    static func contrasting(_ text: NSColor, on background: NSColor, ratio: Double) -> NSColor {
+        guard contrast(text, background) < ratio else { return text }
+        let target: NSColor = contrast(.white, background) >= contrast(.black, background) ? .white : .black
+        var low = 0.0, high = 1.0
+        for _ in 0..<12 {
+            let middle = (low + high) / 2
+            let candidate = text.blended(withFraction: middle, of: target) ?? target
+            if contrast(candidate, background) >= ratio { high = middle } else { low = middle }
+        }
+        return text.blended(withFraction: high, of: target) ?? target
+    }
+
     private mutating func symbol(_ cell: Cell) -> (font: NSFont, kern: CGFloat)? {
+        // Private-use icons, and ambiguous-width characters drawn two cells wide, are spaced to fill their cells.
         guard let value = cell.character.unicodeScalars.first?.value,
-              (0xE000...0xF8FF).contains(value) || (0xF0000...0xFFFFD).contains(value) || (0x100000...0x10FFFD).contains(value) else { return nil }
+              (0xE000...0xF8FF).contains(value) || (0xF0000...0xFFFFD).contains(value) || (0x100000...0x10FFFD).contains(value)
+              || (cell.width == 2 && TerminalScreen.width(of: cell.character, ambiguousWide: false) == 1) else { return nil }
         let key = SymbolKey(character: cell.character, bold: cell.style.bold, width: cell.width)
         if let cached = symbols[key] { return cached }
         let text = String(cell.character) as NSString
@@ -1124,6 +1368,12 @@ struct TerminalLineRenderer {
                 var attributes = attributes(cell.style)
                 attributes[.font] = symbol.font
                 attributes[.kern] = symbol.kern
+                line.append(NSAttributedString(string: glyph, attributes: attributes))
+            } else if cell.width == 2 && fonts.extraWidth != 0 {
+                // A wide character gets the extra space of both its cells.
+                flush(); runStyle = nil
+                var attributes = attributes(cell.style)
+                attributes[.kern] = fonts.extraWidth * 2
                 line.append(NSAttributedString(string: glyph, attributes: attributes))
             } else {
                 if cell.style != runStyle { flush(); runStyle = cell.style }

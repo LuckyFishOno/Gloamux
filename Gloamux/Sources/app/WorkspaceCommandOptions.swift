@@ -1,11 +1,12 @@
 import Foundation
 import GloamuxNetwork
 import Terminal
+import Ssh
 
 /// `gloamux sessions options`: the rest of the SSH and FTP connection form, beyond `edit` and `auth`.
 extension WorkspaceCommand {
     static let sshOptions = ["jump", "proxy", "proxy-host", "proxy-port", "startup", "forward-agent", "x11", "open-files",
-                             "files", "encoding", "confirm", "remote-folder", "local-folder"]
+                             "files", "algorithms", "encoding", "confirm", "remote-folder", "local-folder"]
 
     @MainActor static func sessionOptions(_ args: [String], _ model: WorkspaceModel, live: Bool) async throws -> Any {
         guard args.count >= 2 else { throw Usage("Wrong number of arguments. Run gloamux sessions --help.") }
@@ -60,6 +61,9 @@ extension WorkspaceCommand {
             case "files":
                 guard clear || ["auto", "sftp", "scp"].contains(value) else { throw Usage("Choose auto, sftp, or scp.") }
                 connection.fileProtocol = clear ? nil : FileProtocolChoice(rawValue: value)
+            case "algorithms":
+                guard clear || SSHAlgorithmSet(rawValue: value) != nil else { throw Usage("Choose modern or compatible.") }
+                connection.sshAlgorithms = clear || value == "modern" ? nil : .compatible
             case "encoding":
                 guard clear || TerminalEncoding(rawValue: value) != nil else {
                     throw Usage("Choose \(TerminalEncoding.allCases.map(\.rawValue).joined(separator: ", ")).")
@@ -114,6 +118,7 @@ extension WorkspaceCommand {
         info["x11"] = connection.forwardsX11 == true
         info["open-files"] = connection.opensFiles == true
         info["files"] = connection.fileProtocol?.rawValue ?? "auto"
+        info["algorithms"] = (connection.sshAlgorithms ?? .modern).rawValue
         info["encoding"] = (connection.encoding ?? .utf8).rawValue
         return info
     }

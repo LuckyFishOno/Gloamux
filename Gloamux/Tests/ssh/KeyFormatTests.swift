@@ -49,6 +49,47 @@ final class KeyFormatTests: XCTestCase {
         }
     }
 
+    /// OpenSSL writes an EC scalar without its leading zero bytes and, as ssh-keygen asks it to, names the curve by its
+    /// parameters. Each curve gets a key whose scalar starts with a zero byte, written by OpenSSL in both formats, so the
+    /// short scalar is tested on every run.
+    func testECKeysWithAShortScalarLoad() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/openssl"), "OpenSSL is not installed")
+        func shortKey<Key>(_ make: () -> Key, raw: (Key) -> Data) -> Key {
+            while true { let key = make(); if raw(key).first == 0 { return key } }
+        }
+        let p256 = shortKey({ P256.Signing.PrivateKey() }) { $0.rawRepresentation }
+        let p384 = shortKey({ P384.Signing.PrivateKey() }) { $0.rawRepresentation }
+        let p521 = shortKey({ P521.Signing.PrivateKey() }) { $0.rawRepresentation }
+        let keys: [(String, String, Int, KeyMaterial)] = [("p256", p256.pemRepresentation, 32, .p256(p256)),
+                                                         ("p384", p384.pemRepresentation, 48, .p384(p384)),
+                                                         ("p521", p521.pemRepresentation, 66, .p521(p521))]
+        for (name, pem, width, material) in keys {
+            let named = server.path("\(name)-named.pem"), sec1 = server.path("\(name)-sec1.pem"), pkcs8 = server.path("\(name)-pkcs8.pem")
+            try pem.write(toFile: named, atomically: true, encoding: .utf8)
+            try Self.openssl(["ec", "-in", named, "-param_enc", "explicit", "-out", sec1])
+            try Self.openssl(["pkcs8", "-topk8", "-nocrypt", "-in", sec1, "-out", pkcs8])
+            let expected = try SSHPrivateKeyFile(material).publicKeyLine
+            for path in [sec1, pkcs8] {
+                let text = try String(contentsOfFile: path, encoding: .utf8)
+                let der = Array(Data(base64Encoded: text.split(whereSeparator: \.isNewline).filter { !$0.hasPrefix("-----") }.joined())!)
+                // The SEC1 key starts INTEGER 1, OCTET STRING scalar. In PKCS#8 it comes last, after the curve's
+                // parameters, whose cofactor can be followed by the same bytes.
+                let start = try XCTUnwrap((0..<der.count - 5).last { Array(der[$0..<$0 + 4]) == [0x02, 0x01, 0x01, 0x04] }, path)
+                XCTAssertLessThan(Int(der[start + 4]), width, "\(path) has a short scalar")
+                XCTAssertEqual(try SSHPrivateKeyFile.load(at: URL(fileURLWithPath: path), passphrase: "").publicKeyLine, expected, path)
+            }
+        }
+    }
+
+    private static func openssl(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
+        process.arguments = arguments
+        process.standardError = FileHandle.nullDevice
+        try process.run(); process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+    }
+
     func testPublicKeyLineMatchesSSHKeygen() throws {
         for (name, type, bits) in [("ed", "ed25519", 256), ("p521", "ecdsa", 521), ("rsa", "rsa", 2048)] {
             let key = try server.addKey(name, type: type, bits: bits)

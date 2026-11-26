@@ -4,7 +4,7 @@
 
 **macOS 原生的 SSH、檔案傳輸與遠端桌面工作區。**
 
-目前版本：**Gloamux 1.4.6 (build 15)**。
+目前版本：**Gloamux 1.5 (build 16)**。
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
@@ -80,8 +80,8 @@ Gloamux 給用 Mac 管伺服器、又不想同時開終端、SFTP 工具、遠�
 
 ## 功能
 
-- **終端** · 分頁、拖曳分割窗格、本機 shell、Shell 整合（提示字元標記、指令狀態、通知）、搜尋、記錄檔、會遮住密碼的錄影，以及 73 組配色。
-- **SSH** · 密碼，Ed25519、ECDSA、RSA 金鑰，`ssh-agent`、Secure Enclave 金鑰、鍵盤互動式（PAM）登入、以 session key 取代使用者名稱的閘道、依序列出最多八層跳板並顯示每一跳的連線路徑、SOCKS 和 HTTP 代理、連接埠轉發、代理轉發，以及透過 XQuartz 的 X11。
+- **終端** · 分頁、拖曳分割窗格、本機 shell、Shell 整合（提示字元標記、指令狀態、通知）、搜尋、記錄檔、會遮住密碼的錄影，以及 73 組配色。鍵盤拷貝模式、貼上歷史、每行時間戳記、sixel 與 iTerm2 內嵌圖片、`sz` 與 `rz`（ZMODEM），以及用快速鍵叫出的下拉視窗。
+- **SSH** · 密碼，Ed25519、ECDSA、RSA 金鑰，`ssh-agent`、Secure Enclave 金鑰、鍵盤互動式（PAM）登入、以 session key 取代使用者名稱的閘道、依序列出最多八層跳板並顯示每一跳的連線路徑、SOCKS 和 HTTP 代理、連接埠轉發、代理轉發、透過 XQuartz 的 X11，以及給舊伺服器和網路設備用的「相容」金鑰交換設定。
 - **檔案** · 跟著目前窗格的檔案側欄、可續傳佇列的雙欄傳輸畫面、快速查看，以及用 Mac App 編輯遠端檔案，支援 SFTP、SCP、FTP 和 FTPS。貼上一次 `sftp` 指令就能存成連線。
 - **遠端桌面** · 在 Gloamux 分頁裡使用 RDP（含網路層級驗證）和 VNC（含 macOS 螢幕共享），可走 SSH 通道並共用剪貼簿。
 - **其他連線** · 序列埠、Telnet、Mosh、Docker 容器、Kubernetes Pod 和 AWS Systems Manager 工作階段。

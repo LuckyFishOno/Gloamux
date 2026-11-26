@@ -93,4 +93,55 @@ import SwiftUI
         model.terminalReceived(tab, bytes: Array("more\r\n".utf8))
         XCTAssertGreaterThan(tab.screenRevision, revision)
     }
+
+    /// AppKit's selection tracking keeps where the button went down as a character offset and ends the selection under
+    /// the pointer. Output that arrived while the button was down used to scroll a line under the pointer, so a plain
+    /// click selected a line and Copy on select put it on the clipboard.
+    func testOutputWhileTheButtonIsDownDoesNotTurnAClickIntoASelection() async throws {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: TerminalPreferences.copyOnSelectKey)
+        defer { defaults.set(saved, forKey: TerminalPreferences.copyOnSelectKey) }
+        defaults.set(true, forKey: TerminalPreferences.copyOnSelectKey)
+        let board = NSPasteboard(name: NSPasteboard.Name("gloamux-test-\(UUID())"))
+        defer { board.releaseGlobally() }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-click-output-\(UUID())")
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let model = try WorkspaceModel(storage: root)
+        let tab = SessionTab()
+        tab.connected = true; tab.terminalReady = true
+        let window = host(TerminalDisplay(tab: tab, model: model, resizes: false).frame(width: 700, height: 400))
+        try await settle()
+        model.terminalReceived(tab, bytes: Array((0..<120).map { "line \($0)\r\n" }.joined().utf8))
+        try await settle()
+        let view = try XCTUnwrap(textView(in: window.contentView) as? TerminalTextView)
+        view.pasteboard = board
+        let clip = try XCTUnwrap(view.enclosingScrollView?.contentView)
+        XCTAssertTrue(view.showsScreenBottom)
+
+        for round in 0..<3 {
+            // Blank cells right of the text, halfway down what is in sight.
+            let point = view.convert(NSPoint(x: clip.bounds.maxX - 40, y: clip.bounds.midY), to: nil)
+            func event(_ type: NSEvent.EventType) -> NSEvent {
+                NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                   windowNumber: window.windowNumber, context: nil, eventNumber: round, clickCount: 1, pressure: 1)!
+            }
+            let up = event(.leftMouseUp)
+            // AppKit's tracking loop runs the run loop, not the main queue, so timers stand in for output and the release.
+            func later(_ seconds: TimeInterval, _ action: @escaping () -> Void) {
+                RunLoop.main.add(Timer(timeInterval: seconds, repeats: false) { _ in MainActor.assumeIsolated { action() } }, forMode: .common)
+            }
+            later(0.05) {
+                model.terminalReceived(tab, bytes: Array("during click \(round)\r\nmore \(round)\r\n".utf8))
+                window.contentView?.layoutSubtreeIfNeeded()
+                window.displayIfNeeded()
+            }
+            later(0.4) { NSApp.postEvent(up, atStart: false) }
+            view.mouseDown(with: event(.leftMouseDown))
+            XCTAssertEqual(view.selectedRange().length, 0, "round \(round): a click selects nothing")
+            XCTAssertNil(board.string(forType: .string), "round \(round): the clipboard is left alone")
+            try await settle()
+            XCTAssertTrue(view.string.contains("more \(round)"), "round \(round): the output is shown once the button is up")
+            XCTAssertTrue(view.showsScreenBottom, "round \(round): and the view still follows it")
+        }
+    }
 }

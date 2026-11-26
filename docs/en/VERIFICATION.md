@@ -4,6 +4,19 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.5 (build 16): terminal tools, ZMODEM, inline images, and Compatible SSH key exchanges (November 26, 2026)
+
+Built on `395ad71` (1.4.6 build 15).
+
+- **Unit tests.** New: `ZmodemTests`, `InlineImageTests`, `KeyExchangeTests` (each Compatible key exchange signs in to a local OpenSSH server that offers only it, with two cipher families, and Modern is refused), and `ShellEnvironmentTests` (the locale variables and terminal modes a shell receives). Added to: `TerminalInputTests` (xterm keys, bright bold colors, italic and faint text, spacing, ligatures and minimum contrast, copying wrapped rows, copy on select and middle-click paste, word characters and ambiguous width, paste trimming and joining, copy mode, double-click on paths), `TerminalViewBehaviorTests` (following output, accessibility input), `KeyFormatTests` (EC keys with a short scalar, in SEC1 and PKCS#8), `WorkspaceCommandTests` (the new settings, ZMODEM through a local shell including cancelling `sz` mid-transfer, the dropdown hotkey, paste history, and timestamps from the CLI), and `TerminalOutputViewTests` (a click while output arrives).
+- **Swift suite.** 560 tests, 8 skipped (remote host and Xshell sample checks that need external inputs), 0 failures, before the release run. The Swift and Rust suites run again in `release.sh build` on the release commit.
+- **ZMODEM against real lrzsz.** Over SSH to a test server with lrzsz 0.12.21rc: `sz` of a 20 MB file, an empty file, a name with spaces, and a name with shell characters, and `rz` of an 8 MB file, a Chinese name, and an empty file. Every SHA-256 matched. A second download of the same name got a numbered name. A cancelled download removed its partial file; before the fix the data `sz` had already sent appeared on screen, and after it only the prompt did.
+- **Following output.** A report that a long `sudo apt install` did not stay at the bottom led to reading the position before each update. In a packaged copy, a script that redraws an apt-style progress line in a scroll region kept the bottom in view with text selected, and kept the view still when scrolled up.
+- **A click while output arrives.** Found during the demo: with **Copy on select** on, a click while output arrived selected a line and replaced the clipboard. The new test reproduced it (162 characters selected) before the fix and passes after it.
+- **On the Mac.** In a renamed test copy with an isolated workspace and test preferences: minimum contrast, 1.4× line spacing, 1.2× character spacing, wide ambiguous-width characters, double-clicking a path, copy on select, middle-click paste, paste trimming and joining, timestamps, copy mode, paste history in the sheet and the CLI, a session set to **Compatible** connecting, the dropdown window shown and hidden with `gloamux layout dropdown`, sixel and iTerm2 images, and `sz` and `rz` with the bar.
+- **Packaged app and stress.** `package-app.sh`, deep strict signature verification, the 9-feature self-test, and a full `stress-test.py` run: all 14 phases passed, including 30 tabs printing 1,000,000 lines each (about 605,000 lines/s, 931 MB at the peak and 242 MB after closing them).
+- Not checked: the hotkey pressed on a real keyboard (the demo used the CLI), ligatures with a ligature font (none installed), the Dock bounce, and installing the update through **Check for Updates**. The kitty graphics protocol is not supported.
+
 ## Gloamux 1.4.6 (build 15): what new tabs open, a steady terminal screen, and pickers (November 26, 2026)
 
 Built on `1b57fc3` (1.4.5 build 14).

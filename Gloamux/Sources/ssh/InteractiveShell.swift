@@ -83,6 +83,7 @@ final class InteractiveShellHandler: ChannelDuplexHandler {
     private let continuation: AsyncThrowingStream<[UInt8], Error>.Continuation
     private let rows: Int, columns: Int
     private let term: String
+    private let environment: [(String, String)]
     private let forwardsAgent: Bool
     private let x11: X11ForwardState?
     private weak var router: InboundChannelRouter?
@@ -93,10 +94,10 @@ final class InteractiveShellHandler: ChannelDuplexHandler {
     let gate = ShellOutputGate()
     private var received: [UInt8] = []
     init(ready: EventLoopPromise<Void>, continuation: AsyncThrowingStream<[UInt8], Error>.Continuation, rows: Int, columns: Int,
-         term: String = "xterm-256color", forwardsAgent: Bool = false, x11: X11ForwardState? = nil,
-         router: InboundChannelRouter? = nil) {
+         term: String = "xterm-256color", environment: [(String, String)] = [], forwardsAgent: Bool = false,
+         x11: X11ForwardState? = nil, router: InboundChannelRouter? = nil) {
         self.ready = ready; self.continuation = continuation; self.rows = rows; self.columns = columns
-        self.term = term; self.forwardsAgent = forwardsAgent; self.x11 = x11; self.router = router
+        self.term = term; self.environment = environment; self.forwardsAgent = forwardsAgent; self.x11 = x11; self.router = router
     }
     func channelActive(context: ChannelHandlerContext) {
         // Without a reply, as OpenSSH sends it: a server that refuses agent forwarding still opens the shell.
@@ -115,9 +116,23 @@ final class InteractiveShellHandler: ChannelDuplexHandler {
         }
         context.fireChannelActive()
     }
+    /// The terminal settings OpenSSH sends from a Mac terminal: the usual control keys, Delete (0x7F) as erase, and
+    /// UTF-8 input, so erasing in a line read by the terminal, as `read` and password prompts do, removes a whole
+    /// character instead of one byte of it. Without them the server keeps its own defaults.
+    static let terminalModes: SSHTerminalModes = {
+        typealias Op = SSHTerminalModes.Opcode
+        let values: [(Op, UInt32)] = [
+            (.VINTR, 3), (.VQUIT, 28), (.VERASE, 127), (.VKILL, 21), (.VEOF, 4), (.VSUSP, 26),
+            (.ICRNL, 1), (.IXON, 1), (Op(rawValue: 42), 1), // IUTF8, RFC 8160
+            (.ISIG, 1), (.ICANON, 1), (.ECHO, 1), (.ECHOE, 1), (.ECHOK, 1), (.IEXTEN, 1), (.ECHOCTL, 1), (.ECHOKE, 1),
+            (.OPOST, 1), (.ONLCR, 1), (.CS8, 1),
+        ]
+        return SSHTerminalModes(Dictionary(uniqueKeysWithValues: values.map { ($0.0, SSHTerminalModes.OpcodeValue(rawValue: $0.1)) }))
+    }()
+
     private func requestPTY(_ context: ChannelHandlerContext) {
         stage = .pty
-        context.triggerUserOutboundEvent(SSHChannelRequestEvent.PseudoTerminalRequest(wantReply: true, term: term, terminalCharacterWidth: columns, terminalRowHeight: rows, terminalPixelWidth: 0, terminalPixelHeight: 0, terminalModes: .init([:])))
+        context.triggerUserOutboundEvent(SSHChannelRequestEvent.PseudoTerminalRequest(wantReply: true, term: term, terminalCharacterWidth: columns, terminalRowHeight: rows, terminalPixelWidth: 0, terminalPixelHeight: 0, terminalModes: Self.terminalModes))
             .whenFailure { error in self.fail(error); context.close(promise: nil) }
     }
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
@@ -128,6 +143,10 @@ final class InteractiveShellHandler: ChannelDuplexHandler {
                 requestPTY(context)
             case .pty:
                 stage = .shell
+                // Without a reply, as OpenSSH sends them: a server that does not accept a variable still opens the shell.
+                for (name, value) in environment {
+                    context.triggerUserOutboundEvent(SSHChannelRequestEvent.EnvironmentRequest(wantReply: false, name: name, value: value), promise: nil)
+                }
                 context.triggerUserOutboundEvent(SSHChannelRequestEvent.ShellRequest(wantReply: true)).whenFailure { error in self.fail(error); context.close(promise: nil) }
             case .shell:
                 stage = .ready
@@ -191,8 +210,10 @@ final class InteractiveShellHandler: ChannelDuplexHandler {
 extension SSHSession {
     /// Opens a shell on a pseudo-terminal. `term` is the TERM the server's programs see. With `agentSocket`, the server
     /// may reach that SSH agent through this shell's connection (`ssh -A`).
-    public func openShell(rows: Int = 24, columns: Int = 80, term: String = "xterm-256color", agentSocket: String? = nil,
-                          x11: SSHX11Configuration? = nil,
+    /// `environment` is sent as OpenSSH's `SendEnv LANG LC_*` does: only `LANG` and `LC_` names are sent, and the
+    /// server decides which it accepts.
+    public func openShell(rows: Int = 24, columns: Int = 80, term: String = "xterm-256color", environment: [String: String] = [:],
+                          agentSocket: String? = nil, x11: SSHX11Configuration? = nil,
                           timeoutSeconds: Int64 = 15) async throws -> SSHInteractiveShell {
         guard (1...500).contains(rows), (1...1000).contains(columns), (1...120).contains(timeoutSeconds) else { throw SSHError.invalidSettings("Invalid terminal dimensions or timeout.") }
         guard !term.isEmpty, term.utf8.count <= 64, term.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "-_.+".contains($0)) }) else {
@@ -206,8 +227,12 @@ extension SSHSession {
         let ready = channel.eventLoop.makePromise(of: Void.self)
         // Unbounded, since the gate and the SSH window bound it: at most a read's worth past the high mark.
         let pair = AsyncThrowingStream<[UInt8], Error>.makeStream(bufferingPolicy: .unbounded)
+        let variables = environment.filter { name, value in
+            (name == "LANG" || name.hasPrefix("LC_")) && name.utf8.count <= 64 && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
+                && !value.isEmpty && value.utf8.count <= 256 && value.allSatisfy { $0.isASCII && !$0.isNewline && $0 != "\0" }
+        }.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
         let shellHandler = InteractiveShellHandler(ready: ready, continuation: pair.continuation, rows: rows, columns: columns,
-                                                   term: term, forwardsAgent: agentSocket != nil, x11: x11Forward, router: inbound)
+                                                   term: term, environment: variables, forwardsAgent: agentSocket != nil, x11: x11Forward, router: inbound)
         // Consume ready failures even if channel creation is rejected before handler installation.
         ready.futureResult.whenFailure { _ in }
         let child: Channel

@@ -3,6 +3,7 @@ import Terminal
 import Combine
 import GloamuxNetwork
 import FileTransfer
+import Ssh
 
 /// How a saved SSH session reaches its files.
 enum FileProtocolChoice: String, Codable, CaseIterable, Sendable {
@@ -57,6 +58,8 @@ public struct SavedConnection: Codable, Equatable, Sendable {
     var forwardsX11: Bool?
     /// How files are reached over SSH: SFTP only or SCP only; nil tries SFTP and falls back to SCP.
     var fileProtocol: FileProtocolChoice?
+    /// Compatible also offers the older finite-field key exchanges; nil is modern.
+    var sshAlgorithms: SSHAlgorithmSet?
     /// Set for an FTP or FTPS server, which this entry then is instead of an SSH one.
     var ftpSecurity: FTPSecurity?
     /// The SHA-256 fingerprint of a self-signed FTPS certificate the user checked.
@@ -95,7 +98,7 @@ public struct SavedConnection: Codable, Equatable, Sendable {
     func validate() throws {
         if isFTP {
             guard !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, (1...65535).contains(port), identityPath == nil,
-                  usesAgent == nil, forwardsX11 != true, jumpSessionID == nil, earlierJumpSessionIDs == nil, proxyHost == nil, forwardingRules?.isEmpty ?? true,
+                  usesAgent == nil, forwardsX11 != true, sshAlgorithms == nil, jumpSessionID == nil, earlierJumpSessionIDs == nil, proxyHost == nil, forwardingRules?.isEmpty ?? true,
                   ftpFingerprint.map({ FTPSettings.isFingerprint($0) }) ?? true else {
                 throw WorkspaceError.invalid("Invalid saved connection settings.")
             }

@@ -32,10 +32,16 @@ extension WorkspaceCommand {
         Setting(name: "terminal.cursor-blinks", key: TerminalPreferences.blinkKey, kind: .bool(false)),
         Setting(name: "terminal.new-tab", key: TerminalPreferences.newTabKey, kind: .text(NewTabChoice.local.raw)),
         Setting(name: "terminal.opacity", key: TerminalPreferences.opacityKey, kind: .number(0.3...1, 1)),
+        Setting(name: "terminal.line-spacing", key: TerminalPreferences.lineSpacingKey, kind: .number(TerminalPreferences.spacings, 1)),
+        Setting(name: "terminal.character-spacing", key: TerminalPreferences.characterSpacingKey, kind: .number(TerminalPreferences.spacings, 1)),
+        Setting(name: "terminal.ligatures", key: TerminalPreferences.ligaturesKey, kind: .bool(false)),
+        Setting(name: "terminal.minimum-contrast", key: TerminalPreferences.minimumContrastKey, kind: .number(TerminalPreferences.contrasts, 1)),
         Setting(name: "terminal.scrollback", key: TerminalPreferences.scrollbackKey,
                 kind: .choice(TerminalPreferences.scrollbackChoices.map(String.init), String(TerminalPreferences.defaultScrollback))),
         Setting(name: "terminal.bell", key: TerminalPreferences.bellKey, kind: .choice(BellStyle.allCases.map(\.rawValue), BellStyle.flash.rawValue)),
         Setting(name: "terminal.confirm-multiline-paste", key: TerminalPreferences.pasteKey, kind: .bool(true)),
+        Setting(name: "terminal.paste-trims", key: TerminalPreferences.pasteTrimKey, kind: .bool(false)),
+        Setting(name: "terminal.paste-joins-lines", key: TerminalPreferences.pasteJoinKey, kind: .bool(false)),
         Setting(name: "terminal.allow-clipboard-writes", key: TerminalPreferences.clipboardKey, kind: .bool(false)),
         Setting(name: "terminal.mouse-reporting", key: TerminalPreferences.mouseKey, kind: .bool(true)),
         Setting(name: "terminal.log-every-session", key: TerminalPreferences.logKey, kind: .bool(false)),
@@ -45,6 +51,14 @@ extension WorkspaceCommand {
         Setting(name: "terminal.confirm-close", key: TerminalPreferences.confirmCloseKey, kind: .bool(true)),
         Setting(name: "terminal.right-click-paste", key: TerminalPreferences.rightClickPasteKey, kind: .bool(false)),
         Setting(name: "terminal.option-as-meta", key: TerminalPreferences.optionMetaKey, kind: .bool(false)),
+        Setting(name: "terminal.copy-on-select", key: TerminalPreferences.copyOnSelectKey, kind: .bool(false)),
+        Setting(name: "terminal.middle-click-paste", key: TerminalPreferences.middleClickPasteKey, kind: .bool(true)),
+        Setting(name: "terminal.bell-bounces-dock", key: TerminalPreferences.bellDockKey, kind: .bool(true)),
+        Setting(name: "terminal.inline-images", key: TerminalPreferences.inlineImagesKey, kind: .bool(true)),
+        Setting(name: "terminal.zmodem", key: TerminalPreferences.zmodemKey, kind: .bool(true)),
+        Setting(name: "terminal.zmodem-folder", key: TerminalPreferences.zmodemFolderKey, kind: .text("")),
+        Setting(name: "terminal.ambiguous-wide", key: TerminalPreferences.ambiguousWideKey, kind: .bool(false)),
+        Setting(name: "terminal.word-characters", key: TerminalPreferences.wordCharactersKey, kind: .text(TerminalPreferences.defaultWordCharacters)),
         Setting(name: "terminal.type", key: TerminalPreferences.terminalTypeKey, kind: .choice(TerminalPreferences.terminalTypes, "xterm-256color")),
         Setting(name: "ssh.keepalive-seconds", key: TerminalPreferences.keepAliveKey, kind: .int(0...3600, 30)),
         Setting(name: "ssh.reconnect", key: TerminalPreferences.reconnectKey, kind: .bool(true)),
@@ -54,6 +68,7 @@ extension WorkspaceCommand {
         Setting(name: "workspace.reopen-tabs", key: WorkspaceModel.restoreTabsKey, kind: .bool(false)),
         Setting(name: "workspace.lock-after-minutes", key: WorkspaceModel.lockIdleKey, kind: .int(0...1440, 0)),
         Setting(name: "menu-bar-extra", key: MenuBarSettings.key, kind: .bool(true)),
+        Setting(name: "dropdown-hotkey", key: DropdownWindow.hotkeyKey, kind: .choice(DropdownHotkey.allCases.map(\.rawValue), DropdownHotkey.off.rawValue)),
         Setting(name: "spotlight", key: SpotlightIndex.key, kind: .bool(true)),
         Setting(name: "reachability", key: Reachability.key, kind: .bool(true)),
         Setting(name: "desktop.share-clipboard", key: RemoteDesktopSession.clipboardKey, kind: .bool(true)),
@@ -241,6 +256,11 @@ extension WorkspaceCommand {
             try count(args, 1...1)
             guard let layout = WorkspaceLayout(argument: args[0]) else { throw Usage("Choose default, classic, or workbench.") }
             try model.selectLayout(layout)
+        case "dropdown":
+            try count(args, 0...0)
+            guard live else { throw WorkspaceError.invalid("Open Gloamux to show the dropdown window.") }
+            guard DropdownWindow.hotkey != .off else { throw Usage("Choose a dropdown-hotkey setting first.") }
+            return ["dropdown": DropdownWindow.shared.toggle()]
         default: throw Usage("Unknown layout operation.")
         }
         return ["layout": model.layout.argument]

@@ -19,6 +19,13 @@ import XCTest
         }
     }
 
+    func testSSHSessionsSendTheAppsOwnLocaleOrTheMacs() {
+        XCTAssertEqual(LocalLaunch.sshEnvironment(["LANG": "de_DE.UTF-8", "LC_CTYPE": "UTF-8", "LC_EMPTY": "", "HOME": "/x"], locale: Locale(identifier: "zh_TW")),
+                       ["LANG": "de_DE.UTF-8", "LC_CTYPE": "UTF-8"], "Variables the app was started with go as they are.")
+        XCTAssertEqual(LocalLaunch.sshEnvironment(["HOME": "/x"], locale: Locale(identifier: "zh_TW")), ["LANG": "zh_TW.UTF-8"],
+                       "Started from Finder, the Mac's language and region.")
+    }
+
     func testNonASCIINamesShowInALocalTerminal() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

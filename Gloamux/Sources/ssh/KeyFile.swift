@@ -474,7 +474,8 @@ enum PEMKeyFormat {
         if text.hasPrefix("-----BEGIN RSA PRIVATE KEY-----") {
             return try SSHPrivateKeyFile(.rsa(rsa(text)))
         }
-        if text.hasPrefix("-----BEGIN EC PRIVATE KEY-----"), let key = try sec1(text) { return try SSHPrivateKeyFile(key) }
+        if text.hasPrefix("-----BEGIN EC PRIVATE KEY-----"), let key = try sec1(der(text)) { return try SSHPrivateKeyFile(key) }
+        if text.hasPrefix("-----BEGIN PRIVATE KEY-----"), let key = try pkcs8EC(der(text)) { return try SSHPrivateKeyFile(key) }
         if text.hasPrefix("-----BEGIN EC PRIVATE KEY-----") || text.hasPrefix("-----BEGIN PRIVATE KEY-----") {
             if let key = try? P256.Signing.PrivateKey(pemRepresentation: text) { return try SSHPrivateKeyFile(.p256(key)) }
             if let key = try? P384.Signing.PrivateKey(pemRepresentation: text) { return try SSHPrivateKeyFile(.p384(key)) }
@@ -489,11 +490,45 @@ enum PEMKeyFormat {
         do { return try _RSA.Signing.PrivateKey(pemRepresentation: text) } catch { throw SSHKeyFileError.invalid }
     }
 
-    /// SEC1 `EC PRIVATE KEY`: SEQUENCE { INTEGER 1, OCTET STRING d, [0] curve OID, [1] public key }.
-    /// Read directly, because OpenSSL-written files trip the stricter CryptoKit parser.
-    private static func sec1(_ text: String) throws -> KeyMaterial? {
+    /// The DER bytes of a PEM file, without its header lines.
+    private static func der(_ text: String) throws -> [UInt8] {
         let body = text.split(whereSeparator: \.isNewline).filter { !$0.hasPrefix("-----") && !$0.contains(":") }.joined()
         guard let der = Data(base64Encoded: body).map(Array.init) else { throw SSHKeyFileError.invalid }
+        return der
+    }
+
+    /// PKCS#8 `PRIVATE KEY` holding an EC key: SEQUENCE { INTEGER 0, SEQUENCE { ecPublicKey OID, curve OID },
+    /// OCTET STRING { SEC1 key } }. Read directly, as SEC1 is: CryptoKit refuses some OpenSSL-written files, such as a
+    /// P-521 key whose scalar starts with zero bytes. Nil for other key types.
+    private static func pkcs8EC(_ der: [UInt8]) throws -> KeyMaterial? {
+        var index = 0
+        /// The tag and contents of the element at `index`; moves `index` past the element unless `enter` is set.
+        func element(enter: Bool = false) -> (tag: UInt8, contents: Range<Int>)? {
+            guard index + 2 <= der.count else { return nil }
+            let tag = der[index]
+            var position = index + 1
+            var size = Int(der[position]); position += 1
+            if size >= 0x80 {
+                let count = size & 0x7f
+                guard (1...3).contains(count), position + count <= der.count else { return nil }
+                size = der[position..<position + count].reduce(0) { $0 << 8 | Int($1) }
+                position += count
+            }
+            guard position + size <= der.count else { return nil }
+            index = enter ? position : position + size
+            return (tag, position..<position + size)
+        }
+        let ecPublicKey: [UInt8] = [0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01]
+        guard element(enter: true)?.tag == 0x30, let version = element(), version.tag == 0x02, der[version.contents] == [0x00],
+              let algorithm = element(), algorithm.tag == 0x30, der[algorithm.contents].starts(with: ecPublicKey),
+              let key = element(), key.tag == 0x04 else { return nil }
+        return try sec1(Array(der[key.contents]), parameters: Array(der[algorithm.contents]))
+    }
+
+    /// SEC1 `EC PRIVATE KEY`: SEQUENCE { INTEGER 1, OCTET STRING d, [0] curve OID, [1] public key }.
+    /// Read directly, because OpenSSL-written files trip the stricter CryptoKit parser. `parameters` holds the curve
+    /// when the key sits inside PKCS#8, where the SEC1 part can leave it out.
+    private static func sec1(_ der: [UInt8], parameters: [UInt8] = []) throws -> KeyMaterial? {
         var index = 0
         func length() -> Int? {
             guard index < der.count else { return nil }
@@ -512,7 +547,7 @@ enum PEMKeyFormat {
         index += 1
         guard let size = length(), index + size <= der.count else { return nil }
         let scalar = Array(der[index..<index + size])
-        let rest = der[(index + size)...]
+        let rest = (Array(der[(index + size)...]) + parameters)[...]
         func contains(_ oid: [UInt8]) -> Bool { rest.windows(oid.count).contains(oid) }
         func padded(_ width: Int) throws -> [UInt8] {
             guard scalar.count <= width else { throw SSHKeyFileError.invalid }
@@ -521,17 +556,16 @@ enum PEMKeyFormat {
         if contains([0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]) { return .p256(try P256.Signing.PrivateKey(rawRepresentation: padded(32))) }
         if contains([0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22]) { return .p384(try P384.Signing.PrivateKey(rawRepresentation: padded(48))) }
         if contains([0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23]) { return .p521(try P521.Signing.PrivateKey(rawRepresentation: padded(66))) }
-        // Explicit curve parameters (as ssh-keygen writes them): the scalar has the curve's width,
-        // and the embedded public key must match the one derived from it.
-        let material: KeyMaterial
-        let derived: [UInt8]
-        switch scalar.count {
-        case 32: let key = try P256.Signing.PrivateKey(rawRepresentation: scalar); material = .p256(key); derived = Array(key.publicKey.x963Representation)
-        case 48: let key = try P384.Signing.PrivateKey(rawRepresentation: scalar); material = .p384(key); derived = Array(key.publicKey.x963Representation)
-        case 66: let key = try P521.Signing.PrivateKey(rawRepresentation: scalar); material = .p521(key); derived = Array(key.publicKey.x963Representation)
-        default: return nil
-        }
-        return contains(derived) ? material : nil
+        // Explicit curve parameters (as ssh-keygen writes them): the curve is the one whose public key, derived from
+        // the scalar, is the one embedded. OpenSSL leaves out the scalar's leading zero bytes, so a P-521 key often has
+        // 65 bytes and a P-256 key now and then 31.
+        if scalar.count <= 32, let key = try? P256.Signing.PrivateKey(rawRepresentation: padded(32)),
+           contains(Array(key.publicKey.x963Representation)) { return .p256(key) }
+        if scalar.count <= 48, let key = try? P384.Signing.PrivateKey(rawRepresentation: padded(48)),
+           contains(Array(key.publicKey.x963Representation)) { return .p384(key) }
+        if scalar.count <= 66, let key = try? P521.Signing.PrivateKey(rawRepresentation: padded(66)),
+           contains(Array(key.publicKey.x963Representation)) { return .p521(key) }
+        return nil
     }
 
     /// PKCS#8 Ed25519 keys have a fixed 48-byte DER layout ending in the 32-byte seed.

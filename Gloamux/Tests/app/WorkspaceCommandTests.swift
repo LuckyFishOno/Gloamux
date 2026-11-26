@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 @testable import App
+@testable import Terminal
 import GloamuxNetwork
 
 /// The operations behind `gloamux`, run the way the running app runs them for a CLI request.
@@ -54,6 +55,201 @@ import GloamuxNetwork
         XCTAssertEqual(reset?["terminal.bell"] as? String, "flash")
         do { try await run(["settings", "set", "language", "en"], model, live: false); XCTFail("Language needs the app") }
         catch WorkspaceError.invalid {}
+    }
+
+    func testTerminalOptionsFromITerm2AndTabbyAreSettings() async throws {
+        let model = try workspace()
+        for (name, value) in [("terminal.copy-on-select", "on"), ("terminal.middle-click-paste", "off"), ("terminal.bell-bounces-dock", "off"),
+                              ("terminal.ambiguous-wide", "on"), ("terminal.word-characters", "/-_."), ("terminal.paste-trims", "on"),
+                              ("terminal.paste-joins-lines", "on"), ("terminal.line-spacing", "1.2"), ("terminal.character-spacing", "1.1"),
+                              ("terminal.ligatures", "on"), ("terminal.minimum-contrast", "4.5")] {
+            try await run(["settings", "set", name, value], model)
+        }
+        let all = try await run(["settings", "list"], model) as? [String: Any]
+        XCTAssertEqual(all?["terminal.copy-on-select"] as? Bool, true)
+        XCTAssertEqual(all?["terminal.middle-click-paste"] as? Bool, false)
+        XCTAssertEqual(all?["terminal.word-characters"] as? String, "/-_.")
+        XCTAssertEqual(all?["terminal.minimum-contrast"] as? Double, 4.5)
+        for bad in [["terminal.line-spacing", "3"], ["terminal.minimum-contrast", "0.5"], ["terminal.ligatures", "maybe"]] {
+            do { try await run(["settings", "set"] + bad, model); XCTFail("Accepted \(bad)") }
+            catch is WorkspaceCommand.Usage {} catch WorkspaceError.invalid {}
+        }
+    }
+
+    private final class MemoryFile: ZmodemSource, ZmodemSink {
+        let name: String
+        var contents: Data
+        var size: Int { contents.count }
+        let modified = Date()
+        var complete: Bool?
+        init(_ name: String, _ contents: Data = Data()) { self.name = name; self.contents = contents }
+        func read(at offset: Int, count: Int) throws -> Data { contents.subdata(in: offset..<(offset + count)) }
+        func write(_ data: Data) throws { contents.append(data) }
+        func close(complete: Bool) { self.complete = complete }
+    }
+
+    func testZmodemSavesSzFilesAndAnswersRzFromTheCommandLine() async throws {
+        let model = try workspace()
+        let tab = model.addLocalTab()
+        tab.screen = TerminalScreen()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("zmodem-\(UUID())")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("older".utf8).write(to: folder.appendingPathComponent("report.txt"))
+        UserDefaults.standard.set(folder.path, forKey: TerminalPreferences.zmodemFolderKey)
+        var toRemote: [[UInt8]] = []
+        ZmodemTransfer.writeForTesting = { _, bytes in toRemote.append(bytes); return true }
+        ZmodemTransfer.choosesFiles = false
+        addTeardownBlock {
+            await MainActor.run { ZmodemTransfer.writeForTesting = nil; ZmodemTransfer.choosesFiles = true }
+            UserDefaults.standard.removeObject(forKey: TerminalPreferences.zmodemFolderKey)
+            try? FileManager.default.removeItem(at: folder)
+        }
+
+        // sz on the server: the file lands in the folder under a free name, and the terminal shows only text.
+        let contents = Data((0..<70_000).map { UInt8($0 % 256) })
+        let sz = ZmodemSession(start: .upload)
+        var toApp: [[UInt8]] = [Array("$ sz report.txt\r\nrz\r".utf8) + Zmodem.hexHeader(.rqinit)]
+        sz.output = { toApp.append($0) }
+        sz.send([MemoryFile("report.txt", contents)])
+        while !toApp.isEmpty || !toRemote.isEmpty {
+            if !toApp.isEmpty { model.terminalReceived(tab, bytes: toApp.removeFirst()) }
+            if !toRemote.isEmpty { sz.receive(toRemote.removeFirst()) }
+        }
+        model.terminalReceived(tab, bytes: Array("$ done".utf8))
+        XCTAssertEqual(tab.zmodem?.outcome, .finished)
+        XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("report 2.txt")), contents)
+        XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("report.txt")), Data("older".utf8), "An existing file is kept")
+        let shown = tab.screen.text(lines: 0..<tab.screen.rows)
+        XCTAssertTrue(shown.contains("$ sz report.txt"))
+        XCTAssertTrue(shown.contains("$ done"))
+        XCTAssertFalse(shown.contains("OO") || shown.contains("B0"), shown)
+        let status = try await run(["tabs", "zmodem", tab.id.uuidString], model) as? [String: Any]
+        XCTAssertEqual((status?["zmodem"] as? [String: Any])?["state"] as? String, "finished")
+
+        // rz on the server waits; gloamux tabs zmodem send answers it.
+        do { try await run(["tabs", "zmodem", tab.id.uuidString, "send", "/tmp"], model); XCTFail("Sent with nothing waiting") } catch {}
+        let upload = folder.appendingPathComponent("upload.bin")
+        try contents.prefix(9000).write(to: upload)
+        let rz = ZmodemSession(start: .download)
+        let received = MemoryFile("upload.bin")
+        rz.accept = { name, _ in name == "upload.bin" ? received : nil }
+        rz.output = { toApp.append($0) }
+        model.terminalReceived(tab, bytes: Array("rz waiting to receive.".utf8) + Zmodem.hexHeader(.rinit, [0, 0, 0, 0x23]))
+        let waiting = try await run(["tabs", "zmodem", tab.id.uuidString], model) as? [String: Any]
+        XCTAssertEqual((waiting?["zmodem"] as? [String: Any])?["state"] as? String, "waiting")
+        model.typeTerminal(tab, bytes: Array("x".utf8))
+        XCTAssertTrue(toRemote.isEmpty, "Typing does not reach a running transfer")
+        do { try await run(["tabs", "zmodem", tab.id.uuidString, "send", folder.appendingPathComponent("missing").path], model); XCTFail("Sent a missing file") } catch {}
+        try await run(["tabs", "zmodem", tab.id.uuidString, "send", upload.path], model)
+        while !toApp.isEmpty || !toRemote.isEmpty {
+            if !toRemote.isEmpty { rz.receive(toRemote.removeFirst()) }
+            if !toApp.isEmpty { model.terminalReceived(tab, bytes: toApp.removeFirst()) }
+        }
+        XCTAssertEqual(received.contents, contents.prefix(9000))
+        XCTAssertEqual(received.complete, true)
+        XCTAssertEqual(tab.zmodem?.outcome, .finished)
+
+        // Cancelling sz hides the data it had already sent; the shell's text after it shows once the line is quiet.
+        toRemote = []; toApp = []
+        let big = ZmodemSession(start: .upload)
+        big.output = { toApp.append($0) }
+        big.send([MemoryFile("letters.bin", Data(repeating: 0x41, count: 400_000))])
+        model.terminalReceived(tab, bytes: Array("$ sz letters.bin\r\n".utf8) + Zmodem.hexHeader(.rqinit))
+        // Stop halfway through the first batch of data: the rest of it is still on the way when cancel is sent.
+        var inFlight: [UInt8] = []
+        while inFlight.isEmpty, !toApp.isEmpty || !toRemote.isEmpty {
+            if !toRemote.isEmpty { big.receive(toRemote.removeFirst()) }
+            guard !toApp.isEmpty else { continue }
+            let chunk = toApp.removeFirst()
+            if chunk.count > 20_000 { model.terminalReceived(tab, bytes: Array(chunk.prefix(10_000))); inFlight = Array(chunk.dropFirst(10_000)) }
+            else { model.terminalReceived(tab, bytes: chunk) }
+        }
+        try await run(["tabs", "zmodem", tab.id.uuidString, "cancel"], model)
+        XCTAssertEqual(tab.zmodem?.outcome, .cancelled)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("letters.bin").path), "A partial file is removed")
+        model.terminalReceived(tab, bytes: inFlight)
+        model.terminalReceived(tab, bytes: Zmodem.subpacket(Array(repeating: 0x41, count: 900), end: .g, crc32: true, escapesControls: false)
+                               + Array(repeating: 0x18, count: 10) + Array(repeating: 0x08, count: 10) + Array("$ after-cancel".utf8))
+        XCTAssertFalse(tab.screen.text(lines: 0..<1_000_000).contains("AAAA"), "Transfer data never reaches the screen")
+        try await Task.sleep(nanoseconds: 600_000_000)
+        let afterCancel = tab.screen.text(lines: 0..<1_000_000)
+        XCTAssertTrue(afterCancel.contains("$ after-cancel"), afterCancel)
+        XCTAssertFalse(afterCancel.contains("AAAA"), afterCancel)
+        XCTAssertEqual(tab.zmodem?.discarding, false)
+        model.terminalReceived(tab, bytes: Array(" next-output".utf8))
+        XCTAssertTrue(tab.screen.text(lines: 0..<1_000_000).contains(" next-output"), "Later output is the terminal's again")
+        toRemote = []; toApp = []
+
+        // cancel stops a waiting rz, and the setting turns detection off.
+        model.terminalReceived(tab, bytes: Zmodem.hexHeader(.rinit, [0, 0, 0, 0x23]))
+        try await run(["tabs", "zmodem", tab.id.uuidString, "cancel"], model)
+        XCTAssertEqual(tab.zmodem?.outcome, .cancelled)
+        XCTAssertEqual(toRemote.last, Zmodem.abortSequence)
+        XCTAssertEqual(ZmodemDownload.safeName("../../etc/passwd"), "passwd")
+        XCTAssertEqual(ZmodemDownload.safeName(".."), "download")
+    }
+
+    func testDropdownHotkeyIsASettingAndTheWindowNeedsTheApp() async throws {
+        let model = try workspace()
+        try await run(["settings", "set", "dropdown-hotkey", "control-grave"], model)
+        let shown = try await run(["settings", "get", "dropdown-hotkey"], model) as? [String: Any]
+        XCTAssertEqual(shown?["dropdown-hotkey"] as? String, "control-grave")
+        do { try await run(["settings", "set", "dropdown-hotkey", "command-q"], model); XCTFail("Accepted an unknown key") }
+        catch is WorkspaceCommand.Usage {} catch WorkspaceError.invalid {}
+        do { try await run(["layout", "dropdown"], model, live: false); XCTFail("The dropdown window needs the app") }
+        catch WorkspaceError.invalid {}
+        do { try await run(["layout", "dropdown", "extra"], model); XCTFail("Accepted an argument") } catch {}
+        XCTAssertEqual(DropdownHotkey.allCases.map(\.rawValue), ["off", "control-grave", "option-grave", "option-space", "f12"])
+    }
+
+    func testPasteHistoryKeepsRecentTextWithoutSecretsAndPastesByNumber() async throws {
+        let history = PasteHistory.shared
+        history.clear()
+        defer { history.clear() }
+        history.add("ls -la")
+        history.add("  \n")
+        history.add("export GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789")
+        history.add("cd /tmp")
+        history.add("ls -la")
+        XCTAssertEqual(history.entries, ["ls -la", "cd /tmp"], "Newest first, once each, blanks and secrets left out")
+        for index in 0..<30 { history.add("echo \(index)") }
+        XCTAssertEqual(history.entries.count, PasteHistory.limit)
+        XCTAssertEqual(history.entries.first, "echo 29")
+
+        let model = try workspace()
+        let listed = try await run(["tabs", "paste-history"], model) as? [[String: Any]]
+        XCTAssertEqual(listed?.first?["index"] as? Int, 1)
+        XCTAssertEqual(listed?.first?["text"] as? String, "echo 29")
+        let tab = model.addLocalTab()
+        for bad in [["tabs", "paste-history", tab.id.uuidString, "0"], ["tabs", "paste-history", tab.id.uuidString, "21"],
+                    ["tabs", "paste-history", tab.id.uuidString]] {
+            do { try await run(bad, model); XCTFail("Accepted \(bad)") } catch is WorkspaceCommand.Usage {}
+        }
+        tab.readOnly = true
+        do { try await run(["tabs", "paste-history", tab.id.uuidString, "1"], model); XCTFail("Read-only") }
+        catch WorkspaceError.invalid {}
+    }
+
+    func testLinesRememberWhenTheyChangedAndTimestampsToggleFromTheCommandLine() async throws {
+        let model = try workspace()
+        let tab = model.addLocalTab()
+        tab.screen = TerminalScreen()
+        tab.screen.resize(rows: 3, cols: 20)
+        model.terminalReceived(tab, bytes: Array("one\r\n".utf8))
+        let first = try XCTUnwrap(tab.lineTimes.time(of: 0))
+        model.terminalReceived(tab, bytes: Array("two\r\nthree\r\nfour\r\n".utf8))
+        XCTAssertEqual(tab.lineTimes.time(of: 0), first, "A line that scrolled keeps its time")
+        XCTAssertNotNil(tab.lineTimes.time(of: 3))
+        XCTAssertGreaterThanOrEqual(tab.lineTimes.time(of: 3)!, first)
+        XCTAssertEqual(LineTimes.label(Date(timeIntervalSince1970: 0), now: Date(timeIntervalSince1970: 0)).count, 8)
+
+        let on = try await run(["tabs", "timestamps", tab.id.uuidString, "on"], model) as? [String: Any]
+        XCTAssertEqual(on?["timestamps"] as? Bool, true)
+        XCTAssertTrue(tab.showsTimestamps)
+        model.toggleTimestamps(tab)
+        XCTAssertFalse(tab.showsTimestamps)
+        do { try await run(["tabs", "timestamps", tab.id.uuidString, "maybe"], model); XCTFail("Accepted maybe") }
+        catch is WorkspaceCommand.Usage {}
     }
 
     func testNewTabSettingTakesLocalFormOrASavedSession() async throws {
@@ -260,7 +456,7 @@ import GloamuxNetwork
         try await run(["sessions", "add", "Bastion", "ssh", "bastion.example.com", "ops"], model)
         try await run(["sessions", "add", "Web", "ssh", "web.example.com", "ops", "2222"], model)
         try await run(["sessions", "options", "Web", "jump=Bastion", "startup=cd /srv\\nls", "x11=on", "forward-agent=on",
-                       "open-files=on", "files=sftp", "encoding=big5"], model)
+                       "open-files=on", "files=sftp", "algorithms=compatible", "encoding=big5"], model)
         var web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
         XCTAssertEqual(web.jumpSessionID, model.sessionTree.nodes.first { $0.name == "Bastion" }?.id)
         XCTAssertEqual(web.startupCommands, "cd /srv\nls")
@@ -269,15 +465,20 @@ import GloamuxNetwork
         XCTAssertEqual(web.opensFiles, true)
         XCTAssertEqual(web.fileProtocol, .sftp)
         XCTAssertEqual(web.encoding, .big5)
+        XCTAssertEqual(web.sshAlgorithms, .compatible)
+        XCTAssertEqual(ConnectionService.sshTarget(web).sshAlgorithms, .compatible, "The connection uses the saved algorithms.")
         let shown = try await run(["sessions", "show", "Web"], model) as? [String: Any]
         XCTAssertEqual(shown?["jump"] as? String, "Bastion")
         XCTAssertEqual(shown?["x11"] as? Bool, true)
+        XCTAssertEqual(shown?["algorithms"] as? String, "compatible")
+        do { try await run(["sessions", "options", "Web", "algorithms=legacy"], model); XCTFail("An unknown algorithm set was accepted") } catch {}
 
         // A loop through jump hosts, and a proxy beside a jump host, are refused as the form refuses them.
         do { try await run(["sessions", "options", "Bastion", "jump=Web"], model); XCTFail("A jump loop was accepted") } catch {}
         do { try await run(["sessions", "options", "Web", "proxy=http", "proxy-host=proxy.example.com"], model); XCTFail("Proxy and jump host were both set") } catch {}
-        try await run(["sessions", "options", "Web", "jump=-", "proxy=http", "proxy-host=proxy.example.com", "startup=-", "x11=off", "encoding=utf8"], model)
+        try await run(["sessions", "options", "Web", "jump=-", "proxy=http", "proxy-host=proxy.example.com", "startup=-", "x11=off", "algorithms=modern", "encoding=utf8"], model)
         web = try XCTUnwrap(model.sessionTree.nodes.first { $0.name == "Web" }?.connection)
+        XCTAssertNil(web.sshAlgorithms, "Modern is the default and is not stored.")
         XCTAssertEqual(web.proxy, ProxyConfiguration(kind: .http, host: "proxy.example.com", port: 1080))
         XCTAssertNil(web.jumpSessionID)
 

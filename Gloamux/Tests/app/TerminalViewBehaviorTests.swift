@@ -99,6 +99,12 @@ import Terminal
         XCTAssertEqual(clip.bounds.minY, CGFloat(200) * lineHeight, accuracy: 1, "The screen's first row is at the top; no scrollback line shows above it.")
         XCTAssertEqual(clip.bounds.maxY, CGFloat(200 + rows) * lineHeight, accuracy: 1, "And its last row is whole at the bottom.")
 
+        XCTAssertTrue(view.showsScreenBottom, "At the bottom, new output is followed, even with text selected")
+        view.setSelectedRange(NSRange(location: 0, length: 4))
+        XCTAssertTrue(view.showsScreenBottom)
+        clip.scroll(to: NSPoint(x: 0, y: CGFloat(200) * lineHeight - lineHeight * 3)); scroll.reflectScrolledClipView(clip)
+        XCTAssertFalse(view.showsScreenBottom, "Scrolled up a few lines, the view stays where it is")
+
         // Scrolled up into the scrollback, with text selected, Return still brings the screen back.
         clip.scroll(to: NSPoint(x: 0, y: 0)); scroll.reflectScrolledClipView(clip)
         view.setSelectedRange(NSRange(location: 0, length: 4))
@@ -108,6 +114,18 @@ import Terminal
         XCTAssertEqual(sent, [13])
         XCTAssertEqual(clip.bounds.minY, CGFloat(200) * lineHeight, accuracy: 1)
         XCTAssertTrue(view.followsNextUpdate, "The output that answers the key is followed too.")
+    }
+
+    func testAssistiveTextIsTypedInsteadOfEditingTheTranscript() {
+        let (_, view, _) = makeTerminal(lines: ["$ ls", "file"], rows: 2)
+        var sent: [UInt8] = []
+        view.input = { sent += $0 }
+        let before = view.string
+        view.setSelectedRange(NSRange(location: 0, length: 4))
+        view.setAccessibilitySelectedText("echo hi\n")
+        view.setAccessibilityValue("replaced")
+        XCTAssertEqual(view.string, before, "The transcript is the remote program's")
+        XCTAssertEqual(String(decoding: sent, as: UTF8.self), "echo hi\n")
     }
 
     func testFindHighlightsMatchesAndSteps() {

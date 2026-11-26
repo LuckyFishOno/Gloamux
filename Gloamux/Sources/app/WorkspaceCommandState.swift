@@ -30,6 +30,8 @@ import Terminal
         var recording = false
         var logging = false
         var readOnly = false
+        var showsTimestamps = false
+        var copyMode = false
         var hasCustomColors = false
         var encoding = TerminalEncoding.utf8
 
@@ -54,6 +56,8 @@ import Terminal
             recording = model.recordings.isRecording(tab)
             logging = model.logs.isLogging(tab)
             readOnly = tab.readOnly
+            showsTimestamps = tab.showsTimestamps
+            copyMode = tab.copyMode
             hasCustomColors = tab.colorScheme != nil || tab.highlights != nil
             encoding = tab.encoding
         }

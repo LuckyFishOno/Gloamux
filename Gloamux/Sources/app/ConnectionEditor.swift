@@ -32,6 +32,7 @@ struct ConnectionEditor: View {
     @State private var ftpSecurity: FTPSecurity?
     @State private var ftpFingerprint: String
     @State private var fileProtocol: FileProtocolChoice?
+    @State private var sshAlgorithms: SSHAlgorithmSet?
     @State private var signIn: SignInMode?
     @State private var remoteFolder: String
     @State private var localFolder: String
@@ -72,6 +73,7 @@ struct ConnectionEditor: View {
         _ftpSecurity = State(initialValue: settings?.ftpSecurity)
         _ftpFingerprint = State(initialValue: settings?.ftpFingerprint ?? "")
         _fileProtocol = State(initialValue: settings?.fileProtocol)
+        _sshAlgorithms = State(initialValue: settings?.sshAlgorithms)
         _signIn = State(initialValue: settings?.signIn)
         _remoteFolder = State(initialValue: settings?.remoteFolder ?? "")
         _localFolder = State(initialValue: settings?.localFolder ?? "")
@@ -257,6 +259,14 @@ struct ConnectionEditor: View {
                     }
                     InfoButton(T("Remote files use SFTP. Some servers turn SFTP off and keep only scp: Gloamux then copies with scp and lists, renames, and deletes with shell commands, which needs a POSIX shell on the server."))
                 }
+                HStack(spacing: 6) {
+                    AppPicker(T("SSH algorithms"), selection: $sshAlgorithms,
+                              current: T(sshAlgorithms == .compatible ? "Compatible" : "Modern")) {
+                        Text(T("Modern")).tag(SSHAlgorithmSet?.none)
+                        Text(T("Compatible")).tag(Optional(SSHAlgorithmSet.compatible))
+                    }
+                    InfoButton(T("Modern offers only elliptic-curve key exchanges. Compatible also offers diffie-hellman-group16-sha512 and diffie-hellman-group14-sha256 for older servers and network devices. Servers that offer only SHA-1 key exchanges or ssh-rsa host keys still cannot connect."))
+                }
                 TextField(T("Remote folder"), text: $remoteFolder, prompt: Text(T("Home folder")))
                 TextField(T("Folder on this Mac"), text: $localFolder, prompt: Text(T("Home folder")))
     }
@@ -345,6 +355,7 @@ struct ConnectionEditor: View {
         connection.forwardsAgent = forwardsAgent ? true : nil
         connection.forwardsX11 = forwardsX11 ? true : nil
         connection.fileProtocol = fileProtocol
+        connection.sshAlgorithms = sshAlgorithms
         connection.signIn = signIn
         if signIn == .sessionKey { connection.username = "" }
         if signIn != nil { connection.identityPath = nil; connection.usesAgent = nil; connection.agentSocket = nil }

@@ -112,7 +112,8 @@ public enum CLICatalog {
             SSH connections take these with options (- resets a setting):
               jump=ITEM[,ITEM...] proxy=socks5|socks4|http proxy-host=HOST proxy-port=1080
               startup='COMMAND\\nCOMMAND' forward-agent=on|off x11=on|off open-files=on|off
-              files=auto|sftp|scp encoding=utf8 confirm=on|off remote-folder=PATH local-folder=PATH
+              files=auto|sftp|scp algorithms=modern|compatible encoding=utf8 confirm=on|off
+              remote-folder=PATH local-folder=PATH
             FTP connections take confirm=on|off. Changing confirm asks for Touch ID or the Mac password in Gloamux.
             Remote desktops saved with add take these with edit-other:
               rdp       gateway=SSH_ITEM resolution=fit|1920x1080 retina=on|off quality=lan|broadband|low clipboard=on|off
@@ -139,8 +140,8 @@ public enum CLICatalog {
         CLICommand("tabs",
                    summary: "Control tabs and terminals in the running app",
                    runner: .workspace,
-                   operations: ["list", "show", "open", "open-window", "connect", "local", "select", "rename", "duplicate", "close", "disconnect", "reconnect", "split", "unsplit", "broadcast", "multiexec", "window", "attach", "read", "send", "run", "readonly", "log", "encoding", "colors", "highlights", "record", "integration", "view"],
-                   localPaths: ["colors": [1], "highlights": [1]],
+                   operations: ["list", "show", "open", "open-window", "connect", "local", "select", "rename", "duplicate", "close", "disconnect", "reconnect", "split", "unsplit", "broadcast", "multiexec", "window", "attach", "read", "send", "run", "paste-history", "readonly", "timestamps", "copy-mode", "zmodem", "log", "encoding", "colors", "highlights", "record", "integration", "view"],
+                   localPaths: ["colors": [1], "highlights": [1], "zmodem": Array(2..<34)],
                    help: """
             list | show TAB_ID
             open SESSION | open-window SESSION | connect USER@HOST[:PORT] | local
@@ -150,7 +151,10 @@ public enum CLICatalog {
             multiexec TAB_ID on|off
             window TAB_ID | attach TAB_ID
             read TAB_ID [LINES] | send TAB_ID TEXT | run TAB_ID COMMAND_LINE
-            readonly TAB_ID on|off | log TAB_ID on|off | record TAB_ID on|off | encoding TAB_ID ENCODING
+            paste-history [TAB_ID ENTRY]
+            readonly TAB_ID on|off | timestamps TAB_ID on|off | copy-mode TAB_ID on|off
+            zmodem TAB_ID [status | send PATH... | cancel]
+            log TAB_ID on|off | record TAB_ID on|off | encoding TAB_ID ENCODING
             integration TAB_ID | view TAB_ID terminal|files|session-log
             colors TAB_ID XCS_PATH | highlights TAB_ID HIGHLIGHT_PATH
 
@@ -160,6 +164,13 @@ public enum CLICatalog {
             two-pane file transfer for the tab, or to the session log.
             broadcast types into the panes of a split. multiexec types into every terminal of the tab's window.
             read prints the visible screen, or the last LINES lines with scrollback. run presses Return after the text.
+            timestamps shows beside each line when it last changed. copy-mode shows the tab and lets the keyboard select
+            its text, as Terminal > Copy mode does.
+            zmodem reports the tab's ZMODEM transfer. Running sz on the server saves its files in the
+            terminal.zmodem-folder setting (Downloads by default); running rz waits for files, which send answers with up
+            to 32 paths, as the file panel in Gloamux does. cancel stops a transfer.
+            paste-history lists text copied from or pasted into terminals since the app opened, newest first, or pastes
+            entry ENTRY into a tab. Text with a recognized secret is never kept.
             A risky command in a confirming environment waits for your answer in Gloamux.
             Encodings: utf8, big5, gb18030, shiftJIS, eucJP, eucKR, latin1. Needs the running app.
             """),
@@ -247,10 +258,15 @@ public enum CLICatalog {
             safety.risky-patterns takes a JSON array of regular expressions. language needs the running app.
             """),
         CLICommand("layout",
-                   summary: "Get or set the workspace layout",
+                   summary: "Get or set the workspace layout, or show the dropdown window",
                    runner: .workspace,
-                   operations: ["get", "set"],
-                   help: "get | set default|classic|workbench"),
+                   operations: ["get", "set", "dropdown"],
+                   help: """
+            get | set default|classic|workbench | dropdown
+
+            dropdown shows or hides the dropdown window, as its hotkey does. Choose the key with
+            settings set dropdown-hotkey off|control-grave|option-grave|option-space|f12.
+            """),
         CLICommand("config",
                    summary: "Export or import all settings in one file",
                    runner: .workspace,

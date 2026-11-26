@@ -109,6 +109,7 @@ Naming:
 - A new window starts with a local terminal. The first window owns the saved-tab snapshot. Closing a workspace cleans up its sessions and tool windows, and closing the last one quits the app.
 - MultiExec (`WorkspaceModel.multiExec`) belongs to one window. `typeTerminal` sends input to every ready terminal of that window, including tabs moved to their own windows, and skips read-only terminals and remote desktops. Risky-command checks still apply to each target.
 - The Tunnels window and `gloamux forwards live-list` share `WorkspaceModel.tunnelTabs`, which lists only connected SSH tabs, because a tab that is not connected shows the new connection form.
+- The dropdown window (`DropdownWindow.swift`) registers its key with Carbon `RegisterEventHotKey`, which needs no Accessibility permission, takes the next workspace window it opens, and floats it on every Space. `gloamux layout dropdown` shows or hides it.
 
 ### Ownership
 
@@ -187,6 +188,11 @@ Naming:
 - The cursor is a separate `TerminalCursorView` over its cell. Changing its shape, focus, or blink never redraws a line, and blinking is a Core Animation keyframe animation.
 - Input method composition is kept in the view and drawn over the cursor. It never enters the text storage, and while it is active every key goes to the input method.
 - The find bar searches the text storage and marks matches with layout-manager temporary attributes. While it is open, new output is searched again after 0.2 s.
+- New output scrolls to the bottom when the view was within one and a half lines of it before the update (`showsScreenBottom`, read before the new lines make the view taller) and no find result is shown, even with text selected. Typing always scrolls back down.
+- While the left button is down to select (`selectingWithMouse`), `TerminalDisplay` keeps only the latest update in `heldUpdate` and runs it, with the cursor, once `mouseDown` returns. AppKit's tracking keeps where the button went down as a character offset and ends the selection under the pointer, so output that changed or scrolled the text during a click used to select a line. `TerminalOutputViewTests` drives the tracking loop with run-loop timers, because main-queue blocks do not run inside it.
+- **Terminal › Copy mode** (`TerminalCopyMode.swift`) moves a keyboard caret over the text storage and copies through the same `copy` path as the mouse. `PasteHistory` keeps 20 entries in memory and skips text that `SecretRedaction` would change. `LineTimes` marks the absolute lines between the old and new cursor line on each output.
+- Assistive apps that set the selected text or the value through accessibility, such as Voice Control and dictation, are typed into the terminal instead of editing the transcript.
+- ZMODEM: `Zmodem.detect` finds `**` ZDLE `B00` (`sz` offering files) or `B01` (`rz` waiting) in a tab's output, and `Zmodem` (in `Sources/terminal`) then runs the transfer on the tab's bytes. `ZmodemTransfer` writes received files straight into the folder (`ZmodemDownload`: last path part only, numbered names, a file cut short removed) and shows the bar. After Gloamux aborts a download, `sz` keeps sending what it had queued, so the output is dropped until the line has been quiet for 0.3 s (5 s at most), and only the text after the last ZDLE is shown. Checked against lrzsz 0.12.21rc.
 
 ## Safety and Mac integration
 
@@ -205,6 +211,7 @@ Naming:
 - File transfers go through `TransferQueue`, which `WorkspaceModel.transfers` shares between the file sidebar (`RemoteFileSidebar`, which shows `LocalTreeState` for a local terminal), the two-pane `FileTransferView`, and every layout. The Default layout shows `FileTransferView` in the main window when `workspaceMode` is `.files`, following the selected tab. Classic and Workbench show it in `FileTransferWindow` with a server menu. `.log` shows `ConnectionHistoryView` there, and `selectTab` leaves it; the other layouts open it as a tool window.
 - The queue runs one item at a time on the tab's SFTP channel. Uploads write a temporary `.name.gloamux-….partial` file and move it into place with `RemoteFileSystem.commitUpload`, which uses `replace` over an existing file and never deletes it first; downloads write a hidden partial file beside the destination. CLI uploads and **Edit on this Mac** stage content at a temporary remote name and commit it the same way.
 - `SFTPTransfer` keeps 16 reads or writes of 32 KiB in flight and stops at task cancellation.
+- SSH key exchange is Modern (elliptic-curve only) unless a session chooses Compatible, which adds `FiniteFieldKeyExchange`: `diffie-hellman-group16-sha512` and `diffie-hellman-group14-sha256` (RFC 8268, RFC 3526 groups) on the BigInt package. The SHA-1 groups are left out. Each shell request offers `LANG` and `LC_*` from `LocalLaunch.sshEnvironment`, as `SendEnv` does.
 - `SFTPCommand` parses a pasted `sftp` command and refuses options that change the route or run programs. `SavedConnection.signIn` is `questions` or `session-key`; session keys live only in `SessionTreeStore.sessionKeys`.
 - `AuthWatcher` follows only the channel that connected. A name with several addresses makes one channel for each, and one that is refused must not end the sign-in.
 - Remote Quick Look copies one file of at most 100 MB into a private temporary folder and deletes it with the next preview and at quit.
@@ -308,7 +315,7 @@ A full run on an Apple silicon Mac (10 cores, November 22, 2026):
 ### Future work
 
 - **Metal.** Building every visible line takes under 1 ms, and AppKit then draws only the lines that changed, so a Metal renderer would not change what users notice today. The parser is the limit. Runs of printable ASCII are written a row at a time, UTF-8 is decoded without a `String` per character, and CSI parameters are parsed byte by byte. CJK text still goes through the width lookup one character at a time, so that is the next place to speed up.
-- **Inline images.** iTerm2's `OSC 1337 File=` and the kitty graphics protocol carry PNG or raw pixels that `NSImage` and `CGImage` decode directly, so they fit the current text view as attachments anchored to cells; sixel needs its own decoder. If added: iTerm2 first, then kitty's direct transmission (not its file or shared-memory modes), then sixel. Cap each image at 10 MB encoded and 4096×4096 pixels, keep at most 64 MB of decoded images per tab, dropped as their lines leave the scrollback, and never let images from a remote host read local files.
+- **Inline images.** iTerm2's `OSC 1337 File=` (including `MultipartFile=`) and sixel are implemented in `Sources/terminal/InlineImages.swift`: the screen keeps each picture with the absolute line of its top row and the cells it covers, and the text view draws it over those cells. Each file is capped at 10 MB and 4096×4096 pixels, sixel at 4096 pixels a side, and a tab keeps at most 64 pictures and 64 MB counted as decoded pixels; pictures are dropped as their lines leave the scrollback, by erasing the screen or scrollback, and when a program leaves the alternate screen. Files not marked `inline=1` (downloads) are ignored, and nothing a remote host sends can read local files. The kitty graphics protocol is not supported yet.
 
 ## Tests
 
@@ -350,7 +357,7 @@ Verification on November 24, 2026 of the uncommitted architecture changes passed
 | [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts) Symbols Nerd Font Mono v3.5.1 (terminal prompt icons) | [MIT](../../Gloamux/Sources/app/Resources/TerminalFonts/NerdFontsSymbols-LICENSE.txt), shipped in the app's resource bundle with its [provenance](../../Gloamux/Sources/app/Resources/TerminalFonts/PROVENANCE.txt). The icon sets it collects keep their own licenses, listed in Nerd Fonts' [license audit](https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/license-audit.md). |
 | Visual Studio Code theme colors | [MIT notice](../../Gloamux/Sources/app/Resources/vscode-themes-license.txt). |
 | Marketplace theme colors | [License notices](../../Gloamux/Sources/app/Resources/vscode-community-themes-licenses.txt) of the MIT-licensed themes. |
-| Swift packages | Resolved in [Package.resolved](../../Gloamux/Package.resolved). |
+| Swift packages, including [BigInt](https://github.com/attaswift/BigInt) (MIT, for the Compatible SSH key exchanges) | Resolved in [Package.resolved](../../Gloamux/Package.resolved). |
 
 Themes and imports:
 

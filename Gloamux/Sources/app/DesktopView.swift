@@ -63,6 +63,7 @@ public struct DesktopView: View {
         }
         .overlay { WorkspaceLockCover(model: model) }
         .sheet(item: $model.sftpCommandRequest) { SFTPCommandSheet(model: model, text: $0.text).tint(model.theme.accent.color) }
+        .sheet(isPresented: $model.pasteHistoryShown) { PasteHistoryView(model: model).tint(model.theme.accent.color) }
         .animation(.easeOut(duration: 0.15), value: model.workspaceLocked)
         .animation(.easeOut(duration: 0.12), value: model.commandPaletteShown)
         .task {
@@ -1233,6 +1234,11 @@ struct SessionPane: View {
         TerminalDisplay(tab: tab, model: model)
             .background { if terminalOpacity < 1 { TerminalBackdrop() } }
             .overlay(alignment: .topTrailing) { TerminalFindBar(model: model, tab: tab) }
+            .overlay(alignment: .bottom) {
+                if let transfer = tab.zmodem {
+                    ZmodemBar(transfer: transfer, cancel: { model.cancelZmodem(tab) }, close: { if tab.zmodem === transfer { tab.zmodem = nil } })
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: flat ? 0 : 8)).accessibilityIdentifier("terminalOutput")
     }
 

@@ -34,6 +34,7 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [x] Add keyboard-interactive authentication and multi-factor prompts, including multiple rounds and a public key plus a verification code.
 - [x] Sign in with OpenSSH agent keys and with Ed25519, ECDSA, and RSA key files.
 - [x] Forward the SSH agent per session, chosen in the connection editor. Generate an Ed25519 key file in the OpenSSH format, optionally encrypted with a passphrase.
+- [x] Choose a session's SSH algorithms: Modern, or Compatible with `diffie-hellman-group16-sha512` and `diffie-hellman-group14-sha256` for older servers. Offer the Mac's `LANG` and `LC_*` to the shell as `ssh` does with `SendEnv`.
 - [x] Send a configurable keepalive while idle, check sessions after the Mac wakes, and optionally reconnect a lost saved session (after 2, 5, 10, 30, then 60 seconds).
 - [x] Save local, reverse, and dynamic tunnels in a profile and start them after connect. Start, stop, and save rules during an active connection, and from the menu bar. Local listeners use loopback.
 
@@ -47,9 +48,15 @@ Baseline reviewed on November 20, 2026. The backlog covers documented product fe
 - [ ] Add repeatable compatibility checks with tmux, Vim, and full-screen console apps.
 - [x] Double-click a word or triple-click a line to select it. Search the terminal and its scrollback with ⌘F, as text or a regular expression, with or without case, with every match highlighted and ⌘G and ⇧⌘G to step through them.
 - [x] Preview and edit a multiline paste before it is sent, and let programs write the clipboard with OSC 52 when the user turns it on. Clipboard reads are never answered.
+- [x] Copy on select, middle-click paste, word characters for double-click, and trimming or joining pasted lines. Copy joins lines the terminal wrapped. **Terminal › Paste from history** lists recent copied and pasted text, without text that holds a recognized secret.
+- [x] **Terminal › Copy mode** selects and copies with the keyboard (`h j k l`, `w`, `b`, `0`, `$`, `g`, `G`, `v`, `V`, `y`), and **Terminal › Show timestamps** shows when each line last changed.
+- [x] Receive files from `sz` and send files to `rz` (ZMODEM) with a progress bar and Cancel; a cancelled download leaves no partial file and no stray data on screen.
+- [x] Font ligatures, line and character spacing, a minimum contrast for colored text, and wide ambiguous-width characters for Chinese, Japanese, and Korean servers.
+- [x] Show or hide a dropdown workspace window from any app with a global hotkey (⌃\`, ⌥\`, ⌥Space, or F12).
 - [x] Import Xshell highlight sets and color matching keywords in a terminal.
 - [x] Mark an inactive tab and send a macOS notification when a long command finishes there (with shell integration).
 - [x] Ring the bell as a flash or the system sound, or not at all, and mark an inactive tab where it rang. Show the title a program sets in the pane header.
+- [x] Bounce the Dock icon on the bell while Gloamux is in the background.
 - [x] Confirm before closing a tab that would end something, make a terminal read-only, and lock the workspace manually or after an idle time, unlocking with Touch ID or the Mac password.
 - [x] Mark new output on a tab you are not looking at, and a dropped connection on any tab.
 - [x] Save session logs as plain text or with escape sequences, for every session or one terminal at a time, with likely secrets masked.
@@ -120,7 +127,7 @@ These items come from a November 20, 2026 brainstorm. They cover macOS-native, m
 
 - [x] Add shell integration with OSC 133 prompt marks: jump between prompts, select a command's output, show exit status, and notify when a long-running command finishes in an inactive tab.
 - [x] Track the remote working directory through OSC 7 and use it for the file pane's directory following and for opening new tabs in the same location.
-- [x] Support OSC 8 hyperlinks and detected URLs. Evaluate inline images through the sixel, kitty, and iTerm2 protocols with size limits (see the development guide).
+- [x] Support OSC 8 hyperlinks and detected URLs. Show inline images sent with sixel or the iTerm2 protocol, with size limits (see the development guide). The kitty graphics protocol is not supported yet.
 - [x] Measure terminal throughput and input latency with repeatable benchmarks. Evaluate Metal rendering against the current renderer.
 - [x] Raise parser throughput: write runs of printable ASCII in bulk, decode UTF-8 without a `String` per character, and parse CSI parameters byte by byte (plain text from 22 to about 100 MB/s, colored logs from 17 to 36 MB/s).
 - [x] Add a ⌘⇧P command palette that lists every operation through the shared application operations.

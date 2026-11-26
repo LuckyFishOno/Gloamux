@@ -97,6 +97,7 @@ For a terminal on this Mac, choose **File › New local terminal** (⌘T). The *
 | **Open in Remote files** | Opens the files sidebar when the session connects. |
 | **Startup commands** | Lines typed into the shell after it opens. |
 | **File transfer** | **SFTP, or SCP when SFTP is off**, **SFTP only**, or **SCP only**. |
+| **SSH algorithms** | **Modern** offers elliptic-curve key exchanges only. **Compatible** also offers `diffie-hellman-group16-sha512` and `diffie-hellman-group14-sha256` for older servers and network devices. Servers that offer only SHA-1 key exchanges or `ssh-rsa` host keys still cannot connect. |
 | **Trusted certificate** | For FTPS, the server certificate's SHA-256 fingerprint you verified. |
 
 ### The session tree
@@ -133,6 +134,7 @@ Right-click a folder for **Open all in tabs**, **Save current connection here**,
 - A password, an Ed25519, ECDSA, or RSA key, keys from `ssh-agent`, or the Gloamux key in this Mac's Secure Enclave.
 - Servers that ask their own questions (keyboard-interactive), such as a verification code after the password, show them in a sheet. The session's password answers the first password question. Answers are never saved.
 - **Sign-in** in a saved session's settings chooses **Password or key**, **Answer the server each time** (no saved password; every question is shown), or **Session key each time**.
+- Like OpenSSH's `SendEnv LANG LC_*`, the shell is offered this Mac's language settings (`LANG` and `LC_*`) and the usual terminal modes, including UTF-8 input, so non-ASCII text and backspace work on servers that accept them.
 
 ### SFTP gateways and session keys
 
@@ -191,7 +193,7 @@ The vault is a separate store sealed under a master password.
 
 ### Keys
 
-- **Choose private key** uses an existing private key, such as an EC2 `.pem` file. Its menu includes **Choose key file** and **Generate new key file**. Generation writes an Ed25519 private key and its `.pub` file in `~/.ssh`, with an optional passphrase and comment. Keep the private key on your Mac and put the public key in the server's `~/.ssh/authorized_keys`.
+- **Choose private key** uses an existing private key, such as an EC2 `.pem` file: OpenSSH, PEM (PKCS#1, SEC1, and PKCS#8), or PuTTY `.ppk` files with Ed25519, ECDSA, or RSA keys. Its menu includes **Choose key file** and **Generate new key file**. Generation writes an Ed25519 private key and its `.pub` file in `~/.ssh`, with an optional passphrase and comment. Keep the private key on your Mac and put the public key in the server's `~/.ssh/authorized_keys`.
 - **Create public key** creates a P-256 key in this Mac's Secure Enclave. **Show public key** shows that Gloamux key's OpenSSH public key, independently of any private key file selected beside it. Choose **Use for this connection** to use the Secure Enclave key. **Regenerate** replaces it, so servers must receive the new public key.
 - Removing a key with × asks first. The saved session stops using it, and while the vault is unlocked, the account's saved password and the key's passphrase are deleted too.
 - An older Secure Enclave key that still asks for Touch ID shows **Needs Touch ID**. Switch to the Gloamux key to stop the prompt.
@@ -207,11 +209,21 @@ Each window locks on its own. While a window is locked, `gloamux` commands and a
 ### Basics
 
 - The cursor follows the shell while the mouse selects text. Text rewraps when the width changes.
+- New output keeps the bottom in view, even with text selected. Scroll up to stay where you are; scrolling back to the bottom follows the output again. While you hold the mouse button to select, the text stays still and catches up when you let go.
 - Input methods compose over the cursor.
 - ⌘-click a link to open it, both links that programs mark (OSC 8) and plain web addresses.
 - vim, tmux, htop, and similar programs get mouse clicks, drags, and the wheel. Hold Option to select text instead.
 - Pasting several lines shows them first, so you can check or edit them.
-- The bell flashes the terminal or plays a sound, and marks a tab you are not looking at.
+- Copy joins lines the terminal wrapped and leaves out the blank space at the end of each line. Double-click selects a whole path or host name, including `/ - + \ ~ _ .`.
+- Keys send what xterm and iTerm2 send: Shift-Tab, F1 to F12, Insert, Home, End, and Page Up/Down, with Shift, Option, and Control on the arrows and function keys (for example `ESC [1;5D` for Control-←), and ⌃2, ⌃6, ⌃-, and ⌃/ as control characters. Bold text in the eight basic colors shows in their bright versions, italic text in the font's italic (or slanted when it has none), and faint text dimmed.
+- Bold text in the eight basic colors shows in their bright versions, as in xterm, and italic and faint text show slanted and dimmed.
+- The bell flashes the terminal or plays a sound, and marks a tab you are not looking at. When Gloamux is in the background it also bounces the Dock icon.
+- Copy on select, middle-click paste, word characters for double-click, and trimming or joining pasted lines are in [Settings › Terminal](#terminal).
+- **Terminal › Paste from history** (⇧⌘H) lists text copied from or pasted into terminals since Gloamux opened, newest first. Text with a recognized secret is never kept.
+- **Terminal › Copy mode** (⇧⌘C) moves through the text with the keyboard: arrows or `h j k l`, `w` and `b` by word, `0` and `$` to the line ends, Control-U and Control-D by half a screen, `g` and `G` to the top and bottom, `v` to start a selection, `y` or Return to copy it, and Escape or `q` to leave.
+- **Terminal › Show timestamps** (⇧⌘E) shows beside each line when it last changed.
+- Pictures that programs such as `imgcat`, `chafa`, and `img2sixel` send with sixel graphics or the iTerm2 image protocol appear in the terminal and scroll with the text.
+- Running `sz FILE` on the server saves the file on this Mac (in Downloads unless you choose another folder); running `rz` asks which files to send. A bar over the terminal shows the progress, with **Cancel**; a cancelled download leaves no partial file and no stray data on the screen. A file that already exists is kept, and the new one gets a number. Commands that a server asks to run on this Mac are always refused.
 - **Terminal › Text encoding** switches a session to UTF-8, Big5, GB18030, Shift JIS, EUC-JP, EUC-KR, or ISO Latin 1. Saved sessions remember it.
 - **Terminal › Read-only** stops your typing from reaching the session.
 
@@ -508,6 +520,9 @@ What an agent can do:
 | | **Save output** | ⇧⌘S |
 | | **Open output in text editor** | |
 | | **Read-only** | |
+| | **Paste from history** | ⇧⌘H |
+| | **Copy mode** | ⇧⌘C |
+| | **Show timestamps** | ⇧⌘E |
 | | **Import color scheme** / **Import highlight set** / **Use default colors** | |
 | | **Text encoding** | |
 | | **Runbooks** | |
@@ -539,6 +554,10 @@ What an agent can do:
 | ⌥⌘R | Start or stop recording |
 | ⌥⌘L | Start or stop the session log |
 | ⇧⌘S | Save output |
+| ⇧⌘H | Paste from history |
+| ⇧⌘C | Copy mode |
+| ⇧⌘E | Show timestamps |
+| Chosen in Settings | Show or hide the dropdown window from any app |
 | ⌘+, ⌘−, ⌘0 | Session text size |
 | ⌥⌘+, ⌥⌘−, ⌥⌘0 | App text size |
 | ⌃⌘L | Lock the workspace |
@@ -559,6 +578,7 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 | **Reopen tabs at launch** (`workspace.reopen-tabs`) | Opens the sessions and local terminals that were open when Gloamux quit. Each connects on its own. |
 | **Lock the workspace** (`workspace.lock-after-minutes`) | Locks the workspace after this long without use, or **Never**. |
 | **Show in menu bar** (`menu-bar-extra`) | The menu bar icon with quick connect, recent sessions, and tunnels. |
+| **Dropdown window** (`dropdown-hotkey`) | A key (⌃\`, ⌥\`, ⌥Space, or F12) that shows a Gloamux window across the top of the screen from any app, and hides it again. Its tabs stay open while it is hidden. A warning shows when another app already uses the key. `gloamux layout dropdown` does the same. |
 | **Check for updates automatically** | Checks GitHub for a new version once a day. |
 | **All settings** · **Export** / **Import** | Saves or restores everything in one file. See [Backup](#all-settings-in-one-file). |
 
@@ -577,6 +597,16 @@ The settings are grouped under **New tabs**, **Shell integration**, **SSH connec
 | **Reconnect automatically** (`ssh.reconnect`) | Reconnects dropped saved sessions after 2, 5, 10, 30, and 60 seconds. |
 | **Scrollback** (`terminal.scrollback`) | Lines kept above the screen in each terminal. |
 | **Bell** (`terminal.bell`) | **Flash**, **Sound**, or **Off**. |
+| **Bounce the Dock icon on the bell** (`terminal.bell-bounces-dock`) | While Gloamux is in the background. On by default. |
+| **Ambiguous-width characters are wide** (`terminal.ambiguous-wide`) | Greek, Cyrillic, box drawing, and symbols such as ① take two cells, as many Chinese, Japanese, and Korean servers expect. Applies to new terminals. |
+| **Show inline images** (`terminal.inline-images`) | Sixel and iTerm2 inline images. On by default. Applies to new terminals. |
+| **ZMODEM file transfer** (`terminal.zmodem`) | Starts a transfer when `sz` or `rz` runs on the server. On by default. |
+| **Save received files in** (`terminal.zmodem-folder`) | Where files from `sz` go. Downloads unless set. |
+| **Word characters** (`terminal.word-characters`) | Characters that double-click keeps inside a word, besides letters and digits. Default `/-+\~_.`. |
+| **Copy on select** (`terminal.copy-on-select`) | Copies text as soon as you select it. |
+| **Middle-click pastes** (`terminal.middle-click-paste`) | On by default. |
+| **Trim spaces when pasting** (`terminal.paste-trims`) | Removes spaces and line breaks around pasted text. |
+| **Paste as one line** (`terminal.paste-joins-lines`) | Joins pasted lines with spaces. |
 | **Confirm multiline paste** (`terminal.confirm-multiline-paste`) | Shows pasted text with line breaks before sending it. |
 | **Send mouse to programs** (`terminal.mouse-reporting`) | vim, tmux, and htop get clicks, drags, and the wheel. |
 | **Confirm before closing** (`terminal.confirm-close`) | Asks before closing a connected tab, or a local terminal running a command. |
@@ -599,6 +629,9 @@ The settings are grouped under **New tabs**, **Shell integration**, **SSH connec
 | **Cursor** (`terminal.cursor`) | **Block**, **Underline**, or **Bar**. |
 | **Blinking cursor** (`terminal.cursor-blinks`) | Programs such as vim can still change it while they run. |
 | **Background opacity** (`terminal.opacity`) | Below 100%, what is behind the window shows through, blurred. |
+| **Font ligatures** (`terminal.ligatures`) | Joins character pairs such as `->` and `!=` in fonts that have ligatures. Off by default, so each character keeps its cell. |
+| **Line spacing** (`terminal.line-spacing`) / **Character spacing** (`terminal.character-spacing`) | From 0.8 to 2.0 times the font's own spacing. |
+| **Minimum contrast** (`terminal.minimum-contrast`) | From 1 (off) to 7. Text whose color is too close to its background is lightened or darkened until it reaches this WCAG contrast ratio. |
 
 ### Triggers
 
@@ -648,7 +681,7 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 | `gloamux history` | `list [COUNT [SEARCH]]`, `show`, `log ID PATH`, `export PATH.csv\|PATH.json`, `remove`, `clear`. |
 | `gloamux sessions` | `list`, `show`, `mkdir`, `add`, `edit`, `options`, `add-other`, `edit-other`, `serial-ports`, `rename`, `move`, `remove`, `env`, `auth`, `cert`, `from-sftp`, `import`, `export`. |
 | `gloamux hosts` | `list`, `history`, `clear-history`, `trust`, `replace`, `remove`, `export` (as `known_hosts`), `discover bonjour\|tailscale\|aws`. |
-| `gloamux tabs` | `list`, `show`, `open`, `open-window`, `connect`, `local`, `select`, `rename`, `duplicate`, `close`, `disconnect`, `reconnect`, `split`, `unsplit`, `broadcast`, `multiexec`, `window`, `attach`, `read`, `send`, `run`, `readonly`, `log`, `record`, `encoding`, `integration`, `view`, `colors`, `highlights`. Needs the running app. |
+| `gloamux tabs` | `list`, `show`, `open`, `open-window`, `connect`, `local`, `select`, `rename`, `duplicate`, `close`, `disconnect`, `reconnect`, `split`, `unsplit`, `broadcast`, `multiexec`, `window`, `attach`, `read`, `send`, `run`, `paste-history`, `readonly`, `timestamps`, `copy-mode`, `zmodem` (`status`, `send PATH...` to answer `rz`, `cancel`), `log`, `record`, `encoding`, `integration`, `view`, `colors`, `highlights`. Needs the running app. |
 | `gloamux forwards` | `list`, `add`, `remove` (saved rules); `live-list`, `start`, `stop` (running forwards). Kinds: `local`, `remote`, `dynamic`. |
 | `gloamux commands` | `list`, `add`, `edit`, `remove`, `send`, `run` (quick commands). |
 | `gloamux triggers` | `list`, `add`, `edit`, `enable`, `disable`, `remove`. Actions: `notify`, `sound`, `mark`. |
@@ -656,7 +689,7 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 | `gloamux recordings` | `list`, `export` (as `.cast`), `remove`. |
 | `gloamux appearance` | `list`, `get`, `set THEME_ID`. |
 | `gloamux settings` | `list`, `get`, `set`, `reset`. Names are in the [settings reference](#19-settings-reference). |
-| `gloamux layout` | `get`, `set default\|classic\|workbench`. |
+| `gloamux layout` | `get`, `set default\|classic\|workbench`, `dropdown` (shows or hides the dropdown window). |
 | `gloamux config` | `export PATH`, `import PATH` (quit Gloamux first). |
 | `gloamux mcp` | Serves allowed sessions to an AI agent over MCP. |
 | `gloamux agents` | `status`, `history`, `clear-history`, `revoke`, `off`. |
@@ -675,6 +708,7 @@ Examples:
 gloamux sessions add "Work server" ssh server.example.com deploy
 gloamux sessions options "Work server" jump=Bastion x11=on
 gloamux sessions options "Work server" jump=Bastion,Inner   # through Bastion, then Inner
+gloamux sessions options "Old switch" algorithms=compatible
 gloamux ssh "Work server"
 gloamux files get --session "Work server" /var/log/app.log ./app.log
 gloamux files put --session "Work server" ./build.tar.gz /srv/releases/ --overwrite

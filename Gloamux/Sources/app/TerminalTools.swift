@@ -70,6 +70,9 @@ public struct TerminalCommands: Commands {
             Button(T("Select output of last command")) { model.navigate(.selectLastOutput) }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(!menu.hasLastCommand)
+            Button(T("Paste from history")) { model.pasteHistoryShown = true }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .disabled(!live)
             Button(T("Share with Agents")) { if let tab = model.selected { model.shareWithAgents(tab, selection: WorkspaceModel.terminalSelection()) } }
                 .disabled(!menu.hasSelection || menu.isDesktop || !menu.agentsEnabled)
             Divider()
@@ -92,6 +95,12 @@ public struct TerminalCommands: Commands {
             Divider()
             Toggle(T("Read-only"), isOn: Binding(get: { menu.readOnly }, set: { _ in model.toggleReadOnly() }))
                 .disabled(!menu.hasSelection)
+            Toggle(T("Copy mode"), isOn: Binding(get: { menu.copyMode }, set: { _ in model.toggleCopyMode() }))
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(!menu.hasSelection || menu.isDesktop)
+            Toggle(T("Show timestamps"), isOn: Binding(get: { menu.showsTimestamps }, set: { _ in model.toggleTimestamps() }))
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(!menu.hasSelection || menu.isDesktop)
             Button(T("Import color scheme…")) { model.chooseColorScheme() }
                 .disabled(!menu.hasSelection)
             Button(T("Import highlight set…")) { model.chooseHighlightSet() }

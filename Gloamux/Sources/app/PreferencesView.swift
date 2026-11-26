@@ -140,6 +140,8 @@ private struct GeneralSettings: View {
     @AppStorage(WorkspaceModel.restoreTabsKey) private var reopenTabs = false
     @AppStorage(WorkspaceModel.lockIdleKey) private var lockAfter = 0
     @AppStorage(MenuBarSettings.key) private var menuBar = true
+    @AppStorage(DropdownWindow.hotkeyKey) private var dropdownHotkey = DropdownHotkey.off.rawValue
+    @ObservedObject private var dropdown = DropdownWindow.shared
     @ObservedObject private var updates = AppUpdates.shared
 
 
@@ -182,6 +184,20 @@ private struct GeneralSettings: View {
                 HStack(spacing: 6) {
                     Text(T("Show in menu bar"))
                     InfoButton(T("Quick connect, recent sessions, and saved tunnels from the menu bar."))
+                }
+            }
+            AppPicker(title: T("Dropdown window"), selection: $dropdownHotkey,
+                      current: T(DropdownHotkey(rawValue: dropdownHotkey)?.symbol ?? "Off")) {
+                ForEach(DropdownHotkey.allCases, id: \.rawValue) { key in Text(T(key.symbol)).tag(key.rawValue) }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(T("Dropdown window"))
+                    InfoButton(T("This key shows a Gloamux window across the top of the screen from any app, and hides it again. Its tabs stay open while it is hidden. It works while Gloamux is running."))
+                    if dropdown.registrationFailed {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                            .help(T("Another app uses this key. Choose a different one."))
+                            .accessibilityLabel(T("Another app uses this key. Choose a different one."))
+                    }
                 }
             }
             if updates.isAvailable {
@@ -230,6 +246,16 @@ private struct TerminalSettings: View {
     @AppStorage(TerminalPreferences.logFormatKey) private var logFormat = TerminalLogFormat.text.rawValue
     @AppStorage(TerminalPreferences.confirmCloseKey) private var confirmClose = true
     @AppStorage(TerminalPreferences.rightClickPasteKey) private var rightClickPaste = false
+    @AppStorage(TerminalPreferences.copyOnSelectKey) private var copyOnSelect = false
+    @AppStorage(TerminalPreferences.middleClickPasteKey) private var middleClickPaste = true
+    @AppStorage(TerminalPreferences.bellDockKey) private var bellDock = true
+    @AppStorage(TerminalPreferences.ambiguousWideKey) private var ambiguousWide = false
+    @AppStorage(TerminalPreferences.inlineImagesKey) private var inlineImages = true
+    @AppStorage(TerminalPreferences.zmodemKey) private var zmodem = true
+    @AppStorage(TerminalPreferences.zmodemFolderKey) private var zmodemFolder = ""
+    @AppStorage(TerminalPreferences.pasteTrimKey) private var pasteTrims = false
+    @AppStorage(TerminalPreferences.pasteJoinKey) private var pasteJoins = false
+    @AppStorage(TerminalPreferences.wordCharactersKey) private var wordCharacters = TerminalPreferences.defaultWordCharacters
     @AppStorage(TerminalPreferences.optionMetaKey) private var optionMeta = false
     @AppStorage(TerminalPreferences.keepAliveKey) private var keepAlive = 30
     @AppStorage(TerminalPreferences.terminalTypeKey) private var terminalType = "xterm-256color"
@@ -297,11 +323,59 @@ private struct TerminalSettings: View {
                 } label: {
                     label(T("Bell"), T("In a tab you are not looking at, the tab also shows a bell."))
                 }
+                Toggle(isOn: $bellDock) {
+                    label(T("Bounce the Dock icon on the bell"), T("While Gloamux is in the background, the bell bounces its Dock icon once."))
+                }
+                .disabled(bell == BellStyle.off.rawValue)
                 Toggle(isOn: $confirmPaste) {
                     label(T("Confirm multiline paste"), T("Shows the text before it is pasted, so you can check or edit it. Each line break can run a command."))
                 }
+                Toggle(isOn: $pasteTrims) {
+                    label(T("Trim spaces when pasting"), T("Leaves out spaces and line breaks before and after the pasted text, so a copied line does not run as soon as it is pasted."))
+                }
+                Toggle(isOn: $pasteJoins) {
+                    label(T("Paste as one line"), T("Turns line breaks in pasted text into spaces, for programs that cannot take several lines at once."))
+                }
                 Toggle(isOn: $mouse) {
                     label(T("Send mouse to programs"), T("vim, tmux, htop, and similar programs get clicks, drags, and the scroll wheel. Hold Option to select text instead."))
+                }
+                Toggle(isOn: $ambiguousWide) {
+                    label(T("Ambiguous-width characters are wide"), T("Greek, Cyrillic, box drawing, and symbols such as ① and ○ take two cells, as in many Chinese, Japanese, and Korean terminals. Turn it on only when the server expects that. Applies to new terminals."))
+                }
+                Toggle(isOn: $inlineImages) {
+                    label(T("Show inline images"), T("Pictures that programs such as imgcat, chafa, and img2sixel send with sixel graphics or the iTerm2 image protocol appear in the terminal. Applies to new terminals."))
+                }
+                Toggle(isOn: $zmodem) {
+                    label(T("ZMODEM file transfer"), T("Running sz on the server saves its files on this Mac, and running rz asks which files to send. Commands that a server asks to run on this Mac are always refused."))
+                }
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        Text(TerminalPreferences.zmodemFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                            .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                        Button(T("Choose")) {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.canCreateDirectories = true
+                            panel.directoryURL = TerminalPreferences.zmodemFolder
+                            if panel.runModal() == .OK, let url = panel.url { zmodemFolder = url.path }
+                        }
+                    }
+                } label: {
+                    Text(T("Save received files in"))
+                }
+                .disabled(!zmodem)
+                LabeledContent {
+                    TextField(T("Word characters"), text: $wordCharacters)
+                        .labelsHidden()
+                        .font(.body.monospaced())
+                        .frame(maxWidth: 140)
+                } label: {
+                    label(T("Word characters"), T("Besides letters and digits, these characters count as part of a word when you double-click, so a path or host name is selected whole."))
+                }
+                Toggle(isOn: $copyOnSelect) {
+                    label(T("Copy on select"), T("Text you select with the mouse is copied to the clipboard at once, as in iTerm2."))
+                }
+                Toggle(isOn: $middleClickPaste) {
+                    label(T("Middle-click pastes"), T("The middle mouse button pastes the clipboard, unless a program such as vim gets the mouse."))
                 }
                 Toggle(isOn: $rightClickPaste) {
                     label(T("Right-click pastes"), T("As in PuTTY. Control-click still shows the menu."))
@@ -410,6 +484,11 @@ private struct TextSettings: View {
     @AppStorage(TerminalPreferences.blinkKey) private var blinks = false
     @AppStorage(TerminalPreferences.opacityKey) private var opacity = 1.0
     @AppStorage(AppTextSize.key) private var appSize = AppTextSize.defaultSize
+    @AppStorage(TerminalPreferences.lineSpacingKey) private var lineSpacing = 1.0
+    @AppStorage(TerminalPreferences.characterSpacingKey) private var characterSpacing = 1.0
+    @AppStorage(TerminalPreferences.ligaturesKey) private var ligatures = false
+    @AppStorage(TerminalPreferences.minimumContrastKey) private var minimumContrast = 1.0
+    @Environment(\.appTextScale) private var textScale
     @State private var families: [String] = []
 
     var body: some View {
@@ -447,6 +526,28 @@ private struct TextSettings: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel(T("Font preview"))
+                Toggle(isOn: $ligatures) {
+                    HStack(spacing: 6) {
+                        Text(T("Font ligatures")).fixedSize(horizontal: false, vertical: true)
+                        InfoButton(T("Fonts such as Fira Code and JetBrains Mono join characters like -> and != into one symbol. Off, every character shows on its own."))
+                    }
+                }
+            }
+            Section(T("Spacing and contrast")) {
+                spacing(T("Line spacing"), $lineSpacing, T("The height of each line, as a multiple of the font's own. Extra space is split above and below the text."))
+                spacing(T("Character spacing"), $characterSpacing, T("The width of each character cell, as a multiple of the font's own."))
+                LabeledContent {
+                    HStack {
+                        Slider(value: $minimumContrast, in: TerminalPreferences.contrasts, step: 0.5)
+                        Text(minimumContrast <= 1 ? T("Off") : String(format: "%.1f:1", minimumContrast))
+                            .monospacedDigit().frame(width: 52, alignment: .trailing)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Minimum contrast")).fixedSize(horizontal: false, vertical: true)
+                        InfoButton(T("Text too close to its background color is lightened or darkened until it reaches this contrast ratio. 4.5:1 is the WCAG level for normal text."))
+                    }
+                }
             }
             Section {
                 Picker(T("Cursor"), selection: $cursor) {
@@ -476,9 +577,23 @@ private struct TextSettings: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .scrollDisabled(true)
+        // Taller than most screens leave room for, so it scrolls in a window of fixed height.
+        .frame(height: (520 * max(1, textScale)).rounded())
         .padding(-8)
         .task { if families.isEmpty { families = TerminalPreferences.monospacedFamilies() } }
+    }
+
+    private func spacing(_ title: String, _ value: Binding<Double>, _ info: String) -> some View {
+        LabeledContent {
+            Stepper(value: value, in: TerminalPreferences.spacings, step: 0.1) {
+                Text(String(format: "%.1f×", value.wrappedValue)).monospacedDigit()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title).fixedSize(horizontal: false, vertical: true)
+                InfoButton(info)
+            }
+        }
     }
 
     private var previewFont: Font {

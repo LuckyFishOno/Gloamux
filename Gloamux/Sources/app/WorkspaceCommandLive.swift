@@ -216,6 +216,33 @@ extension WorkspaceCommand {
             default: throw Usage("Choose terminal, files, or session-log.")
             }
             return ["id": tab.id.uuidString, "view": args[1]]
+        case "copy-mode":
+            try count(args, 2...2)
+            let (owner, tab) = try tab(args[0], windows)
+            guard tab.desktop == nil else { throw Usage("Remote desktop tabs have no terminal text.") }
+            let on = try toggle(args[1])
+            if on { owner.reveal(tab: tab.id) }
+            tab.copyMode = on
+            return ["id": tab.id.uuidString, "copyMode": on]
+        case "zmodem":
+            try count(args, 1...Int.max)
+            let tab = try tab(args[0], windows).tab
+            switch args.count > 1 ? args[1] : "status" {
+            case "status": try count(args, 1...2)
+            case "send": try model.sendZmodemFiles(tab, args.dropFirst(2).map { URL(fileURLWithPath: $0) })
+            case "cancel":
+                try count(args, 2...2)
+                guard tab.zmodem?.isActive == true else { throw WorkspaceError.invalid("No ZMODEM transfer is running in this tab.") }
+                model.cancelZmodem(tab)
+            default: throw Usage("Use status, send PATH..., or cancel.")
+            }
+            return ["id": tab.id.uuidString, "zmodem": tab.zmodem?.state ?? NSNull()]
+        case "timestamps":
+            try count(args, 2...2)
+            let tab = try tab(args[0], windows).tab
+            guard tab.desktop == nil else { throw Usage("Remote desktop tabs have no terminal lines.") }
+            tab.showsTimestamps = try toggle(args[1])
+            return ["id": tab.id.uuidString, "timestamps": tab.showsTimestamps]
         case "readonly":
             try count(args, 2...2)
             let tab = try tab(args[0], windows).tab
@@ -249,6 +276,18 @@ extension WorkspaceCommand {
             while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
             if let wanted { lines = Array(lines.suffix(wanted)) }
             return ["id": tab.id.uuidString, "text": lines.map { String($0.reversed().drop(while: { $0 == " " }).reversed()) }.joined(separator: "\n")]
+        case "paste-history":
+            try count(args, 0...2)
+            let entries = PasteHistory.shared.entries
+            guard args.count == 2 else {
+                guard args.isEmpty else { throw Usage("Enter a tab ID and an entry number, or nothing to list them.") }
+                return entries.enumerated().map { ["index": $0.offset + 1, "text": $0.element] }
+            }
+            guard let index = Int(args[1]), entries.indices.contains(index - 1) else {
+                throw Usage(entries.isEmpty ? "The paste history is empty." : "Enter an entry number from 1 to \(entries.count).")
+            }
+            let (owner, tab) = try tab(args[0], windows)
+            return try type(entries[index - 1], into: tab, of: owner, pressReturn: false)
         case "send", "run":
             try count(args, 2...2)
             let (owner, tab) = try tab(args[0], windows)

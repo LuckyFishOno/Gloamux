@@ -162,6 +162,16 @@ extension WorkspaceModel {
     // MARK: Read-only and closing
 
     /// A read-only terminal shows output but ignores typing and pasting, so nothing is sent by accident.
+    func toggleCopyMode(_ tab: SessionTab? = nil) {
+        guard let tab = tab ?? selected, tab.desktop == nil else { return }
+        tab.copyMode.toggle()
+    }
+
+    func toggleTimestamps(_ tab: SessionTab? = nil) {
+        guard let tab = tab ?? selected, tab.desktop == nil else { return }
+        tab.showsTimestamps.toggle()
+    }
+
     func toggleReadOnly(_ tab: SessionTab? = nil) {
         guard let tab = tab ?? selected else { return }
         tab.readOnly.toggle()

@@ -48,6 +48,7 @@ struct JumpHostFailure: Error {
                                      proxyKind: settings.proxyKind ?? .socks5, confirmsEachConnection: settings.asksEachConnection)
         target.setJumpPath(settings.jumpPath)
         target.signIn = settings.signIn
+        target.sshAlgorithms = settings.sshAlgorithms
         return target
     }
 
@@ -161,7 +162,8 @@ struct JumpHostFailure: Error {
                            via jump: SSHSession?) async throws -> SSHSession {
         let endpoint = KnownHosts.endpoint(host: configuration.host, port: configuration.port)
         let id = "\(configuration.username)@\(endpoint)"
-        let settings = SSHConnectionSettings(host: configuration.host, port: configuration.port, username: configuration.username)
+        let settings = SSHConnectionSettings(host: configuration.host, port: configuration.port, username: configuration.username,
+                                             algorithms: configuration.sshAlgorithms ?? .modern)
         let credentialGeneration = await vault.sessionGeneration
         let credential: SSHCredential
         let password: String?

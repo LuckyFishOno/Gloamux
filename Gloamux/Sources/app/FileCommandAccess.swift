@@ -80,7 +80,7 @@ extension WorkspaceModel {
             let agent = settings.forwardsAgent == true ? (settings.agentSocket ?? SSHAgentClient.environment()?.socketPath) : nil
             let type = term.flatMap { $0.isEmpty || $0.utf8.count > 64 ? nil : $0 } ?? TerminalPreferences.terminalType
             let shell = try await ssh.openShell(rows: min(max(rows, 1), 500), columns: min(max(columns, 1), 1000),
-                                                term: type, agentSocket: agent)
+                                                term: type, environment: LocalLaunch.sshEnvironment(), agentSocket: agent)
             return try await Self.closing({ await shell.close() }) { try await perform(shell) }
         }
     }

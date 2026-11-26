@@ -120,29 +120,29 @@ import Terminal
         func run(_ command: String, _ output: String) {
             type(command); show(command); type("\r"); show("\r\n" + output); capture.settle(screen)
         }
-        show("cipher@h50:~$ ")
+        show("admin@bastion:~$ ")
         // A new host key and a password, which are answers and not commands.
-        run("ssh cipher@10.0.6.52", "The authenticity of host '10.0.6.52' can't be established.\r\nAre you sure you want to continue connecting (yes/no/[fingerprint])? ")
+        run("ssh admin@192.0.2.52", "The authenticity of host '192.0.2.52' can't be established.\r\nAre you sure you want to continue connecting (yes/no/[fingerprint])? ")
         XCTAssertEqual(results, [])
-        run("yes", "Warning: Permanently added '10.0.6.52' (ED25519) to the list of known hosts.\r\ncipher@10.0.6.52's password: ")
-        type("wrong\r"); show("\r\nPermission denied, please try again.\r\ncipher@10.0.6.52's password: "); capture.settle(screen)
+        run("yes", "Warning: Permanently added '192.0.2.52' (ED25519) to the list of known hosts.\r\nadmin@192.0.2.52's password: ")
+        type("wrong\r"); show("\r\nPermission denied, please try again.\r\nadmin@192.0.2.52's password: "); capture.settle(screen)
         XCTAssertEqual(results, [])
-        type("right\r"); show("\r\nWelcome to Ubuntu\r\n * ssh: see the manual\r\n\r\nLast login: Wed Nov 25 from 10.0.6.50\r\ncipher@h52:~$ "); capture.settle(screen)
-        XCTAssertEqual(results, ["cipher@10.0.6.52 ok"])
-        XCTAssertEqual(commands, ["ssh cipher@10.0.6.52"])
-        run("ssh -p 2222 10.0.7.52", "ssh: connect to host 10.0.7.52 port 2222: Connection refused\r\ncipher@h52:~$ ")
-        run("ssh -l ops 10.0.7.53", "ops@10.0.7.53: Permission denied (publickey).\r\ncipher@h52:~$ ")
-        run("ssh nowhere", "ssh: Could not resolve hostname nowhere: Name or service not known\r\ncipher@h52:~$ ")
+        type("right\r"); show("\r\nWelcome to Ubuntu\r\n * ssh: see the manual\r\n\r\nLast login: Wed Nov 25 from 192.0.2.50\r\nadmin@web:~$ "); capture.settle(screen)
+        XCTAssertEqual(results, ["admin@192.0.2.52 ok"])
+        XCTAssertEqual(commands, ["ssh admin@192.0.2.52"])
+        run("ssh -p 2222 198.51.100.52", "ssh: connect to host 198.51.100.52 port 2222: Connection refused\r\nadmin@web:~$ ")
+        run("ssh -l ops 198.51.100.53", "ops@198.51.100.53: Permission denied (publickey).\r\nadmin@web:~$ ")
+        run("ssh nowhere", "ssh: Could not resolve hostname nowhere: Name or service not known\r\nadmin@web:~$ ")
         // Interrupted while it waits.
-        run("ssh 10.0.7.54", ""); type("\u{3}"); show("^C\r\ncipher@h52:~$ "); capture.settle(screen)
+        run("ssh 198.51.100.54", ""); type("\u{3}"); show("^C\r\nadmin@web:~$ "); capture.settle(screen)
         // No greeting, and a prompt with no user or host in it.
-        run("cd / && sudo ssh -i key root@10.0.7.55", "# ")
+        run("cd / && sudo ssh -i key root@198.51.100.55", "# ")
         // A prompt of a form that is not known: told when the next command runs.
-        run("ssh 10.0.7.56", "[10.0.7.56] @@ ")
+        run("ssh 198.51.100.56", "[198.51.100.56] @@ ")
         XCTAssertEqual(results.count, 6)
-        run("uptime", "up\r\n[10.0.7.56] @@ ")
-        XCTAssertEqual(Array(results.dropFirst()), ["10.0.7.52:2222 Connection refused", "ops@10.0.7.53 Permission denied (publickey).",
-            "nowhere Could not resolve hostname nowhere: Name or service not known", "10.0.7.54 interrupted", "root@10.0.7.55 ok", "10.0.7.56 ok"])
+        run("uptime", "up\r\n[198.51.100.56] @@ ")
+        XCTAssertEqual(Array(results.dropFirst()), ["198.51.100.52:2222 Connection refused", "ops@198.51.100.53 Permission denied (publickey).",
+            "nowhere Could not resolve hostname nowhere: Name or service not known", "198.51.100.54 interrupted", "root@198.51.100.55 ok", "198.51.100.56 ok"])
         XCTAssertEqual(commands.last, "uptime")
     }
 

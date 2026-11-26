@@ -6,7 +6,15 @@ The [verification record](VERIFICATION.md) includes the November 25, 2026 local 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.4.3 (build 12)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.5 (build 16)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.5 (build 16): keyboard copy mode, paste history, line timestamps, sixel and iTerm2 inline images, ZMODEM (`sz` and `rz`), a dropdown window on a hotkey, copy on select, middle-click paste, word characters for double-click, paste trimming and joining, ligatures, line and character spacing, minimum contrast, wide ambiguous-width characters, a Dock bounce on the bell, xterm keys for Shift, Option, and Control combinations, Compatible SSH key exchanges (`diffie-hellman-group16-sha512` and `group14-sha256`), the Mac's `LANG` and `LC_*` offered to SSH shells, and fixes for EC keys in PKCS#8 files and for clicks that selected a line while output arrived.
+
+Included in 1.4.6 (build 15): **Settings › Terminal › New tabs open** chooses what the **+** buttons open, Terminal settings are grouped under headings, pickers stay open after a click on their name, and the terminal keeps its whole screen in view.
+
+Included in 1.4.5 (build 14): Gloamux checks for a new version once a day by default.
+
+Included in 1.4.4 (build 13): session tree drag and drop that keeps working while the list scrolls, folders that change places, Mac sidebar keys in the session tree, and consistent dialog buttons.
 
 Included in 1.4.3 (build 12): the **Session Log** records whether each `ssh` run in a terminal connected or failed, with the reason.
 
@@ -55,6 +63,7 @@ Included in 1.3.2 (build 8): the serial form discovers devices on opening and re
 - [x] Keyboard-interactive authentication and multi-factor login, including multi-round prompts and public key plus verification code, through RFC 4256 support added to the vendored NIOSSH.
 - [ ] Verify keyboard-interactive sign-in against a real OpenSSH server with PAM and a one-time code.
 - [x] Per-session SSH agent forwarding and Ed25519 key file generation.
+- [x] A per-session **SSH algorithms** choice: Modern (elliptic-curve key exchanges only) or Compatible, which adds `diffie-hellman-group16-sha512` and `diffie-hellman-group14-sha256` for older servers and network devices.
 - [x] Connection recovery: a configurable keepalive, a check after the Mac wakes, and optional automatic reconnect for saved sessions.
 - [x] Multi-pane workspace: split any pane side by side or stacked without a pane limit, drag dividers, maximize and restore a pane, and type into all panes at once.
 - [x] Reopen the last launch's tabs, select tabs by number, reorder and rename tabs, confirm before closing, lock the workspace, and run startup commands per session.
@@ -65,6 +74,7 @@ Included in 1.3.2 (build 8): the serial form discovers devices on opening and re
 - [x] Output triggers that notify, play a sound, or mark the tab when a line matches.
 - [x] Output and disconnect indicators on tabs, besides a finished long command and the bell.
 - [x] Rewrap text when the terminal width changes.
+- [x] Keyboard copy mode, paste history, line timestamps, sixel and iTerm2 inline images, ZMODEM `sz` and `rz` with progress and cancel, and a dropdown window on a global hotkey. Copy on select, middle-click paste, word characters, paste trimming and joining, ligatures, line and character spacing, minimum contrast, and wide ambiguous-width characters.
 - [ ] Expand compatibility testing with Vim, tmux, and Chinese input methods.
 - [x] Session import and export, including MobaXterm and CSV. Support sharing profiles with a team without including credentials. Imports also read PuTTY and KiTTY registry exports and Gloamux sessions files; exports write Gloamux sessions files, CSV, and OpenSSH configuration without passwords.
 

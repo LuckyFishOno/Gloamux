@@ -78,6 +78,13 @@ struct HostKeyChange: Identifiable {
     @Published var renamed = false
     /// Typing and pasting are ignored; output still shows.
     @Published var readOnly = false
+    /// Terminal › Show timestamps: each line shows when it last changed.
+    @Published var showsTimestamps = false
+    /// Terminal › Copy mode: the keyboard moves through the text and selects it.
+    @Published var copyMode = false
+    /// A ZMODEM transfer started by sz or rz on the server, kept after it ends until its bar is closed.
+    @Published var zmodem: ZmodemTransfer?
+    var lineTimes = LineTimes()
     /// Bytes received from and sent to the session since it opened, for the status bar.
     var bytesReceived = 0
     var bytesSent = 0
@@ -154,6 +161,7 @@ struct HostKeyChange: Identifiable {
     var ftpFingerprint: String?
     /// SFTP only, SCP only, or SFTP with SCP when the server has no SFTP (nil).
     var fileProtocol: FileProtocolChoice?
+    var sshAlgorithms: SSHAlgorithmSet?
     var signIn: SignInMode?
     /// Where this session's files open, from the saved session.
     var remoteFolder: String?
@@ -220,6 +228,7 @@ struct HostKeyChange: Identifiable {
                                      proxyKind: proxyKind, confirmsEachConnection: confirmsEachConnection)
         target.setJumpPath(jumpPath)
         target.signIn = signIn
+        target.sshAlgorithms = sshAlgorithms
         if let sessionKey, target.usesSessionKey { target.username = sessionKey }
         return target
     }
@@ -404,6 +413,8 @@ enum ConnectionState: Equatable {
     var commandObservers: [UUID: (CommandMark) -> Void] = [:]
     /// The ⌘⇧P command palette is open.
     @Published var commandPaletteShown = false
+    /// Terminal › Paste from history is open.
+    @Published var pasteHistoryShown = false
     /// A recording that was just saved, for the banner that offers to show it.
     @Published var recordingSaved: URL?
     /// Recordings, runbooks, host discovery, and other tool windows, by kind.
@@ -552,8 +563,9 @@ enum ConnectionState: Equatable {
             targets = layout.tabIDs.compactMap { id in tabs.first { $0.id == id } }
         } else { targets = [tab] }
         guard !workspaceLocked else { return }
-        if tab.readOnly { NSSound.beep() }
-        for target in targets where !target.readOnly {
+        if tab.readOnly || tab.zmodem?.isActive == true { NSSound.beep() }
+        // Typing into a ZMODEM transfer would corrupt it; its bar has a Cancel button.
+        for target in targets where !target.readOnly && target.zmodem?.isActive != true {
             // In a production session (or another environment set to confirm), a risky command waits for a yes.
             if let command = riskyCommand(in: target, typing: bytes) {
                 target.riskyCommand = RiskyCommandPrompt(command: command, bytes: bytes, environment: target.environment ?? .production,
@@ -1020,7 +1032,8 @@ enum ConnectionState: Equatable {
                 guard tab.epoch == epoch else { return }
             }
             let shell = try await ssh.openShell(rows: tab.screen.rows, columns: tab.screen.cols,
-                                                term: TerminalPreferences.terminalType, agentSocket: agent, x11: x11)
+                                                term: TerminalPreferences.terminalType, environment: LocalLaunch.sshEnvironment(),
+                                                agentSocket: agent, x11: x11)
             guard tab.epoch == epoch else { await shell.close(); return }
             try await shell.resize(rows: tab.screen.rows, columns: tab.screen.cols)
             guard tab.epoch == epoch else { await shell.close(); return }
@@ -1055,13 +1068,18 @@ enum ConnectionState: Equatable {
     }
 
     /// Output from a shell: draws it, answers terminal queries, records it, and notes finished commands.
-    func terminalReceived(_ tab: SessionTab, bytes raw: [UInt8]) {
+    func terminalReceived(_ tab: SessionTab, bytes incoming: [UInt8]) {
+        // ZMODEM is binary, so it is taken out before decoding.
+        let raw = zmodemOutput(tab, incoming)
+        guard !raw.isEmpty else { return }
         let bytes = tab.decoder.decode(raw)
         tab.bytesReceived += raw.count
         if !tab.outputPending, tab.id != selection, !isVisible(tab) { tab.outputPending = true }
         let scrollback = TerminalPreferences.scrollback
         if tab.screen.options.scrollbackSize != scrollback { tab.screen.setScrollbackSize(scrollback) }
+        let before = LineTimes.cursorLine(tab.screen)
         if let commands = tab.commands { commands.feed(bytes, to: tab.screen) } else { tab.screen.feed(bytes) }
+        tab.lineTimes.touch(from: before, to: LineTimes.cursorLine(tab.screen), at: Date(), screen: tab.screen)
         tab.screenRevision += 1
         recordings.output(tab, bytes: bytes)
         logs.output(tab, bytes: bytes)
@@ -1092,6 +1110,9 @@ enum ConnectionState: Equatable {
         guard now.timeIntervalSince(tab.lastBell) >= 0.25 else { return }
         tab.lastBell = now
         if !isVisible(tab) && tab.id != selection { tab.bellPending = true }
+        if TerminalPreferences.bellBouncesDock, TerminalPreferences.bell != .off, !NSApp.isActive {
+            NSApp.requestUserAttention(.informationalRequest)
+        }
         switch TerminalPreferences.bell {
         case .flash: tab.bellFlash += 1
         case .sound: NSSound.beep()
@@ -1172,8 +1193,9 @@ enum ConnectionState: Equatable {
     }
 
     /// `records` is false for what a user or command did not type, such as a terminal's replies.
-    @discardableResult func enqueueTerminalInput(_ tab: SessionTab, bytes utf8: [UInt8], records: Bool = true) -> Bool {
-        let bytes = tab.encoding.encode(utf8)
+    /// `encodes` is false for bytes that must reach the server unchanged, such as ZMODEM.
+    @discardableResult func enqueueTerminalInput(_ tab: SessionTab, bytes utf8: [UInt8], records: Bool = true, encodes: Bool = true) -> Bool {
+        let bytes = encodes ? tab.encoding.encode(utf8) : utf8
         guard tab.terminalReady, !bytes.isEmpty, bytes.count <= 262144 else { return false }
         tab.bytesSent += bytes.count
         if tab.isLocal {
@@ -1437,6 +1459,7 @@ enum ConnectionState: Equatable {
         tab.showsFiles = settings.opensFiles == true
         tab.forwardingRules = settings.forwardingRules ?? []
         tab.fileProtocol = settings.fileProtocol
+        tab.sshAlgorithms = settings.sshAlgorithms
         tab.signIn = settings.signIn
         tab.remoteFolder = settings.remoteFolder; tab.localFolder = settings.localFolder
         if let folder = settings.remoteFolder { tab.remotePath = folder }
@@ -1529,6 +1552,7 @@ enum ConnectionState: Equatable {
         settings.forwardingRules = tab.forwardingRules.isEmpty ? nil : tab.forwardingRules
         settings.forwardsX11 = tab.forwardsX11 ? true : nil
         settings.fileProtocol = tab.fileProtocol
+        settings.sshAlgorithms = tab.sshAlgorithms
         settings.signIn = tab.signIn
         settings.remoteFolder = tab.remoteFolder; settings.localFolder = tab.localFolder
         try settings.validate()

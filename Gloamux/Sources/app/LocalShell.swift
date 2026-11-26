@@ -51,6 +51,14 @@ struct LocalLaunch: Equatable {
         return ["LANG": name]
     }
 
+    /// The locale variables an SSH shell gets, as `ssh` sends them from a Mac terminal (`SendEnv LANG LC_*`): this Mac's
+    /// `LANG` and `LC_` variables, or the `LANG` a local shell gets when there are none. The server may refuse them.
+    static func sshEnvironment(_ environment: [String: String] = ProcessInfo.processInfo.environment,
+                               locale: Locale = .current) -> [String: String] {
+        let own = environment.filter { ($0.key == "LANG" || $0.key.hasPrefix("LC_")) && !$0.value.isEmpty }
+        return own.isEmpty ? localeEnvironment(environment, locale: locale) : own
+    }
+
     private static func isAvailable(_ name: String) -> Bool {
         guard let handle = newlocale(LC_CTYPE_MASK | LC_MESSAGES_MASK, name, nil) else { return false }
         freelocale(handle)

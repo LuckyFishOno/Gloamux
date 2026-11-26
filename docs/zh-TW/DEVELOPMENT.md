@@ -109,6 +109,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 新視窗以本機終端開始。第一個視窗擁有已存分頁的快照。關閉工作區會清理它的工作階段和工具視窗，關閉最後一個會結束 App。
 - 多重執行（`WorkspaceModel.multiExec`）屬於單一視窗。`typeTerminal` 會把輸入送到該視窗中每個就緒的終端，包括移到獨立視窗的分頁，並略過唯讀終端和遠端桌面。每個目標仍會套用高風險指令檢查。
 - 通道視窗和 `gloamux forwards live-list` 共用 `WorkspaceModel.tunnelTabs`，它只列出已連線的 SSH 分頁，因為沒連線的分頁顯示的是新連線表單。
+- 下拉視窗（`DropdownWindow.swift`）用 Carbon 的 `RegisterEventHotKey` 註冊快速鍵，不需要輔助使用權限；它接手下一個開啟的工作區視窗，並讓它浮在每個桌面空間上。`gloamux layout dropdown` 可顯示或隱藏它。
 
 ### 所有權
 
@@ -187,6 +188,11 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 游標是蓋在儲存格上的獨立 `TerminalCursorView`。改變形狀、焦點或閃爍都不會重繪任何一行，閃爍是 Core Animation 的關鍵影格動畫。
 - 輸入法組字保留在畫面中並繪製在游標上。它從不進入文字儲存，組字期間每個按鍵都交給輸入法。
 - 搜尋列搜尋文字儲存，並用 layout manager 的暫時屬性標示符合項目。搜尋列開著時，新的輸出會在 0.2 秒後重新搜尋。
+- 更新前畫面離底部在一行半以內、且沒有顯示搜尋結果時，新輸出會捲到底部（`showsScreenBottom`，在新行讓畫面變高之前讀取），即使選取了文字也一樣。打字一律捲回底部。
+- 按住左鍵選取時（`selectingWithMouse`），`TerminalDisplay` 只把最新一次更新存在 `heldUpdate`，等 `mouseDown` 返回後連同游標一起執行。AppKit 追蹤滑鼠時用字元位置記住按下的位置，並以游標底下的位置當選取終點，所以點擊期間輸出改變或捲動文字，原本會選取一整行。`TerminalOutputViewTests` 用 run loop 計時器驅動追蹤迴圈，因為迴圈裡不會執行 main queue 的區塊。
+- **終端 › 拷貝模式**（`TerminalCopyMode.swift`）在文字儲存上移動鍵盤游標，並和滑鼠走同一條 `copy` 路徑拷貝。`PasteHistory` 在記憶體保留 20 筆，跳過 `SecretRedaction` 會改動的文字。`LineTimes` 在每次輸出時，標記舊游標行到新游標行之間的絕對行號。
+- 透過輔助使用設定選取文字或內容值的輔助 App（例如「語音控制」和聽寫），會把文字打進終端，而不是修改畫面內容。
+- ZMODEM：`Zmodem.detect` 在分頁輸出中找 `**` ZDLE `B00`（`sz` 要傳檔）或 `B01`（`rz` 在等檔案），之後由 `Zmodem`（在 `Sources/terminal`）處理該分頁的位元組。`ZmodemTransfer` 把收到的檔案直接寫進資料夾（`ZmodemDownload`：只取路徑最後一段、同名加編號、不完整的檔案會刪除）並顯示進度列。Gloamux 中止下載後，`sz` 仍會送出已排入的資料，所以會丟棄輸出，直到線路安靜 0.3 秒（最多 5 秒），並只顯示最後一個 ZDLE 之後的文字。已用 lrzsz 0.12.21rc 驗證。
 
 ## 安全與 Mac 整合
 
@@ -205,6 +211,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - 檔案傳輸都經過 `TransferQueue`，由 `WorkspaceModel.transfers` 在檔案側欄（`RemoteFileSidebar`，本機終端時顯示 `LocalTreeState`）、雙欄的 `FileTransferView` 和所有版面之間共用。預設版面在 `workspaceMode` 為 `.files` 時於主視窗顯示 `FileTransferView`，並跟著選取的分頁；經典和工作台則在附伺服器選單的 `FileTransferWindow` 中顯示。`.log` 時顯示 `ConnectionHistoryView`，`selectTab` 會離開；其他版面以工具視窗打開。
 - 佇列在分頁的 SFTP 通道上一次執行一個項目。上傳會先寫入暫存的 `.name.gloamux-….partial` 檔，再用 `RemoteFileSystem.commitUpload` 放到定位；已有檔案時使用 `replace`，不會先刪除舊檔。下載會在目的地旁寫入隱藏的暫存檔。CLI 上傳和 **在這台 Mac 編輯** 也會先放在遠端的暫存名稱，再用同樣方式提交。
 - `SFTPTransfer` 同時保持 16 個 32 KiB 的讀取或寫入，並在工作取消時停止。
+- SSH 金鑰交換預設為「新式」（只有橢圓曲線），連線選「相容」時才加入 `FiniteFieldKeyExchange`：建立在 BigInt 套件上的 `diffie-hellman-group16-sha512` 與 `diffie-hellman-group14-sha256`（RFC 8268，RFC 3526 群組），不提供 SHA-1 群組。每個 shell 請求都會像 `SendEnv` 一樣，提供 `LocalLaunch.sshEnvironment` 的 `LANG` 與 `LC_*`。
 - `SFTPCommand` 解析貼上的 `sftp` 指令，並拒絕會改變連線路徑或執行程式的選項。`SavedConnection.signIn` 是 `questions` 或 `session-key`；session key 只存在 `SessionTreeStore.sessionKeys`。
 - `AuthWatcher` 只跟隨真正連上的 channel。一個名稱有多個位址時，每個位址各有一個 channel，被拒絕的位址不能讓登入失敗。
 - 遠端快速查看會把一個最多 100 MB 的檔案複製到私有暫存資料夾，並在下一次預覽和結束時刪除。
@@ -308,7 +315,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 ### 未來工作
 
 - **Metal。** 建立所有可見行不到 1 毫秒，之後 AppKit 只繪製有變動的行，所以 Metal 繪製器目前不會帶來使用者感受得到的差異。瓶頸在解析器。連續的可列印 ASCII 一次寫入一整列，UTF-8 解碼不再為每個字元建立 `String`，CSI 參數也逐位元組解析。中日韓文字仍一次一個字元查詢寬度，下一個要加速的就是這裡。
-- **內嵌圖片。** iTerm2 的 `OSC 1337 File=` 和 kitty 圖形協定傳送的是 `NSImage` 和 `CGImage` 能直接解碼的 PNG 或原始像素，所以可以當作錨定在儲存格上的附件放進目前的文字畫面；sixel 則需要自己的解碼器。若要加入：先做 iTerm2，再做 kitty 的直接傳輸（不含檔案或共用記憶體模式），最後是 sixel。每張圖片編碼後上限 10 MB、4096×4096 像素，每個分頁最多保留 64 MB 的解碼圖片，在其所在行離開回捲時丟棄；來自遠端主機的圖片絕不能讀取本機檔案。
+- **內嵌圖片。** iTerm2 的 `OSC 1337 File=`（含 `MultipartFile=`）與 sixel 已實作於 `Sources/terminal/InlineImages.swift`：畫面為每張圖片記下其最上一行的絕對行號與涵蓋的儲存格，文字畫面再把圖片畫在這些儲存格上。每個檔案上限 10 MB、4096×4096 像素，sixel 每邊上限 4096 像素，每個分頁最多保留 64 張、以解碼後像素計 64 MB；圖片在其所在行離開回捲、清除畫面或回捲，或程式離開替代畫面時丟棄。沒有標記 `inline=1` 的檔案（下載）會被忽略，遠端主機送來的內容絕不能讀取本機檔案。kitty 圖形協定尚未支援。
 
 ## 測試
 
@@ -350,7 +357,7 @@ cargo test --offline --manifest-path Gloamux/RDP/Cargo.toml
 | [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts) Symbols Nerd Font Mono v3.5.1（終端提示圖示） | [MIT](../../Gloamux/Sources/app/Resources/TerminalFonts/NerdFontsSymbols-LICENSE.txt)，連同[來源紀錄](../../Gloamux/Sources/app/Resources/TerminalFonts/PROVENANCE.txt)放在 App 的資源套件中。其收錄的各圖示集保留各自的授權，列於 Nerd Fonts 的[授權稽核](https://github.com/ryanoasis/nerd-fonts/blob/v3.5.1/license-audit.md)。 |
 | Visual Studio Code 主題顏色 | [MIT 聲明](../../Gloamux/Sources/app/Resources/vscode-themes-license.txt)。 |
 | Marketplace 主題顏色 | MIT 授權主題的[授權聲明](../../Gloamux/Sources/app/Resources/vscode-community-themes-licenses.txt)。 |
-| Swift 套件 | 解析結果記錄在 [Package.resolved](../../Gloamux/Package.resolved)。 |
+| Swift 套件，包含 [BigInt](https://github.com/attaswift/BigInt)（MIT，用於「相容」SSH 金鑰交換） | 解析結果記錄在 [Package.resolved](../../Gloamux/Package.resolved)。 |
 
 主題與匯入：
 
