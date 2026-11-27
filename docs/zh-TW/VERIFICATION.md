@@ -7,8 +7,9 @@
 ## Gloamux 1.8.1 (build 20)：「已存密碼」在無障礙工具讀取時保持回應（2026 年 11 月 27 日）
 
 - **改了什麼。** 沒有已存密碼時，**已存密碼** 面板在清單載入後會顯示 `ContentUnavailableView`。這個 view 插入已經開啟的面板後，只要 VoiceOver、視窗管理工具或自動化工具讀取視窗，SwiftUI 的無障礙更新就會在 attribute graph 裡無限循環：主執行緒一直滿載，`gloamux` 對 App 的請求也得不到回應。面板的空狀態改成一般的圖示、標題與說明，文字不變。這個問題從 1.6 (build 17) 就存在。
-- **如何找到並縮小範圍。** 用一個不需 Touch ID 就能開啟面板、並以 `AXUIElement` 客戶端讀取的診斷版：同一個 view 在面板第一個畫面就存在、普通文字，或稍後插入的自製圖示與文字，都不會卡；稍後插入的 `ContentUnavailableView` 會卡，放在一般堆疊或 `ZStack` 都一樣。同一個 view 放在主視窗的工作階段紀錄和工具視窗不會卡。單元測試裡放進 `NSWindow` 的 view 從未出現循環，所以回歸測試 `SavedSignInsViewTests` 確保面板原始碼不再使用這個 view。
-- **其他面板，同一個客戶端。** 工作階段屬性、重新命名、貼上紀錄，以及設定視窗：沒有循環。其他面板都沒有使用 `ContentUnavailableView`。
+- **如何找到並縮小範圍。** 用一個不需 Touch ID 就能開啟面板、並以 `AXUIElement` 客戶端讀取的診斷版：同一個 view 在面板第一個畫面就存在、普通文字，或稍後插入的自製圖示與文字，都不會卡；稍後插入的 `ContentUnavailableView` 會卡，放在一般堆疊或 `ZStack` 都一樣。同一個 view 放在主視窗的連線歷史不會卡。單元測試裡放進 `NSWindow` 的 view 從未出現循環，所以回歸測試 `SavedSignInsViewTests` 確保面板原始碼不再使用這個 view。
+- **其他面板，同一個客戶端。** 編輯連線、重新命名、從歷史貼上，以及設定視窗：沒有循環。其他面板都沒有使用 `ContentUnavailableView`。
+- **使用 `ContentUnavailableView` 的視窗，已發布的 1.8.1，空的工作區。** 錄影、Runbook、探索主機、主機金鑰（兩個分頁，「紀錄」分頁是在視窗開著時切換的），以及經典版面的連線歷史視窗，都顯示了各自的空狀態；每開一個就讓客戶端讀取整個 App 兩次，沒有循環，也沒有卡住。
 - **打包後的 App、改名副本、獨立工作區。** 通過 Touch ID 開啟 **已存密碼** 後，連續三次讀取整棵無障礙樹，每次都在 0.05 秒內完成，AttributeGraph 沒有回報循環，App 約占 5% CPU，`gloamux tabs list` 立即回應。修正前，1.6 和 1.7 的副本做同樣步驟會卡死。
 
 ## Gloamux 1.8 (build 19)：視窗錄影的歷史紀錄（2026 年 11 月 27 日）
