@@ -23,9 +23,11 @@ struct WorkspaceSidebarWidths: Equatable {
     var left: Double
     var right: Double
 
-    /// Fits the sidebars into the space left after reserving the center pane and the dividers.
-    func fitting(in available: Double, reservingRight minimum: Double) -> Self {
-        let left = min(left, max(0, available - minimum))
+    /// Fits the sidebars into the space left after reserving the center pane and the dividers. The left keeps its own
+    /// minimum when it can; the right gives way first, below its minimum if it has to.
+    func fitting(in available: Double, reservingRight minimum: Double,
+                 leftMinimum: Double = SidebarWidth.left.range.lowerBound) -> Self {
+        let left = min(left, max(min(left, leftMinimum), available - minimum), max(0, available))
         return Self(left: left, right: min(right, max(0, available - left)))
     }
 }
@@ -39,6 +41,9 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
     let leadingContent: Leading
     let centerContent: Center
     let trailingContent: Trailing
+    /// The room the center keeps: the terminal's minimum, or more for file transfer and the session log, which lay
+    /// out two columns side by side. The sidebars give way to it.
+    var centerMinimum: Double = 340
 
     @AppStorage("leftSidebarWidth") private var savedLeft = 254.0
     /// The width of every right panel: the browser, files, quick commands, and color themes.
@@ -47,9 +52,8 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
 
     var body: some View {
         GeometryReader { geometry in
-            let dividerWidth = (showsLeading ? 1.0 : 0) + (showsTrailing ? 1.0 : 0)
-            let available = max(0, geometry.size.width - 340 - dividerWidth)
-            let widths = preferredWidths.fitting(in: available, reservingRight: minimumRightWidth)
+            let (widths, available) = Self.fit(preferredWidths, in: geometry.size.width, centerMinimum: centerMinimum,
+                                               leading: showsLeading, trailing: showsTrailing)
             HStack(spacing: 0) {
                 if showsLeading {
                     leadingContent
@@ -58,7 +62,8 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
                         .transition(.move(edge: .leading))
                     handle(.left, widths: widths, available: available)
                 }
-                centerContent.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+                // Clipped, so a window too small for the center's content never draws it over the sidebars.
+                centerContent.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity).clipped()
                 if showsTrailing {
                     HStack(spacing: 0) {
                         handle(.right, widths: widths, available: available)
@@ -78,7 +83,14 @@ struct WorkspaceSidebarLayout<Leading: View, Center: View, Trailing: View>: View
         return WorkspaceSidebarWidths(left: showsLeading ? SidebarWidth.left.clamp(savedLeft) : 0, right: right)
     }
 
-    private var minimumRightWidth: Double { showsTrailing ? SidebarWidth.right.range.lowerBound : 0 }
+    /// The sidebars' widths in a window this wide, and the room they may share: whatever the center does not keep.
+    static func fit(_ preferred: WorkspaceSidebarWidths, in width: Double, centerMinimum: Double,
+                    leading: Bool, trailing: Bool) -> (widths: WorkspaceSidebarWidths, available: Double) {
+        let dividerWidth = (leading ? 1.0 : 0) + (trailing ? 1.0 : 0)
+        let available = max(0, width - centerMinimum - dividerWidth)
+        let minimumRight = trailing ? SidebarWidth.right.range.lowerBound : 0
+        return (preferred.fitting(in: available, reservingRight: minimumRight), available)
+    }
 
     private func handle(_ side: SidebarWidth, widths: WorkspaceSidebarWidths, available: Double) -> some View {
         let width = side == .left ? widths.left : widths.right

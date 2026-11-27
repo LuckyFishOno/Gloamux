@@ -252,7 +252,8 @@ struct FileTransferView: View {
                     titleBar
                     Divider()
                 }
-                HStack(spacing: 0) {
+                // The two panes always share the width equally, so the arrows stay in the middle at any size.
+                CenteredColumns {
                     LocalFilePane(local: local, selection: $localSelection, upload: { urls in upload(urls) },
                                   download: { paths in download(paths) })
                     transferButtons
@@ -348,10 +349,17 @@ struct FileTransferView: View {
             .disabled(remoteSelection.isEmpty || currentTab == nil)
             Spacer()
         }
-        .padding(.horizontal, 6)
+        .frame(width: Self.arrowsWidth)
         .frame(maxHeight: .infinity)
         .background(model.theme.sidebar.color.opacity(0.5))
     }
+
+    /// Each file pane's least width, and the column of arrows between them.
+    static let paneMinWidth: CGFloat = 340
+    static let arrowsWidth: CGFloat = 44
+    /// The width the two panes and the arrows need side by side. The workspace keeps this much room for file transfer,
+    /// so the panels beside it cannot squeeze the panes under them.
+    static let minimumWidth: CGFloat = paneMinWidth * 2 + arrowsWidth
 
     private func upload(_ urls: [URL]) {
         let urls = urls.filter { !RemoteFileDrag.isOwnCopy($0) }
@@ -518,7 +526,7 @@ private struct LocalFilePane: View {
             .overlay { if local.loading && local.items.isEmpty { ProgressView() } }
         }
         .padding(10)
-        .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { pathDraft = local.folder.path }
         .onChange(of: local.folder) { _, folder in pathDraft = folder.path; selection = [] }
         .sheet(item: $naming) { request in
@@ -656,7 +664,7 @@ private struct RemoteFilePane: View {
             .overlay { if remote.loading && remote.items.isEmpty { ProgressView() } }
         }
         .padding(10)
-        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: tab.connected) {
             if tab.connected, remote.folder == nil { await remote.load(nil, model: model, tab: tab) }
         }
@@ -835,5 +843,31 @@ private struct TransferRow: View {
         case .done: return .green
         default: return .secondary
         }
+    }
+}
+
+/// Three columns: the middle one at its own width, exactly centered, and the outer two splitting the rest equally.
+struct CenteredColumns: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let middle = subviews.count == 3 ? subviews[1].sizeThatFits(.unspecified).width : 0
+        let side = FileTransferView.paneMinWidth
+        return CGSize(width: proposal.width ?? (side * 2 + middle), height: proposal.height ?? 300)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let middle = subviews[1].sizeThatFits(.unspecified).width
+        for (subview, frame) in zip(subviews, Self.frames(in: bounds, middle: middle)) {
+            subview.place(at: frame.origin, proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    /// The left, middle, and right columns' frames.
+    static func frames(in bounds: CGRect, middle: CGFloat) -> [CGRect] {
+        let middle = min(middle, bounds.width)
+        let side = (bounds.width - middle) / 2
+        return [CGRect(x: bounds.minX, y: bounds.minY, width: side, height: bounds.height),
+                CGRect(x: bounds.minX + side, y: bounds.minY, width: middle, height: bounds.height),
+                CGRect(x: bounds.minX + side + middle, y: bounds.minY, width: side, height: bounds.height)]
     }
 }

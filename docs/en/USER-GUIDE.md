@@ -49,6 +49,7 @@ Choose a layout from the **Layout** menu at the right end of the toolbar. It app
 | Environment badge | Shows the focused session's environment tag, such as Production. |
 | **File Transfer** / **Terminal** / **Session Log** | Switches the window between two-pane file transfer, the terminal, and the [session log](#session-log-page). Choosing a tab leaves the session log. |
 | **New connection** menu | **New connection**, **Local terminal**, **Windows Remote Desktop (RDP)**, **Remote Desktop (VNC)**, **Other connection**, **Discover hosts**, and **Import sessions**. |
+| **Record window video** | Records the whole window as a video. While it records, it shows a red dot and the time; click it to stop. See [Window video](#window-video). |
 | **Browser** (globe) | Shows or hides the [browser panel](#browser-panel) on the right. |
 | **Files** | Shows or hides the focused pane's files on the right. |
 | **Quick commands** | Opens the quick commands sidebar. |
@@ -78,7 +79,7 @@ The globe button in the toolbar, to the left of **Files**, shows a browser on th
 
 - Type an address or a search in the field and press Return. Without `http://` or `https://`, an IP address, `localhost`, or a name with a port or path (`router:8080`, `nas/`) opens with `http://`, and a name with a dot with `https://`, as browsers do. Anything else, such as words or a single word without a dot, is searched on Google. Other schemes, and addresses with a user name or password in them, are refused.
 - The panel's pages are tabs along its top. **+** (**New page**) opens one after the page shown, and the **×** on a tab closes it. The panel keeps up to 20 pages, closing the oldest past that, and keeps them while it is hidden, with any sound or video paused. The **×** at the right end hides the panel.
-- Drag the panel's left edge to make it wider, as far as leaving the terminal 340 points. Every panel on the right (the browser, **Files**, **Quick commands**, and **Color theme**) shares this width in every layout, and Gloamux remembers it.
+- Drag the panel's left edge to make it wider, as far as leaving the terminal 340 points. **File Transfer** and the **Session Log** keep room for their two columns, so the panel gives way while one of them is shown and returns to its width afterwards. Every panel on the right (the browser, **Files**, **Quick commands**, and **Color theme**) shares this width in every layout, and Gloamux remembers it.
 - The bar above the page has **Back**, **Forward**, **Reload** (or **Stop loading**), the address field, and the **More** menu: **Zoom in**, **Zoom out**, **Actual size**, **Open in the default browser**, **Copy address**, and **Clear website data**. ⌘+, ⌘−, and ⌘0 zoom the page while it has the keyboard.
 - The panel's pages share cookies and sign-ins, kept in memory apart from Safari until Gloamux quits. **Clear website data** removes them for every page, forgets trusted certificates, and opens each page again, so a site that needs a sign-in asks again.
 - When macOS does not trust a page's certificate, as with a device's self-signed one, the page shows the address and the certificate's SHA-256 fingerprint. Compare it with the one the device shows, then choose **Trust this certificate** to trust it for that address until Gloamux quits. A trusted certificate that changes is asked about again, in red.
@@ -263,6 +264,7 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
   - **Files**: downloads, uploads, new folders, renames, deletions, and permission changes.
   - **Connection**: the jump hosts and proxy it went through, sign-in, port forwarding, whether each `ssh` run in the terminal connected, and how it ended.
 - Search finds commands, paths, hosts, and names. **Download log** saves one record as text, with its terminal log when there is one.
+- When the window leaves the page too little room for both columns, it shows the list and the chosen connection one at a time. **Session Log** at the top of a connection goes back to the list.
 - A command is read from the line the terminal shows when you press Return, so a password the server does not show is never recorded, and likely secrets in a command are masked. Text typed into editors and other full-screen programs is left out. Inside tmux, screen, or Mosh a command is recorded when its prompt shows `user@host`. A terminal that opens on this Mac is not a connection and has no record.
 - When you run `ssh` in the terminal to go on to another server, the record says **SSH connected** or **SSH connection failed** with the reason `ssh` showed. Answers to its questions, such as `yes` for a new host key, are not commands. It is left out when `ssh` hides its errors (`-q`, `-E`, or redirected), holds a tunnel open without a session (`-N`), or runs from an alias or script.
 - The options menu exports the list as CSV or JSON, clears it, or turns it or **Record commands** off. Right-click a record to delete it.
@@ -277,12 +279,25 @@ Local zsh reports each prompt, command, exit status, and folder. For bash, zsh o
 
 ### Recordings
 
-- **Terminal › Start recording** (⌥⌘R) records what a terminal shows, never what you type.
+- **Terminal › Start text recording** (⌥⌘R) records what a terminal shows, never what you type.
 - Access keys, tokens, private keys, and password values are replaced with `[REDACTED]` when the recording is saved.
 - **Terminal › Recordings** replays them at up to 4× speed and exports them as asciinema `.cast` files.
 - Stopping a recording returns at once; Gloamux masks and writes the file in the background, so the window keeps working. Two recordings of the same tab stopped within one second get separate files.
 - If a recording cannot be saved, **Recording not saved** appears at the bottom of the window. Gloamux keeps the recording until you choose **Try again** or **Discard**.
 - Quitting stops running recordings and waits until they are written. If one cannot be saved, Gloamux asks before quitting: **Don’t Quit** keeps it for another try, **Quit Anyway** discards it.
+
+### Window video
+
+- **Record window video** in the toolbar, to the left of the browser button, or **Terminal › Record window video** (⇧⌘R) records the whole workspace window as a video, whatever it shows: every tab and split, **File Transfer**, and the **Session Log**. No sound is recorded. In the Classic and Workbench layouts the button is next to **Layout**.
+- The first time, Gloamux says what a video records and asks before it starts. `gloamux videos start --yes` answers the same question.
+- macOS also asks for permission once. Turn on Gloamux in **System Settings › Privacy & Security › Screen & System Audio Recording**, then record again. macOS may ask you to reopen Gloamux, and may ask again after an update.
+- While it records, the button shows a red dot and the time. Click it or press ⇧⌘R to stop. The file is finished, and **Recording saved** appears with **Show**.
+- Recording pauses while a sheet is open on the window, such as a password prompt or a confirmation, and while the window is in the Dock. The button turns orange. The paused time is cut out of the video. Switching tabs or views, splitting, closing a tab, and a dropped connection do not pause it.
+- The video keeps the size the window had when it started. A window resized later is scaled to fit, with black bars where its shape no longer matches.
+- Recording ends when you stop it, when the window closes, and when Gloamux quits, which finishes the file first. It also stops at 4 GB, or when less than 1 GB of disk space is left, and says why. Up to 4 windows can record at once.
+- Choose the format, quality, frame rate, pointer, and folder in [Settings › General › Window video](#window-video-settings).
+- Videos are saved in **Downloads** unless you choose another folder, readable only by your account. While one records, its file has a hidden name that starts with a dot. **Terminal › Recordings** lists every video Gloamux saved, in whichever folder, under **Window video**, plays it, and exports it; **Move to Trash** there moves the file to the Trash. Videos from before this setting, in the `videos` folder of Gloamux's data folder, are listed too. The file is written in two-second pieces, so after a crash the part up to the last piece still plays; it gets its name and appears in the list at the next launch.
+- Nothing in a video is masked. Anything the window shows, such as a password a program echoes, file names, and output, is in it.
 
 ### Colors
 
@@ -527,7 +542,8 @@ What an agent can do:
 | | **Select output of last command** | ⇧⌘A |
 | | **Share with Agents** | |
 | | **Enable shell integration** | |
-| | **Start recording** / **Stop recording** | ⌥⌘R |
+| | **Start text recording** / **Stop text recording** | ⌥⌘R |
+| | **Record window video** / **Stop window video** | ⇧⌘R |
 | | **Recordings** | |
 | | **Start session log** / **Stop session log** | ⌥⌘L |
 | | **Session Log** | |
@@ -566,7 +582,8 @@ What an agent can do:
 | ⇧⌘], ⇧⌘[ | Next tab, previous tab |
 | ⌘↑, ⌘↓ | Previous prompt, next prompt (shell integration); in the files sidebar, ⌘↑ goes up a folder |
 | ⇧⌘A | Select the last command's output |
-| ⌥⌘R | Start or stop recording |
+| ⌥⌘R | Start or stop a terminal text recording |
+| ⇧⌘R | Start or stop the window video |
 | ⌥⌘L | Start or stop the session log |
 | ⇧⌘S | Save output |
 | ⇧⌘H | Paste from history |
@@ -596,6 +613,18 @@ Open Settings with **Gloamux › Settings** (⌘,). Changes apply at once. Each 
 | **Dropdown window** (`dropdown-hotkey`) | A key (⌃\`, ⌥\`, ⌥Space, or F12) that shows a Gloamux window across the top of the screen from any app, and hides it again. Its tabs stay open while it is hidden. A warning shows when another app already uses the key. `gloamux layout dropdown` does the same. |
 | **Check for updates automatically** | Checks GitHub for a new version once a day. |
 | **All settings** · **Export** / **Import** | Saves or restores everything in one file. See [Backup](#all-settings-in-one-file). |
+
+#### Window video settings
+
+These apply to the next [window video](#window-video). Videos never include sound.
+
+| Setting | What it does |
+|---|---|
+| **Format** (`video.format`) | **MP4** (`mp4`, the default) or **MOV** (`mov`). Both hold H.264 video. |
+| **Quality** (`video.quality`) | **Standard** (`standard`) records the window at its size in points, for small files. **High** (`high`, the default) records every pixel of a Retina display. **Best** (`best`) also doubles the bit rate, so text stays sharp while it scrolls. |
+| **Frame rate** (`video.frame-rate`) | `30` (the default) or `60` frames per second. 60 makes files about twice as large. |
+| **Show the pointer** (`video.show-pointer`) | Shows the mouse pointer when it is over the window. On by default. |
+| **Save videos in** (`video.folder`) | The folder for new videos. **Downloads** by default (an empty value). |
 
 ### Terminal
 
@@ -703,6 +732,7 @@ While Gloamux is open, workspace commands run in the app. A command that waits f
 | `gloamux triggers` | `list`, `add`, `edit`, `enable`, `disable`, `remove`. Actions: `notify`, `sound`, `mark`. |
 | `gloamux runbooks` | `list`, `show`, `create`, `import`, `delete`, `run`. |
 | `gloamux recordings` | `list`, `export` (as `.cast`), `remove`. |
+| `gloamux videos` | `start [--window N] [--yes]`, `stop [--window N]`, `status`, `list`, `export FILE PATH`, `remove FILE`. Window numbers are those of `gloamux tabs list`. `start`, `stop`, and `status` need the running app and Screen Recording permission; the first `start` needs `--yes`. Videos are saved in Downloads or `video.folder`; `list` gives each one's path. |
 | `gloamux appearance` | `list`, `get`, `set THEME_ID`. |
 | `gloamux settings` | `list`, `get`, `set`, `reset`. Names are in the [settings reference](#19-settings-reference). |
 | `gloamux layout` | `get`, `set default\|classic\|workbench`, `dropdown` (shows or hides the dropdown window). |

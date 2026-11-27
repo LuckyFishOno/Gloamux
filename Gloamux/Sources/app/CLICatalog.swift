@@ -20,14 +20,20 @@ public struct CLICommand: Sendable {
     /// For each operation, the positions of its arguments (after the operation) that name a file on this Mac. The
     /// command line makes them absolute, since the running app has its own working directory.
     public let localPaths: [String: [Int]]
+    /// Options a workspace command takes besides `--workspace` and `--json`: switches such as `--yes`, and options
+    /// followed by a value such as `--window N`. The command line passes them on after the other arguments.
+    public let switches: Set<String>
+    public let valueOptions: Set<String>
 
     init(_ name: String, summary: String, runner: Runner, operations: [String] = [], localPaths: [String: [Int]] = [:],
-         help: String? = nil) {
+         switches: Set<String> = [], valueOptions: Set<String> = [], help: String? = nil) {
         self.name = name
         self.summary = summary
         self.runner = runner
         self.operations = operations
         self.localPaths = localPaths
+        self.switches = switches
+        self.valueOptions = valueOptions
         self.help = help
     }
 }
@@ -251,6 +257,26 @@ public enum CLICatalog {
                    help: """
             list | export FILE ABSOLUTE_CAST_PATH | remove FILE
             Recordings are asciinema .cast files with secrets masked. Start and stop one with gloamux tabs record.
+            Window videos are under gloamux videos.
+            remove moves the file to the Trash.
+            """),
+        CLICommand("videos",
+                   summary: "Record the workspace window as a video, and list, export, or remove videos",
+                   runner: .workspace,
+                   operations: ["start", "stop", "status", "list", "export", "remove"],
+                   localPaths: ["export": [1]],
+                   switches: ["--yes"],
+                   valueOptions: ["--window"],
+                   help: """
+            start [--window N] [--yes] | stop [--window N] | status
+            list | export FILE ABSOLUTE_VIDEO_PATH | remove FILE
+
+            start records the whole workspace window, without sound, in the format, quality, and frame rate set in
+            Settings › General (gloamux settings set video.format|video.quality|video.frame-rate|video.show-pointer).
+            Videos are saved in Downloads, or in video.folder when it is set; list shows every video Gloamux saved.
+            The first start needs --yes: a video shows everything in the window, with nothing masked.
+            start, stop, and status need the running app and macOS Screen Recording permission for Gloamux.
+            Window numbers are those of gloamux tabs list; without --window, the front window.
             remove moves the file to the Trash.
             """),
         CLICommand("history",

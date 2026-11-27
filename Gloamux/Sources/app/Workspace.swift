@@ -437,6 +437,13 @@ enum ConnectionState: Equatable {
     lazy var reachability = Reachability()
     /// Terminal recordings in progress and saved.
     lazy var recordings = TerminalRecordings(folder: storage.appendingPathComponent("recordings", isDirectory: true))
+    /// Videos of this workspace window, and the one being recorded.
+    lazy var videos: VideoRecordings = {
+        let store = VideoRecordings(folder: storage.appendingPathComponent("videos", isDirectory: true),
+                                    index: storage.appendingPathComponent("videos.json"))
+        store.finished = { [weak self] result, reason in self?.videoFinished(result, reason: reason) }
+        return store
+    }()
     let history: ConnectionHistory
     /// The record of a command's connection.
     var commandHistoryID: UUID?
@@ -853,6 +860,8 @@ enum ConnectionState: Equatable {
     }
 
     public func closeWorkspaceWindow(lockingVault: Bool) async {
+        // The video ends before the connections close, so it does not show them ending.
+        await finishVideo(reason: .windowClosed)
         saveOpenTabs()
         stopWorkspaceObservers()
         for window in Array(toolWindows.values) { window.close() }

@@ -380,6 +380,7 @@ extension WorkspaceModel {
     /// Before the app quits: stops the recordings still running and waits for every save, at most `seconds`.
     /// Returns false when a recording would be lost, because it could not be written or is still being written.
     public func finishRecordingsBeforeQuit(within seconds: Double = 20) async -> Bool {
+        await finishVideo(reason: .quit)
         recordings.stopAll()
         let finished = await recordings.finishSaving(within: seconds)
         return finished && recordings.unsaved.isEmpty

@@ -10,60 +10,36 @@ struct ConnectionHistoryView: View {
     @AppStorage(ConnectionHistory.commandsKey) private var keepsCommands = true
     @AppStorage(TerminalPreferences.logKey) private var logsEverySession = false
     @State private var selection: UUID?
+    /// Narrow: the chosen connection's details fill the view instead of the list.
+    @State private var showsDetail = false
     @State private var confirmsClear = false
     @State private var error: String?
 
     private var shown: [ConnectionRecord] { history.matching(history.search) }
 
+    /// The list's and the details' least widths side by side. Below it, as when the browser panel leaves the log little
+    /// room, one shows at a time, so neither is pushed under the panels around the log.
+    static let sideBySideWidth: CGFloat = listMinWidth + detailMinWidth + 10
+    static let listMinWidth: CGFloat = 180
+    static let detailMinWidth: CGFloat = 320
+
     var body: some View {
         let records = shown
-        HSplitView {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Text(T("Session Log")).appFont(.headline)
-                    InfoButton(T("Each connection is saved as one record: when, where, through which jump hosts or proxy, how it ended, the commands run in it, and the files copied or changed and ports forwarded. Passwords, session keys, and command output are not part of it. Records are kept for a year, up to 2,000."))
-                    Spacer()
-                    Menu {
-                        Button(T("Export as CSV")) { export(csv: true) }.disabled(records.isEmpty)
-                        Button(T("Export as JSON")) { export(csv: false) }.disabled(records.isEmpty)
-                        Divider()
-                        Toggle(T("Keep connection history"), isOn: $enabled)
-                        Toggle(T("Record commands"), isOn: $keepsCommands).disabled(!enabled)
-                        Toggle(T("Log every session"), isOn: $logsEverySession)
-                        Divider()
-                        Button(T("Clear history"), role: .destructive) { confirmsClear = true }.disabled(history.records.isEmpty)
-                    } label: { Image(systemName: "ellipsis.circle") }
-                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                        .accessibilityLabel(T("History options"))
+        GeometryReader { space in
+            if space.size.width >= Self.sideBySideWidth {
+                HSplitView {
+                    list(records, compact: false)
+                        .frame(minWidth: Self.listMinWidth, idealWidth: 300, maxWidth: 420)
+                    detail(compact: false)
+                        .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding(12)
-                TextField(T("Search"), text: $history.search).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.bottom, 10)
-                Divider()
-                if records.isEmpty {
-                    ContentUnavailableView(T(history.search.isEmpty ? "No connections yet" : "No matches"), systemImage: "clock.arrow.circlepath")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(records, selection: $selection) { record in
-                        row(record).tag(record.id)
-                            .contextMenu {
-                                Button(T("Download log")) { download(record) }
-                                Button(T("Delete"), role: .destructive) { remove(record) }.disabled(history.open.contains(record.id))
-                            }
-                    }
-                    .listStyle(.sidebar)
-                    .scrollContentBackground(.hidden)
-                }
+            } else if showsDetail, selection != nil {
+                detail(compact: true)
+            } else {
+                list(records, compact: true)
             }
-            .frame(minWidth: 270, idealWidth: 320, maxWidth: 420)
-            Group {
-                if let record = history.records.first(where: { $0.id == selection }) {
-                    ConnectionRecordView(history: history, record: record) { download(record) }.id(record.id)
-                } else {
-                    ContentUnavailableView(T("Choose a connection"), systemImage: "list.bullet.rectangle")
-                }
-            }
-            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .clipped()
         .onAppear { history.reload(); if selection == nil { selection = shown.first?.id } }
         .onChange(of: history.search) { _, _ in
             let records = shown
@@ -78,18 +54,82 @@ struct ConnectionHistoryView: View {
         } message: { Text(error.map(T) ?? "") }
     }
 
+    private func list(_ records: [ConnectionRecord], compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text(T("Session Log")).appFont(.headline).lineLimit(1)
+                InfoButton(T("Each connection is saved as one record: when, where, through which jump hosts or proxy, how it ended, the commands run in it, and the files copied or changed and ports forwarded. Passwords, session keys, and command output are not part of it. Records are kept for a year, up to 2,000."))
+                Spacer(minLength: 0)
+                Menu {
+                    Button(T("Export as CSV")) { export(csv: true) }.disabled(records.isEmpty)
+                    Button(T("Export as JSON")) { export(csv: false) }.disabled(records.isEmpty)
+                    Divider()
+                    Toggle(T("Keep connection history"), isOn: $enabled)
+                    Toggle(T("Record commands"), isOn: $keepsCommands).disabled(!enabled)
+                    Toggle(T("Log every session"), isOn: $logsEverySession)
+                    Divider()
+                    Button(T("Clear history"), role: .destructive) { confirmsClear = true }.disabled(history.records.isEmpty)
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel(T("History options"))
+            }
+            .padding(12)
+            TextField(T("Search"), text: $history.search).textFieldStyle(.roundedBorder).padding(.horizontal, 12).padding(.bottom, 10)
+            Divider()
+            if records.isEmpty {
+                ContentUnavailableView(T(history.search.isEmpty ? "No connections yet" : "No matches"), systemImage: "clock.arrow.circlepath")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // Narrow, choosing a connection opens its details; side by side, it only selects it.
+                List(records, selection: Binding(get: { selection }, set: { id in
+                    selection = id
+                    if compact, id != nil { showsDetail = true }
+                })) { record in
+                    row(record).tag(record.id)
+                        .contextMenu {
+                            Button(T("Download log")) { download(record) }
+                            Button(T("Delete"), role: .destructive) { remove(record) }.disabled(history.open.contains(record.id))
+                        }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .accessibilityIdentifier("historyList")
+            }
+        }
+    }
+
+    @ViewBuilder private func detail(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if compact {
+                Button { showsDetail = false } label: {
+                    Label(T("Session Log"), systemImage: "chevron.left").lineLimit(1)
+                }
+                .buttonStyle(.borderless)
+                .help(T("Back"))
+                .accessibilityIdentifier("historyBack")
+                .padding([.horizontal, .top], 12)
+            }
+            if let record = history.records.first(where: { $0.id == selection }) {
+                ConnectionRecordView(history: history, record: record) { download(record) }.id(record.id)
+            } else {
+                ContentUnavailableView(T("Choose a connection"), systemImage: "list.bullet.rectangle")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
     private func row(_ record: ConnectionRecord) -> some View {
         let state = record.state(open: history.open.contains(record.id))
         return HStack(spacing: 9) {
             Image(systemName: state.symbol).foregroundStyle(state.color).frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.name).lineLimit(1)
+                Text(record.name).lineLimit(1).truncationMode(.middle)
                 Text(verbatim: "\(record.kind.uppercased())  \(record.address)").appFont(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                 HStack(spacing: 6) {
                     Text(record.started, format: .dateTime.year().month().day().hour().minute())
                     Text(T(state.title))
                 }
-                .appFont(.caption).foregroundStyle(.secondary)
+                .appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .accessibilityElement(children: .combine)
@@ -230,32 +270,28 @@ private struct ConnectionRecordView: View {
     var body: some View {
         let state = record.state(open: history.open.contains(record.id))
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(record.name).appFont(.title3.weight(.semibold)).lineLimit(1)
-                    Text(verbatim: "\(record.kind.uppercased())  \(record.address)").appFont(.callout.monospaced())
-                        .foregroundStyle(.secondary).textSelection(.enabled)
-                    if let route = record.route {
-                        Label {
-                            Text(verbatim: route.isEmpty ? T("Direct connection") : (route + [record.host]).joined(separator: " → "))
-                                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        } icon: { Image(systemName: route.isEmpty ? "arrow.right" : "point.topleft.down.to.point.bottomright.curvepath") }
-                            .appFont(.caption).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("historyRoute")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    summary(state)
+                    Spacer(minLength: 0)
+                    status(state)
+                    Button(T("Download log"), systemImage: "square.and.arrow.down", action: download)
+                        .fixedSize().accessibilityIdentifier("downloadHistoryLog")
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    summary(state)
+                    HStack(spacing: 10) {
+                        status(state)
+                        Spacer(minLength: 0)
+                        Button(T("Download log"), systemImage: "square.and.arrow.down", action: download)
+                            .labelStyle(.iconOnly).help(T("Download log")).accessibilityIdentifier("downloadHistoryLog")
                     }
                 }
-                Spacer()
-                Label(T(state.title), systemImage: state.symbol).foregroundStyle(state.color)
-                Button(T("Download log"), systemImage: "square.and.arrow.down", action: download)
-                    .accessibilityIdentifier("downloadHistoryLog")
             }
-            Picker(T("Show"), selection: $shows) {
-                ForEach(Shows.allCases, id: \.self) { choice in
-                    let count = record.events.filter { choice.includes($0.kind) }.count
-                    Text(verbatim: choice == .commands || choice == .files ? "\(T(choice.rawValue)) (\(count))" : T(choice.rawValue)).tag(choice)
-                }
+            ViewThatFits(in: .horizontal) {
+                showsPicker.pickerStyle(.segmented).fixedSize()
+                showsPicker.pickerStyle(.menu).fixedSize()
             }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
             Divider()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 7) {
@@ -279,6 +315,37 @@ private struct ConnectionRecordView: View {
         }
         .padding(18)
         .task(id: record.logPath) { log = history.logText(record, limit: 256 * 1024) }
+    }
+
+    /// The connection's name, kind and address, and the route it took.
+    private func summary(_ state: ConnectionRecord.State) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(record.name).appFont(.title3.weight(.semibold)).lineLimit(1).truncationMode(.middle)
+            Text(verbatim: "\(record.kind.uppercased())  \(record.address)").appFont(.callout.monospaced())
+                .foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+            if let route = record.route {
+                Label {
+                    Text(verbatim: route.isEmpty ? T("Direct connection") : (route + [record.host]).joined(separator: " → "))
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                } icon: { Image(systemName: route.isEmpty ? "arrow.right" : "point.topleft.down.to.point.bottomright.curvepath") }
+                    .appFont(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("historyRoute")
+            }
+        }
+    }
+
+    private func status(_ state: ConnectionRecord.State) -> some View {
+        Label(T(state.title), systemImage: state.symbol).foregroundStyle(state.color).lineLimit(1).fixedSize()
+    }
+
+    private var showsPicker: some View {
+        Picker(T("Show"), selection: $shows) {
+            ForEach(Shows.allCases, id: \.self) { choice in
+                let count = record.events.filter { choice.includes($0.kind) }.count
+                Text(verbatim: choice == .commands || choice == .files ? "\(T(choice.rawValue)) (\(count))" : T(choice.rawValue)).tag(choice)
+            }
+        }
+        .labelsHidden()
     }
 
     private func commandRow(_ time: Date, _ command: String) -> some View {

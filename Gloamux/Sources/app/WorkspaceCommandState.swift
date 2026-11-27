@@ -28,6 +28,7 @@ import Terminal
         var isDesktop = false
         var agentsEnabled = false
         var recording = false
+        var videoRecording = false
         var logging = false
         var readOnly = false
         var showsTimestamps = false
@@ -46,6 +47,7 @@ import Terminal
             canSplit = model.canSplit(model.selection)
             maximized = model.maximizedPane != nil
             broadcastInput = model.broadcastInput
+            videoRecording = model.videos.active != nil
             hasSplit = model.split != nil
             guard let tab else { return }
             terminalReady = tab.terminalReady

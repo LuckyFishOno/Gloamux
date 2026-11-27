@@ -4,6 +4,23 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.7 (build 18): window video (November 27, 2026)
+
+- **What it does.** Records the whole workspace window as H.264 MP4 or MOV without sound (ScreenCaptureKit and `AVAssetWriter`), from the toolbar, **Terminal › Record window video** (⇧⌘R), the command palette, or `gloamux videos start`. Videos are saved in Downloads by default (`video.folder`), listed in **Terminal › Recordings** through `videos.json`, and mode 0600.
+- **Unit tests.** `VideoRecordingTests` (16): the pause timeline, limits and names, settings including the save folder, the writer for both formats (a pause cut out, 2.5 s, no audio track, 0600), an empty recording leaving no file, crash recovery in the workspace folder and in another folder, the list ignoring other files and dropping removed ones, the Recordings window building its player, and `gloamux videos` (agreement, `--yes`, `--window`, export, remove, settings).
+- **Packaged app, renamed copy, isolated workspace, Screen Recording granted.** A sheet paused the clock (0:56 held); minimizing paused; resizing kept recording; a force-quit left a partial file that was named at the next launch as a 56.0 s MP4 with the pause cut out; MOV at 60 fps (11.46 s, 668 frames, Rec.709) shows the terminal text; stopping from the toolbar showed **Recording saved**, and **Show** opened the Recordings window, which plays the videos; closing the window saved the running video; during an app-modal alert the clock kept counting (11 to 16 s), and that 24.7 s video decodes.
+- **Found and fixed during the checks.** SwiftUI `VideoPlayer` stopped the packaged release app when the Recordings window showed a video (a debug test build does not show it), so the player is AppKit's `AVPlayerView`. The clock's timer stopped during app-modal alerts; it now runs in the common run loop modes. Fragmented files with irregular frame times failed to write (-11800/-16341) until frame reordering was turned off.
+- **Not checked.** Saving to Downloads in the packaged app needs Screen Recording granted again after re-signing; it is covered by the unit tests. A real accessibility client reading the window while **Saved passwords** is open hangs the app; this happens in 1.6 too and is not fixed in 1.7.
+
+## Gloamux 1.7 (build 18): toolbar tooltips and the File Transfer and Session Log layout (November 27, 2026)
+
+Made on top of `9670fcc` (1.6 build 17) and released in 1.7 (build 18).
+
+- **User report.** In the Default layout, the Browser, Files, Quick commands, and Color theme buttons shared one toolbar item. AppKit shows one tooltip per item, so pointing at any of them showed "Browser", and moving between them kept that tooltip up instead of fading it and showing the next one. Each button is now its own toolbar item.
+- **Unit test.** `WorkspaceToolbarTests.testEachSidebarButtonHasItsOwnToolbarItemAndTooltip` hosts the workspace in a titled window and checks that each button's tooltip belongs to one item that shows no other tooltip. With the four buttons put back in one item, it failed for Files, Quick commands, and Color theme.
+- **User report: File Transfer and the Session Log ran under the panels.** The right panel could take all but 340 points, the terminal's minimum, but the two file panes needed about 700 and the log's list and details about 700, so they spilled over the session tree and under the browser. The center now keeps the room its mode needs (`DesktopView.centerMinimum`): 340 for the terminal, 734 for the two file panes and the arrows, 520 for the log; the right panel gives way, and the session tree keeps its 200-point minimum. The center is clipped, so nothing draws over the sidebars. The file panes always share the width equally, so the arrows stay in the middle (`CenteredColumns`). The log's list can shrink to 180 points, its details to 320; narrower, the log shows the list and a connection one at a time, and a connection's title row wraps its status and **Download log** under the name and turns the filter into a menu.
+- **Unit tests.** `SidebarLayoutTests.testTheCenterKeepsRoomForItsColumnsInEveryMode` (each mode's room in a 1,268-point window with a 640-point right panel, and the session tree's minimum in a 1,040-point window) and `testTheTransferArrowsStayCentered` (equal panes and centered arrows at four widths).
+
 ## Gloamux 1.6 (build 17): the browser panel, test scripts, and the settings a renamed copy writes (November 27, 2026)
 
 Built on `f72a8d5` (1.5 build 16), together with the kitty graphics work in the next section.

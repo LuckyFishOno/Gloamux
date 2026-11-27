@@ -80,6 +80,8 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 | `agent-access.json`、`agent-activity.json` | AI 代理存取、允許的連線和活動紀錄。 |
 | `ssh-key-secure-enclave` | Gloamux 的 Secure Enclave SSH 金鑰（見 `AppSSHKey`）。 |
 | `runbooks/`、`recordings/`、`logs/` | Runbook 和執行結果、錄影，以及連線紀錄（權限 0600）。 |
+| `videos.json` | Gloamux 存過的視窗錄影（在下載項目或 `video.folder`）和錄製中檔案的路徑，讓中斷的錄影在下次啟動時取好檔名（權限 0600）。 |
+| `videos/` | 改存下載項目之前的視窗錄影（權限 0600），仍會列出。錄製中的檔案是隱藏的 `.NAME.recording.mp4` 或 `.mov`。 |
 
 命名：
 
@@ -180,6 +182,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - Runbook（`Runbooks.swift`，`runbooks/` 中的 Markdown）一次以括號貼上送出一個區塊，等待它的 `commandFinished`，遇到第一個失敗就停止，並把結果存在 `runbooks/.results/`。
 - 錄影（`TerminalRecording.swift`）只保留輸出，儲存時經過 `SecretRedaction`（也能找出被切成多段的機密），並把 asciicast v2 檔寫到 `recordings/`。
 - 連線紀錄（`TerminalLogs`）寫到 `logs/`，並逐行以 `SecretRedaction` 遮蔽。
+- 視窗錄影（`VideoRecording.swift`）用 ScreenCaptureKit 擷取工作區的 `NSWindow`（`SCContentFilter(desktopIndependentWindow:)`，縮放到開始時的大小），再以 `AVAssetWriter` 每兩秒一段寫入 H.264。`VideoTimeline` 依主機時鐘的擷取時間放置每一格，並剪掉因 `NSWindow` 工作表和縮到 Dock 通知而暫停的時段。`VideoRules` 放上限和檔名規則；`CaptureWriter.append` 是測試在沒有螢幕時驅動的路徑。`VideoRecordings` 每個工作區視窗一個，寫入 `VideoSettings.folder`（沒設 `video.folder` 時是下載項目），以 `videos.json` 記錄自己的影片和錄製中的檔案（同一工作區的視窗共用，所以每次變更都重新讀取），每次啟動把殘留的錄製中檔案改回正式名稱一次，並在 `closeWorkspaceWindow` 和 `finishRecordingsBeforeQuit` 完成檔案。`VideoRecordingUI.swift` 有工具列按鈕、一次性的同意說明和權限工作表；`WorkspaceCommandVideos.swift` 是 `gloamux videos`。
 
 ### 終端畫面
 
@@ -315,8 +318,8 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 
 `python3 Gloamux/scripts/feature-check.py` 對打包好的 App 檢查每一組 `gloamux` 指令的一項實際操作，使用和壓力測試相同的拋棄式工作區、`sshd` 和本機網頁伺服器。
 
-- 不需要 App：版本、自我測試、說明、自動完成、連線、主機、透過 SFTP 和 SCP 的檔案、從標準輸入讀取的 `sftp` 和 `ssh`、轉發、快速指令、觸發器、Runbook、歷史紀錄、外觀、版面、設定、設定備份、代理、密碼庫、X 伺服器、錄製和效能測試。
-- 需要 App：分頁（執行、讀取、開關、檢視、分割、視窗、重新連線、錄製）、在分頁中執行快速指令和 Runbook、執行中的轉發、瀏覽器面板（導覽、縮放、信任和拒絕不受信任的 HTTPS 憑證、清除網站資料、關閉頁面）、`gloamux mcp`、下拉視窗，以及鎖定工作區。
+- 不需要 App：版本、自我測試、說明、自動完成、連線、主機、透過 SFTP 和 SCP 的檔案、從標準輸入讀取的 `sftp` 和 `ssh`、轉發、快速指令、觸發器、Runbook、歷史紀錄、外觀、版面、設定、設定備份、代理、密碼庫、X 伺服器、錄製、視窗錄影清單和效能測試。
+- 需要 App：分頁（執行、讀取、開關、檢視、分割、視窗、重新連線、錄製）、視窗錄影狀態（開始錄影需要螢幕錄製權限，要由人授予）、在分頁中執行快速指令和 Runbook、執行中的轉發、瀏覽器面板（導覽、縮放、信任和拒絕不受信任的 HTTPS 憑證、清除網站資料、關閉頁面）、`gloamux mcp`、下拉視窗，以及鎖定工作區。
 - 選項：`--app PATH`、`--no-app`、`--out DIR` 和 `--keep`，和壓力測試相同。用改名的副本時，它也會變更並重設一項設定，以及匯入備份；用已安裝 App 的識別碼時會略過這些。
 - 它不執行需要人操作的步驟：已存密碼的 Touch ID、解鎖工作區，以及核准代理提議的指令。它從不執行 `runbooks delete`、`recordings remove` 或 `web external`，這些會把檔案移到垃圾桶或打開你的瀏覽器。
 - 它會寫出 `report.md` 和 `report.json`。所有檢查都通過時結束狀態為 0，有任何失敗為 1，設定問題為 2。

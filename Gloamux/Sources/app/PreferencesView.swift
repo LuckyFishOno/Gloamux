@@ -143,7 +143,15 @@ private struct GeneralSettings: View {
     @AppStorage(DropdownWindow.hotkeyKey) private var dropdownHotkey = DropdownHotkey.off.rawValue
     @ObservedObject private var dropdown = DropdownWindow.shared
     @ObservedObject private var updates = AppUpdates.shared
+    @AppStorage(VideoSettings.formatKey) private var videoFormat = VideoFormat.mp4.rawValue
+    @AppStorage(VideoSettings.qualityKey) private var videoQuality = VideoQuality.high.rawValue
+    @AppStorage(VideoSettings.frameRateKey) private var videoFrameRate = "30"
+    @AppStorage(VideoSettings.pointerKey) private var videoPointer = true
+    @AppStorage(VideoSettings.folderKey) private var videoFolder = ""
 
+    private var shownVideoFolder: URL {
+        videoFolder.isEmpty ? VideoSettings.downloads : URL(fileURLWithPath: (videoFolder as NSString).expandingTildeInPath, isDirectory: true)
+    }
 
     var body: some View {
         Form {
@@ -218,6 +226,65 @@ private struct GeneralSettings: View {
                 HStack(spacing: 6) {
                     Text(T("All settings"))
                     InfoButton(T("Export saves sessions with their accounts, quick commands, triggers, runbooks, host keys, the theme, the layout, settings, and the password vault in one file, with a .sha256 file next to it. The vault stays sealed under its master password, which is not saved in the file. Passwords remembered on this Mac are not included. Import replaces all of these and restarts Gloamux. The current ones are kept in the Backups folder of Gloamux's data folder first."))
+                }
+            }
+            Section {
+                AppPicker(title: T("Format"), selection: $videoFormat,
+                          current: (VideoFormat(rawValue: videoFormat) ?? .mp4).title) {
+                    ForEach(VideoFormat.allCases) { Text($0.title).tag($0.rawValue) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Format"))
+                        InfoButton(T("Both use H.264 video, which plays almost anywhere. MP4 suits the web and sharing; MOV suits QuickTime Player and Final Cut Pro."))
+                    }
+                }
+                AppPicker(title: T("Quality"), selection: $videoQuality,
+                          current: T((VideoQuality(rawValue: videoQuality) ?? .high).title)) {
+                    ForEach(VideoQuality.allCases) { Text(T($0.title)).tag($0.rawValue) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Quality"))
+                        InfoButton(T("Standard records the window at its size in points, for small files. High records every pixel of a Retina display. Best also doubles the bit rate, so text stays sharp while it scrolls, and makes the largest files."))
+                    }
+                }
+                AppPicker(title: T("Frame rate"), selection: $videoFrameRate,
+                          current: String(format: T("%@ frames per second"), videoFrameRate)) {
+                    ForEach(VideoSettings.frameRates, id: \.self) { Text(String(format: T("%@ frames per second"), $0)).tag($0) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Frame rate"))
+                        InfoButton(T("30 is smooth for typing and scrolling. 60 keeps fast scrolling smooth and makes files about twice as large."))
+                    }
+                }
+                Toggle(isOn: $videoPointer) {
+                    HStack(spacing: 6) {
+                        Text(T("Show the pointer"))
+                        InfoButton(T("Shows the mouse pointer when it is over the window."))
+                    }
+                }
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        Text(shownVideoFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                            .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                        Button(T("Choose")) {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false; panel.canChooseDirectories = true; panel.canCreateDirectories = true
+                            panel.directoryURL = shownVideoFolder
+                            if panel.runModal() == .OK, let url = panel.url {
+                                videoFolder = url.standardizedFileURL == VideoSettings.downloads.standardizedFileURL ? "" : url.path
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(T("Save videos in"))
+                        InfoButton(T("Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is."))
+                    }
+                }
+            } header: {
+                HStack(spacing: 6) {
+                    Text(T("Window video"))
+                    InfoButton(T("Record window video in the toolbar or the Terminal menu (⇧⌘R) records the whole workspace window, without sound. Changes apply to the next recording."))
                 }
             }
         }

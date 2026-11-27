@@ -356,6 +356,7 @@ class FeatureCheck:
         c("vault: status", lambda: cli.json("vault", "status"))
         c("xserver: status", lambda: cli.json("xserver", "status"))
         c("recordings: list", lambda: f"{len(cli.json('recordings', 'list'))} recordings")
+        c("videos: list", lambda: f"{len(cli.json('videos', 'list'))} videos")
         c("benchmark", lambda: len(json.loads(stress.run([str(stress.CLI), "benchmark", "--megabytes", "2", "--json"], timeout=300)[1])["results"]))
         c("tabs need the running app", lambda: self.fails("tabs", "list"))
         c("web needs the running app", lambda: self.fails("web", "list"))
@@ -453,6 +454,8 @@ class FeatureCheck:
             expect((self.scratch / "export.cast").stat().st_size > 0, "export is empty")
             return name
         c("tabs: record; recordings export", recording)
+        # Starting a window video needs Screen Recording permission, which a person grants, so only the state is read.
+        c("videos: status", lambda: f"{len(cli.json('videos', 'status'))} windows")
 
         def quick_commands():
             cli("commands", "run", self.command, local)

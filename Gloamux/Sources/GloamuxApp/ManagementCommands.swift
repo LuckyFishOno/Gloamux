@@ -23,9 +23,15 @@ enum ManagementCommands {
             try await xserver(arguments)
             return
         }
-        let args = try CLIArguments(arguments, values: ["--workspace"], switches: ["--json"])
+        let entry = CLICatalog.command(command)
+        let args = try CLIArguments(arguments, values: Set(["--workspace"]).union(entry?.valueOptions ?? []),
+                                    switches: Set(["--json"]).union(entry?.switches ?? []))
+        // The command's own options go after its arguments, so the positions of local paths stay the same.
+        var options: [String] = []
+        for option in (entry?.valueOptions ?? []).sorted() { if let value = args.option(option) { options += [option, value] } }
+        for option in (entry?.switches ?? []).sorted() where args.has(option) { options.append(option) }
         // Paths are resolved here, since the running app has its own working directory.
-        let request = CLICatalog.resolvingLocalPaths([command] + args.operands,
+        let request = CLICatalog.resolvingLocalPaths([command] + args.operands + options,
                                                      from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
         let channel = try WorkspaceCommandChannel(workspace: args.workspace ?? WorkspaceModel.defaultStorage)
         if try !channel.claim(), let reply = try await channel.send(request) {

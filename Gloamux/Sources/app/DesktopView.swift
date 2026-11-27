@@ -213,7 +213,20 @@ public struct DesktopView: View {
         WorkspaceSidebarLayout(showsLeading: showsTree, showsTrailing: showsTrailingSidebar,
                                       sidebarColor: model.theme.sidebar.color,
                                       dividerColor: model.theme.border?.color ?? model.theme.foreground.color.opacity(0.16),
-                                      leadingContent: leading(), centerContent: center(), trailingContent: trailingSidebarContent)
+                                      leadingContent: leading(), centerContent: center(), trailingContent: trailingSidebarContent,
+                                      centerMinimum: centerMinimum)
+    }
+
+    /// The center's least width in the current mode, with the session area's 5-point margins on both sides.
+    private var centerMinimum: Double { Self.centerMinimum(layout: model.layout, mode: model.workspaceMode) }
+
+    static func centerMinimum(layout: WorkspaceLayout, mode: WorkspaceMode) -> Double {
+        guard layout == .native else { return 340 }
+        switch mode {
+        case .files: return FileTransferView.minimumWidth + 10
+        case .log: return ConnectionHistoryView.sideBySideWidth + 10
+        case .terminal: return 340
+        }
     }
 
     private var showsTrailingSidebar: Bool {
@@ -453,40 +466,52 @@ public struct DesktopView: View {
             ToolbarItem(placement: .automatic) {
                 newConnectionMenu
             }
-            ToolbarItem(placement: .automatic) {
-                sidebarPicker
-            }
+            // One item per button: AppKit shows one tooltip per toolbar item, so buttons sharing an item all showed the
+            // first one's name, and moving between them kept it up.
+            ToolbarItem(placement: .automatic) { videoButton }
+            ToolbarItem(placement: .automatic) { browserToggle }
+            ToolbarItem(placement: .automatic) { filesToggle }
+            ToolbarItem(placement: .automatic) { commandsToggle }
+            ToolbarItem(placement: .automatic) { themesToggle }
+        } else {
+            // The Classic and Workbench layouts keep only the layout menu here; the video button goes beside it.
+            ToolbarItem(placement: .automatic) { videoButton }
         }
         ToolbarItem(placement: .automatic) { layoutMenu }
     }
 
-    private var sidebarPicker: some View {
-        HStack(spacing: 5) {
-            Toggle(isOn: Binding(get: { sidebar == .browser }, set: { setSidebar($0 ? .browser : .collapsed) })) {
-                Label(T("Browser"), systemImage: "globe")
-            }
-            .help(T("Browser"))
-            .accessibilityIdentifier("browserToggle")
-            Toggle(isOn: Binding(get: { filesSidebarOpen }, set: setFilesSidebar)) {
-                Label(T("Files"), systemImage: "folder")
-            }
-            .disabled(!canShowFilesSidebar)
-            .help(T("Files"))
-            .accessibilityIdentifier("remoteFilesToggle")
-            Toggle(isOn: Binding(get: { sidebar == .commands }, set: { setSidebar($0 ? .commands : .collapsed) })) {
-                Label(T("Quick commands"), systemImage: "command")
-            }
-            .help(T("Quick commands"))
-            .accessibilityIdentifier("quickCommandsToggle")
-            Toggle(isOn: Binding(get: { sidebar == .themes }, set: { setSidebar($0 ? .themes : .collapsed) })) {
-                Label(T("Color theme"), systemImage: "paintpalette")
-            }
-            .help(T("Color theme"))
-            .accessibilityIdentifier("workspaceThemeToggle")
+    /// Records the whole window: every view and split in it, until it is stopped or the window closes.
+    private var videoButton: some View {
+        VideoRecordButton(videos: model.videos) { model.toggleWindowVideo() }
+    }
+
+    private var browserToggle: some View {
+        Toggle(isOn: Binding(get: { sidebar == .browser }, set: { setSidebar($0 ? .browser : .collapsed) })) {
+            Label(T("Browser"), systemImage: "globe")
         }
-        .labelStyle(.iconOnly)
-        .toggleStyle(.button)
-        .padding(.horizontal, 5)
+        .toolbarToggle(help: T("Browser"), id: "browserToggle")
+    }
+
+    private var filesToggle: some View {
+        Toggle(isOn: Binding(get: { filesSidebarOpen }, set: setFilesSidebar)) {
+            Label(T("Files"), systemImage: "folder")
+        }
+        .disabled(!canShowFilesSidebar)
+        .toolbarToggle(help: T("Files"), id: "remoteFilesToggle")
+    }
+
+    private var commandsToggle: some View {
+        Toggle(isOn: Binding(get: { sidebar == .commands }, set: { setSidebar($0 ? .commands : .collapsed) })) {
+            Label(T("Quick commands"), systemImage: "command")
+        }
+        .toolbarToggle(help: T("Quick commands"), id: "quickCommandsToggle")
+    }
+
+    private var themesToggle: some View {
+        Toggle(isOn: Binding(get: { sidebar == .themes }, set: { setSidebar($0 ? .themes : .collapsed) })) {
+            Label(T("Color theme"), systemImage: "paintpalette")
+        }
+        .toolbarToggle(help: T("Color theme"), id: "workspaceThemeToggle")
     }
 
     var workspaceModePicker: some View {
@@ -1699,6 +1724,13 @@ struct WorkspaceToolbarHost<Content: ToolbarContent>: View, Equatable {
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.state == rhs.state }
+}
+
+private extension View {
+    /// A sidebar button in the window toolbar: an icon that stays highlighted while its sidebar is open.
+    func toolbarToggle(help: String, id: String) -> some View {
+        labelStyle(.iconOnly).toggleStyle(.button).help(help).accessibilityIdentifier(id)
+    }
 }
 
 /// Redraws its content when the tab changes, for views drawn by a parent that observes only the workspace.

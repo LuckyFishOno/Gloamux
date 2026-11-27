@@ -81,6 +81,9 @@ public struct TerminalCommands: Commands {
             Button(T(menu.recording ? "Stop recording" : "Start recording")) { model.toggleRecording() }
                 .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(!live && !menu.recording)
+            Button(T(menu.videoRecording ? "Stop window video" : "Record window video")) { model.toggleWindowVideo() }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(menu.workspaceLocked && !menu.videoRecording)
             Button(T("Recordings…")) { model.showRecordings() }
             Button(T(menu.logging ? "Stop session log" : "Start session log")) { model.toggleLogging() }
                 .keyboardShortcut("l", modifiers: [.command, .option])

@@ -141,6 +141,8 @@ extension WorkspaceModel {
             add("record", recordings.isRecording(tab) ? "Stop recording" : "Start recording", "record.circle", "Terminal",
                 shortcut: "⌥⌘R") { [weak self] in self?.toggleRecording(tab) }
         }
+        add("video", videos.active != nil ? "Stop window video" : "Record window video", "record.circle", "Window",
+            shortcut: "⇧⌘R") { [weak self] in self?.toggleWindowVideo() }
         add("recordings", "Recordings…", "play.rectangle", "Terminal") { [weak self] in self?.showRecordings() }
         add("history", "Session Log", "clock.arrow.circlepath", "Session") { [weak self] in self?.showConnectionHistory() }
         add("sftp.command", "New session from sftp command", "arrow.up.arrow.down.circle", "Session") { [weak self] in self?.showSFTPCommand() }

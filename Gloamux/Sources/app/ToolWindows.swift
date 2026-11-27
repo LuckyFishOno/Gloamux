@@ -77,7 +77,7 @@ extension WorkspaceModel {
         }
         let content: AnyView
         switch kind {
-        case .recordings: content = AnyView(RecordingsView(model: self, store: recordings))
+        case .recordings: content = AnyView(RecordingsView(model: self, store: recordings, videos: videos))
         case .runbooks: content = AnyView(RunbooksView(model: self, library: runbooks))
         case .discovery: content = AnyView(HostDiscoveryView(model: self))
         case .hostKeyHistory: content = AnyView(HostKeyHistoryView(model: self))

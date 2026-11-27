@@ -6,7 +6,9 @@ The [verification record](VERIFICATION.md) includes the November 25, 2026 local 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.6 (build 17)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.7 (build 18)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.7 (build 18): window videos (the whole workspace window as MP4 or MOV, without sound, saved in Downloads by default, with `gloamux videos`); each toolbar button in the Default layout shows its own tooltip, where the Browser, Files, Quick commands, and Color theme buttons all showed "Browser"; and **File Transfer** and the **Session Log** keep room for their columns beside a wide right panel, keep the transfer arrows centered, and show the log one column at a time when the window is narrow. See the [verification record](VERIFICATION.md).
 
 Included in 1.6 (build 17): the kitty graphics protocol, the terminal's size in pixels for image programs, faster CJK text (about 19 to about 70 MB/s), a fix for a reconnected terminal that wrote over the earlier connection's text, a fix for an open remote desktop tab that kept its old host and port after its saved session was edited, and a browser panel beside the terminal: WebKit pages as tabs in the panel header, in a panel you can drag as wide as the window. See the [verification record](VERIFICATION.md).
 

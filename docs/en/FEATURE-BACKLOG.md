@@ -144,6 +144,7 @@ These items come from a November 20, 2026 brainstorm. They cover macOS-native, m
 
 - [x] Add Markdown runbooks with executable blocks bound to a selected session. Show each command and destination before it runs and record the results.
 - [x] Record terminal sessions with secret redaction, replay them in the app, and export to the asciinema format.
+- [x] Record the whole workspace window as an MP4 or MOV video without sound, paused while a sheet is open or the window is in the Dock, with format, quality, and frame rate in Settings and `gloamux videos` on the command line.
 
 ### Quality and distribution
 

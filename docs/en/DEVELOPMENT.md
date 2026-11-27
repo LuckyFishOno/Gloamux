@@ -80,6 +80,8 @@ Gloamux stores its working files under `~/Library/Application Support/Gloamux`. 
 | `agent-access.json`, `agent-activity.json` | Agent access, allowed sessions, and the activity history. |
 | `ssh-key-secure-enclave` | The Gloamux Secure Enclave SSH key (see `AppSSHKey`). |
 | `runbooks/`, `recordings/`, `logs/` | Runbooks and their results, recordings, and session logs (mode 0600). |
+| `videos.json` | Paths of the window videos Gloamux saved (in Downloads or `video.folder`) and of recordings in progress, so a cut-off one is named at the next launch (mode 0600). |
+| `videos/` | Window videos saved before they went to Downloads (mode 0600); still listed. A recording in progress has a hidden `.NAME.recording.mp4` or `.mov` name. |
 
 Naming:
 
@@ -180,6 +182,7 @@ Naming:
 - Runbooks (`Runbooks.swift`, Markdown in `runbooks/`) send one block at a time as a bracketed paste, wait for its `commandFinished`, stop at the first failure, and save results in `runbooks/.results/`.
 - Recordings (`TerminalRecording.swift`) keep output only, pass it through `SecretRedaction` (which also finds secrets split across chunks) when saving, and write asciicast v2 files to `recordings/`.
 - Session logs (`TerminalLogs`) go to `logs/`, masked line by line with `SecretRedaction`.
+- Window videos (`VideoRecording.swift`) capture the workspace's `NSWindow` with ScreenCaptureKit (`SCContentFilter(desktopIndependentWindow:)`, scaled to the starting size) and write H.264 with `AVAssetWriter` in two-second fragments. `VideoTimeline` places each frame by its host-clock capture time and cuts out spans paused by `NSWindow` sheet and miniaturize notifications. `VideoRules` holds the limits and names, and `CaptureWriter.append` is the path the tests drive without a screen. `VideoRecordings` is per workspace window; it writes to `VideoSettings.folder` (Downloads unless `video.folder` is set), keeps `videos.json` (read again on every change, since a workspace's windows share it) as the list of its videos and running partial files, renames leftover partial files once per launch, and finishes the file in `closeWorkspaceWindow` and `finishRecordingsBeforeQuit`. `VideoRecordingUI.swift` has the toolbar button, the one-time agreement, and the permission sheet; `WorkspaceCommandVideos.swift` is `gloamux videos`.
 
 ### Terminal view
 
@@ -315,8 +318,8 @@ Each phase gets a pass or fail, its own figures, the app's CPU time and peak mem
 
 `python3 Gloamux/scripts/feature-check.py` checks one working operation of every `gloamux` command group against the packaged app, with the same throwaway workspace, `sshd`, and local web servers as the stress test.
 
-- Without the app: version, self-test, help, completion, sessions, hosts, files over SFTP and SCP, `sftp` and `ssh` reading standard input, forwards, commands, triggers, runbooks, history, appearance, layout, settings, config, agents, vault, X server, recordings, and benchmark.
-- With the app: tabs (run, read, switches, views, splits, windows, reconnect, recording), quick commands and runbooks run in a tab, a live forward, the browser panel (navigation, zoom, an untrusted HTTPS certificate trusted and refused, Clear website data, closing pages), `gloamux mcp`, the dropdown window, and workspace lock.
+- Without the app: version, self-test, help, completion, sessions, hosts, files over SFTP and SCP, `sftp` and `ssh` reading standard input, forwards, commands, triggers, runbooks, history, appearance, layout, settings, config, agents, vault, X server, recordings, videos, and benchmark.
+- With the app: tabs (run, read, switches, views, splits, windows, reconnect, recording), video status (starting a video needs Screen Recording permission, which a person grants), quick commands and runbooks run in a tab, a live forward, the browser panel (navigation, zoom, an untrusted HTTPS certificate trusted and refused, Clear website data, closing pages), `gloamux mcp`, the dropdown window, and workspace lock.
 - Options: `--app PATH`, `--no-app`, `--out DIR`, and `--keep`, as in the stress test. With a renamed copy it also sets and resets a setting and imports a backup; with the installed app's identifier it leaves those out.
 - It does not run steps that need a person: Touch ID for saved passwords, unlocking the workspace, and approving an agent's proposed command. It never runs `runbooks delete`, `recordings remove`, or `web external`, which move files to the Trash or open your browser.
 - It writes `report.md` and `report.json`. The exit status is 0 when every check passed, 1 when any failed, and 2 for a setup problem.

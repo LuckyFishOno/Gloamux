@@ -29,6 +29,7 @@ public enum WorkspaceCommand {
             result = ["list", "history", "trust", "replace"].contains(action) ? try hosts(action, args, model)
                 : try await hostTools(action, args, model)
         case "recordings": result = try recordings(action, args, model)
+        case "videos": result = try await videos(action, args, model, live: live, open)
         case "history": result = try history(action, args, model)
         case "commands":
             if ["send", "run"].contains(action) {
