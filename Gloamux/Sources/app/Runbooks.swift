@@ -119,7 +119,7 @@ struct RunbookResult: Codable, Equatable {
 
     func reload() {
         let urls = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        files = urls.filter { ["md", "markdown"].contains($0.pathExtension.lowercased()) }
+        files = urls.map { $0.resolvingSymlinksInPath().standardizedFileURL }.filter { ["md", "markdown"].contains($0.pathExtension.lowercased()) }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         for file in files where results[file.lastPathComponent] == nil { results[file.lastPathComponent] = loadResults(file) }
     }
@@ -153,7 +153,8 @@ struct RunbookResult: Codable, Equatable {
         """
         try writePrivate(Data(template.utf8), to: url)
         reload()
-        return url
+        // Directory enumeration resolves aliases such as /var -> /private/var; selection must use the same identity.
+        return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
     func importFile(_ source: URL) throws -> URL {
@@ -164,7 +165,8 @@ struct RunbookResult: Codable, Equatable {
         }
         try FileManager.default.copyItem(at: source, to: url)
         reload()
-        return url
+        // Directory enumeration resolves aliases such as /var -> /private/var; selection must use the same identity.
+        return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
     func delete(_ url: URL) throws {
@@ -268,27 +270,27 @@ struct RunbooksView: View {
                 }
                 .padding(12)
                 Divider()
-                if library.files.isEmpty {
-                    ContentUnavailableView {
-                        Label(T("No runbooks"), systemImage: "list.bullet.rectangle")
-                    } actions: {
-                        Button(T("New runbook")) { newRunbook() }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(library.files, id: \.self, selection: $library.selected) { url in
-                        Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
-                            .contextMenu {
-                                Button(T("Edit in default editor")) { NSWorkspace.shared.open(url) }
-                                Button(T("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                                Divider()
-                                Button(T("Move to Trash"), role: .destructive) {
-                                    do { try library.delete(url); if library.selected == url { library.selected = library.files.first } }
-                                    catch { self.error = error.localizedDescription }
-                                }
+                List(library.files, id: \.self, selection: $library.selected) { url in
+                    Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
+                        .contextMenu {
+                            Button(T("Edit in default editor")) { NSWorkspace.shared.open(url) }
+                            Button(T("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                            Divider()
+                            Button(T("Move to Trash"), role: .destructive) {
+                                do { try library.delete(url); if library.selected == url { library.selected = library.files.first } }
+                                catch { self.error = error.localizedDescription }
                             }
+                        }
+                }
+                .listStyle(.sidebar).scrollContentBackground(.hidden)
+                .overlay {
+                    if library.files.isEmpty {
+                        ContentUnavailableView {
+                            Label(T("No runbooks"), systemImage: "list.bullet.rectangle")
+                        } actions: {
+                            Button(T("New runbook")) { newRunbook() }
+                        }
                     }
-                    .listStyle(.sidebar).scrollContentBackground(.hidden)
                 }
             }
             // Fills the window's height even with no runbooks, so the split view does not shrink to the header.

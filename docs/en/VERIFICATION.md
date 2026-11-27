@@ -4,6 +4,12 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.8.3 (build 22): empty recordings and Runbook selection (November 27, 2026)
+
+- Recordings keeps its sidebar list mounted even with no entries, so the list provides the split view's flexible height. Its header stays at the top, and the detail pane shows one No recordings message instead of asking the user to select an entry from an empty list.
+- Runbooks likewise keeps its list mounted and overlays its empty prompt. Creating and importing now return the same normalized, symlink-resolved file URLs used by directory enumeration. The regression reproduced a created `/var/...` URL and a listed `/private/var/...` URL for the same file; the selection remained set, but failed the detail pane's membership check. Three create/delete cycles failed before URL normalization and pass after it.
+- Added hosted-view regression coverage for those empty-to-populated transitions and for the real themed ToolWindow wrapper, in addition to the existing empty/populated layout cases. Focused tests: 8 passed. Full Swift suite: **620 cases, 612 passed, 8 skipped, 0 failed**. Packaging, deep strict signature verification and the 9/9 self-test passed. In an isolated packaged copy (`local.gloamux.windowcheck20261127`), the empty Recordings header stayed at the top with a single message in the detail; clicking New runbook immediately selected the row and displayed the document. The test copy was closed. Released as 1.8.3 (build 22) at the owner's request with `release.sh build --skip-tests`; the suites above ran on the same sources before release. Logs: `/tmp/gloamux-tool-windows-*.log` and `/tmp/gloamux-runbook-paths.log`. No new full stress run or separate Rust test run; no Rust code changed.
+
 ## Gloamux 1.8.2 (build 21): the empty Recordings and Runbooks windows (November 27, 2026)
 
 - **What changed.** With nothing listed, the **Recordings** and **Runbooks** windows drew their header and empty message in the lower part of the window and left the top blank. No child of the split view could grow taller, so the split view shrank to its content, and AppKit placed it at the bottom of the window. The list column and the empty message now fill the window's height.

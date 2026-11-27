@@ -63,4 +63,34 @@ import XCTest
         XCTAssertFalse(model.runbooks.files.isEmpty)
         try assertFills(content)
     }
+    func testCreatingRunbooksKeepsTheNewRowSelectedAcrossEmptyTransitions() async throws {
+        let model = try workspace()
+        let content = try await host(RunbooksView(model: model, library: model.runbooks), kind: .runbooks)
+        for index in 0..<3 {
+            let url = try model.runbooks.create(named: "New \(index)")
+            model.runbooks.selected = url
+            for _ in 0..<30 { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertEqual(model.runbooks.selected, url)
+            XCTAssertTrue(model.runbooks.files.contains(url), "created=\(url.absoluteString), listed=\(model.runbooks.files.map(\.absoluteString))")
+            try assertFills(content)
+            try model.runbooks.delete(url)
+            model.runbooks.selected = nil
+            for _ in 0..<10 { try await Task.sleep(for: .milliseconds(10)) }
+        }
+    }
+
+    func testEmptyRecordingsThroughTheRealToolWindow() async throws {
+        let model = try workspace()
+        let controller = ToolWindow(model: model, kind: .recordings,
+                                    content: AnyView(RecordingsView(model: model, store: model.recordings, videos: model.videos)))
+        let window = try XCTUnwrap(controller.window)
+        window.setFrameOrigin(NSPoint(x: -4000, y: -4000))
+        window.orderBack(nil)
+        defer { window.orderOut(nil) }
+        for _ in 0..<20 { try await Task.sleep(for: .milliseconds(10)) }
+        let content = try XCTUnwrap(window.contentView)
+        content.layoutSubtreeIfNeeded()
+        try assertFills(content)
+    }
+
 }

@@ -26,32 +26,28 @@ struct RecordingsView: View {
                 }
                 .padding(12)
                 Divider()
-                if store.saved.isEmpty && videos.saved.isEmpty {
-                    ContentUnavailableView(T("No recordings"), systemImage: "record.circle", description: Text(T("Recordings you save appear here.")))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(selection: $selection) {
-                        // Headings are plain rows: a sidebar section heading always offers to collapse its section.
-                        if !store.saved.isEmpty {
-                            Section {
-                                heading(T("Terminal text"))
-                                ForEach(store.saved, content: row)
-                            }
-                        }
-                        if !videos.saved.isEmpty {
-                            Section {
-                                heading(T("Window video")) {
-                                    Button(T("Clear History")) { confirmClear = true }
-                                        .buttonStyle(.bordered).controlSize(.small)
-                                        .help(T("Takes every video off this list. The video files stay where they are."))
-                                }
-                                ForEach(videos.saved, content: row)
-                            }
+                List(selection: $selection) {
+                    // Headings are plain rows: a sidebar section heading always offers to collapse its section.
+                    if !store.saved.isEmpty {
+                        Section {
+                            heading(T("Terminal text"))
+                            ForEach(store.saved, content: row)
                         }
                     }
-                    .listStyle(.sidebar)
-                    .scrollContentBackground(.hidden)
+                    if !videos.saved.isEmpty {
+                        Section {
+                            heading(T("Window video")) {
+                                Button(T("Clear History")) { confirmClear = true }
+                                    .buttonStyle(.bordered).controlSize(.small)
+                                    .help(T("Takes every video off this list. The video files stay where they are."))
+                            }
+                            ForEach(videos.saved, content: row)
+                        }
+                    }
                 }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+                .frame(maxHeight: .infinity)
             }
             // The column fills the window's height even with nothing listed; otherwise the split view shrinks to the
             // header and the empty message and sits at the bottom of the window.
@@ -71,6 +67,8 @@ struct RecordingsView: View {
                             Button(T("Remove from List")) { forget(video) }
                         }
                     }
+                } else if store.saved.isEmpty && videos.saved.isEmpty {
+                    ContentUnavailableView(T("No recordings"), systemImage: "record.circle", description: Text(T("Recordings you save appear here.")))
                 } else {
                     ContentUnavailableView(T("Choose a recording"), systemImage: "play.rectangle")
                 }
