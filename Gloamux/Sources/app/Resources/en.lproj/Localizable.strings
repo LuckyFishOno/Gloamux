@@ -1367,3 +1367,9 @@
 "Save videos in" = "Save videos in";
 "Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is." = "Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is.";
 "Gloamux can’t save videos in the chosen folder. Choose another folder in Settings › General." = "Gloamux can’t save videos in the chosen folder. Choose another folder in Settings › General.";
+"Clear History" = "Clear History";
+"Takes every video off this list. The video files stay where they are." = "Takes every video off this list. The video files stay where they are.";
+"Clear the video history?" = "Clear the video history?";
+"The video files stay where they are." = "The video files stay where they are.";
+"File not found" = "File not found";
+"Remove from List" = "Remove from List";

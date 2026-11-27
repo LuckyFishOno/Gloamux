@@ -6,7 +6,9 @@
 
 [功能待辦](FEATURE-BACKLOG.md)追蹤 Xshell 8 和 MobaXterm 26.6 有文件記載的工作流程，以及它們在 macOS 上的對應做法。Tabby 和 Termius 則是工作區導覽和外觀的參考。
 
-目前版本為 **Gloamux 1.7 (build 18)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+目前版本為 **Gloamux 1.8 (build 19)**。App 與 CLI 一起發布，1.1 起提供 Sparkle 更新。CLI 尚缺遠端桌面輸入。
+
+1.8 (build 19) 收錄：錄影視窗保留視窗錄影的歷史紀錄。在 Finder 移走或刪掉的影片會留在清單上並標示 **找不到檔案**，直到移除；**清除歷史紀錄** 會清空清單但保留檔案；每支影片顯示縮圖、名稱和開始時間；`gloamux videos` 新增 `forget`、`clear` 和 `exists`。見[驗證紀錄](VERIFICATION.md)。
 
 1.7 (build 18) 收錄：視窗錄影（把整個工作區視窗錄成 MP4 或 MOV，不含聲音，預設存在下載項目，並有 `gloamux videos`）；預設版面的工具列按鈕各自顯示自己的提示，先前瀏覽器、檔案、快速指令和色彩主題四個按鈕都顯示「Browser」；右側面板很寬時，**檔案傳輸** 和 **Session Log** 仍保留兩欄的空間，傳檔箭頭固定在正中間，視窗窄時 Session Log 改成單欄。見[驗證紀錄](VERIFICATION.md)。
 

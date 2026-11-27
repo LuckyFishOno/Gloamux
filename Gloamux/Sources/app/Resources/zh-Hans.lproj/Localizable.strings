@@ -1367,3 +1367,9 @@
 "Save videos in" = "视频存放位置";
 "Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is." = "视频默认存放在“下载”，也可以选择别的文件夹。录制窗口会列出 Gloamux 存过的每个视频，不论在哪个文件夹。";
 "Gloamux can’t save videos in the chosen folder. Choose another folder in Settings › General." = "Gloamux 无法把视频存到选定的文件夹。请在“设置 › 通用”选择别的文件夹。";
+"Clear History" = "清除历史记录";
+"Takes every video off this list. The video files stay where they are." = "把所有视频从这个列表移除。视频文件留在原处。";
+"Clear the video history?" = "要清除视频历史记录吗？";
+"The video files stay where they are." = "视频文件会留在原处。";
+"File not found" = "找不到文件";
+"Remove from List" = "从列表移除";

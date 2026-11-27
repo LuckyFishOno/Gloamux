@@ -263,13 +263,13 @@ public enum CLICatalog {
         CLICommand("videos",
                    summary: "Record the workspace window as a video, and list, export, or remove videos",
                    runner: .workspace,
-                   operations: ["start", "stop", "status", "list", "export", "remove"],
+                   operations: ["start", "stop", "status", "list", "export", "remove", "forget", "clear"],
                    localPaths: ["export": [1]],
                    switches: ["--yes"],
                    valueOptions: ["--window"],
                    help: """
             start [--window N] [--yes] | stop [--window N] | status
-            list | export FILE ABSOLUTE_VIDEO_PATH | remove FILE
+            list | export FILE ABSOLUTE_VIDEO_PATH | remove FILE | forget FILE | clear
 
             start records the whole workspace window, without sound, in the format, quality, and frame rate set in
             Settings › General (gloamux settings set video.format|video.quality|video.frame-rate|video.show-pointer).
@@ -277,7 +277,8 @@ public enum CLICatalog {
             The first start needs --yes: a video shows everything in the window, with nothing masked.
             start, stop, and status need the running app and macOS Screen Recording permission for Gloamux.
             Window numbers are those of gloamux tabs list; without --window, the front window.
-            remove moves the file to the Trash.
+            list keeps a video whose file was moved or deleted outside Gloamux, with "exists": false.
+            remove moves the file to the Trash and takes it off the list; forget and clear only change the list.
             """),
         CLICommand("history",
                    summary: "List or export the connection history",

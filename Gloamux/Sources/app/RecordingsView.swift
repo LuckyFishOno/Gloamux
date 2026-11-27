@@ -11,6 +11,7 @@ struct RecordingsView: View {
     @ObservedObject var videos: VideoRecordings
     @State private var selection: URL?
     @State private var error: String?
+    @State private var confirmClear = false
 
     var body: some View {
         HSplitView {
@@ -29,23 +30,44 @@ struct RecordingsView: View {
                     ContentUnavailableView(T("No recordings"), systemImage: "record.circle", description: Text(T("Recordings you save appear here.")))
                 } else {
                     List(selection: $selection) {
+                        // Headings are plain rows: a sidebar section heading always offers to collapse its section.
                         if !store.saved.isEmpty {
-                            Section(T("Terminal text")) { ForEach(store.saved, content: row) }
+                            Section {
+                                heading(T("Terminal text"))
+                                ForEach(store.saved, content: row)
+                            }
                         }
                         if !videos.saved.isEmpty {
-                            Section(T("Window video")) { ForEach(videos.saved, content: row) }
+                            Section {
+                                heading(T("Window video")) {
+                                    Button(T("Clear History")) { confirmClear = true }
+                                        .buttonStyle(.bordered).controlSize(.small)
+                                        .help(T("Takes every video off this list. The video files stay where they are."))
+                                }
+                                ForEach(videos.saved, content: row)
+                            }
                         }
                     }
                     .listStyle(.sidebar)
                     .scrollContentBackground(.hidden)
                 }
             }
-            .frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
+            .frame(minWidth: 260, idealWidth: 300, maxWidth: 380)
             Group {
                 if let url = selection, let recording = store.saved.first(where: { $0.url == url }) {
                     RecordingPlayerView(model: model, recording: recording) { export(recording) }.id(url)
                 } else if let url = selection, let video = videos.saved.first(where: { $0.url == url }) {
-                    VideoPlayerPane(video: video) { export(video) }.id(url)
+                    if video.exists {
+                        VideoPlayerPane(video: video) { export(video) }.id(url)
+                    } else {
+                        ContentUnavailableView {
+                            Label(T("File not found"), systemImage: "questionmark.folder")
+                        } description: {
+                            Text(video.url.path).textSelection(.enabled)
+                        } actions: {
+                            Button(T("Remove from List")) { forget(video) }
+                        }
+                    }
                 } else {
                     ContentUnavailableView(T("Choose a recording"), systemImage: "play.rectangle")
                 }
@@ -53,7 +75,7 @@ struct RecordingsView: View {
             .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
-            store.reload(); videos.reload()
+            reload()
             // The newest recording of either kind, so a video just saved is the one shown.
             if selection == nil {
                 let text = store.saved.first, video = videos.saved.first
@@ -61,10 +83,37 @@ struct RecordingsView: View {
                 else { selection = text?.url ?? video?.url }
             }
         }
+        // A video may have been moved or deleted in the Finder while Gloamux was in the background.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in reload() }
         .task(id: videos.saved.map(\.url)) { await videos.loadDurations() }
+        .alert(T("Clear the video history?"), isPresented: $confirmClear) {
+            Button(T("Clear History"), role: .destructive) {
+                videos.clearList()
+                if let url = selection, VideoRules.isVideo(url) { selection = store.saved.first?.url }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { Text(T("The video files stay where they are.")) }
         .alert(T("The recording could not be changed."), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button(T("OK")) { error = nil }
         } message: { Text(error.map(T) ?? "") }
+    }
+
+    private func heading(_ title: String, @ViewBuilder trailing: () -> some View = { EmptyView() }) -> some View {
+        HStack(alignment: .center) {
+            Text(title).appFont(.subheadline).fontWeight(.semibold).foregroundStyle(.secondary)
+            Spacer()
+            trailing().appFont(.subheadline)
+        }
+        .frame(minHeight: 22, alignment: .center)
+        // The list already leaves room above its first row, so less above and more below centers the heading.
+        .padding(.bottom, 6)
+        .padding(.trailing, 6)
+        .selectionDisabled()
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func reload() {
+        store.reload(); videos.reload()
     }
 
     private func export(_ recording: TerminalRecordings.Recording) {
@@ -98,21 +147,36 @@ struct RecordingsView: View {
     }
 
     private func row(_ video: VideoRecordings.Video) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(video.title).lineLimit(1)
-            HStack(spacing: 6) {
-                Text(video.url.pathExtension.uppercased())
-                if let duration = video.duration { Text(VideoRecordButton.clock(duration)).monospacedDigit() }
-                Text(ByteCountFormatter.string(fromByteCount: Int64(video.size), countStyle: .file))
+        HStack(spacing: 8) {
+            VideoThumbnail(video: video)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(VideoRules.shownName(video.title)).lineLimit(1).truncationMode(.middle)
+                    .foregroundStyle(video.exists ? .primary : .secondary)
+                HStack(spacing: 6) {
+                    Text(VideoRules.startDate(fromName: video.title) ?? video.date, format: .dateTime.month().day().hour().minute())
+                    if video.exists {
+                        if let duration = video.duration { Text(VideoRecordButton.clock(duration)).monospacedDigit() }
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(video.size), countStyle: .file))
+                    } else {
+                        HStack(spacing: 3) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                            Text(T("File not found"))
+                        }
+                    }
+                }
+                .appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            .appFont(.caption).foregroundStyle(.secondary)
         }
+        .help(video.url.lastPathComponent)
         .tag(video.url)
         .contextMenu {
-            Button(T("Export…")) { export(video) }
-            Button(T("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([video.url]) }
-            Divider()
-            Button(T("Move to Trash"), role: .destructive) { remove(video) }
+            if video.exists {
+                Button(T("Export…")) { export(video) }
+                Button(T("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([video.url]) }
+                Divider()
+                Button(T("Move to Trash"), role: .destructive) { remove(video) }
+            }
+            Button(T("Remove from List")) { forget(video) }
         }
     }
 
@@ -137,6 +201,11 @@ struct RecordingsView: View {
     private func remove(_ video: VideoRecordings.Video) {
         do { try videos.delete(video); if selection == video.url { selection = videos.saved.first?.url ?? store.saved.first?.url } }
         catch { self.error = error.localizedDescription }
+    }
+
+    private func forget(_ video: VideoRecordings.Video) {
+        videos.forget(video)
+        if selection == video.url { selection = videos.saved.first?.url ?? store.saved.first?.url }
     }
 
     private func remove(_ recording: TerminalRecordings.Recording) {
@@ -273,7 +342,9 @@ private struct VideoPlayerPane: View {
             PlayerView(player: player).background(Color.black)
             Divider()
             HStack(spacing: 10) {
-                Text(video.title).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                Label((video.url.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+                    .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                    .help(video.url.path)
                 Spacer()
                 Button(T("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([video.url]) }
                 Button(T("Export…"), action: export)
@@ -282,6 +353,38 @@ private struct VideoPlayerPane: View {
             .padding(10)
         }
         .onDisappear { player.pause() }
+    }
+}
+
+/// The first frame of a video, or a placeholder while it loads or when the file is gone.
+private struct VideoThumbnail: View {
+    let video: VideoRecordings.Video
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.18))
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: video.exists ? "film" : "questionmark")
+                    .appFont(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 52, height: 32)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.08)))
+        .opacity(video.exists ? 1 : 0.6)
+        .accessibilityHidden(true)
+        .task(id: video.exists) {
+            guard video.exists else { image = nil; return }
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: video.url))
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 208, height: 128)
+            if let frame = try? await generator.image(at: .zero).image {
+                image = NSImage(cgImage: frame, size: NSSize(width: frame.width, height: frame.height))
+            }
+        }
     }
 }
 

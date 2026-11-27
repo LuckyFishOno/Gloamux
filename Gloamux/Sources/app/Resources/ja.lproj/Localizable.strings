@@ -1367,3 +1367,9 @@
 "Save videos in" = "ビデオの保存先";
 "Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is." = "ビデオは、別のフォルダを選ばない限り「ダウンロード」に保存されます。録画ウインドウには、Gloamux が保存したビデオがどのフォルダにあってもすべて表示されます。";
 "Gloamux can’t save videos in the chosen folder. Choose another folder in Settings › General." = "Gloamux は選んだフォルダにビデオを保存できません。「設定 › 一般」で別のフォルダを選んでください。";
+"Clear History" = "履歴を消去";
+"Takes every video off this list. The video files stay where they are." = "このリストからすべてのビデオを外します。ビデオファイルはそのまま残ります。";
+"Clear the video history?" = "ビデオの履歴を消去しますか？";
+"The video files stay where they are." = "ビデオファイルはそのまま残ります。";
+"File not found" = "ファイルが見つかりません";
+"Remove from List" = "リストから外す";

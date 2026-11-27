@@ -214,6 +214,21 @@ enum VideoRules {
     }
 
     static func isVideo(_ url: URL) -> Bool { VideoFormat(rawValue: url.pathExtension.lowercased()) != nil }
+
+    /// When a video started, from the start of its name (`baseName`), for a listed video whose file is gone.
+    static func startDate(fromName name: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.date(from: String(name.prefix(19)))
+    }
+
+    /// A video's name without the time it started, which the list shows on its own line.
+    static func shownName(_ name: String) -> String {
+        guard startDate(fromName: name) != nil else { return name }
+        let rest = name.dropFirst(19).trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty ? name : rest
+    }
 }
 
 /// Saved window videos and the recording running in one workspace window.
@@ -225,6 +240,8 @@ enum VideoRules {
         let date: Date
         var duration: TimeInterval?
         let size: Int
+        /// False when the file was moved or deleted outside Gloamux. The list keeps it until it is removed or cleared.
+        var exists = true
     }
 
     enum StartError: LocalizedError, Equatable {
@@ -253,6 +270,8 @@ enum VideoRules {
     struct Index: Codable, Equatable {
         var videos: [String] = []
         var recording: [String] = []
+        /// Set once the videos in the workspace's own `videos` folder, from before videos went to Downloads, are listed.
+        var oldFolderListed: Bool?
     }
 
     /// The workspace's `videos` folder, where videos were saved before they went to Downloads. They are still listed.
@@ -270,7 +289,27 @@ enum VideoRules {
         indexURL = index
         Self.recoverPartialFiles(in: folder)
         Self.recoverListedFiles(index)
+        Self.listOldFolder(folder, in: index)
         reload()
+    }
+
+    private static func created(_ url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+    }
+
+    /// Adds the videos saved in the workspace's `videos` folder before the list existed, once, so clearing the list
+    /// clears them from it too.
+    static func listOldFolder(_ folder: URL, in url: URL) {
+        guard readIndex(url).oldFolderListed != true else { return }
+        let old = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.creationDateKey],
+                                                                   options: [.skipsHiddenFiles])) ?? [])
+            .filter(VideoRules.isVideo)
+            .sorted { created($0) < created($1) }
+        guard !old.isEmpty else { changeIndex(url) { $0.oldFolderListed = true }; return }
+        changeIndex(url) { index in
+            for video in old where !index.videos.contains(video.path) { index.videos.append(video.path) }
+            index.oldFolderListed = true
+        }
     }
 
     /// Read again each time: the windows of one workspace share the list.
@@ -386,26 +425,29 @@ enum VideoRules {
         return task
     }
 
-    /// The listed videos that still exist, and any in the workspace's own `videos` folder.
+    /// Every video on the list, newest first, each marked by whether its file is still there. Called again when the
+    /// Recordings window comes forward, since a file may have been moved or deleted in the Finder meanwhile.
     func reload() {
-        let keys: [URLResourceKey] = [.fileSizeKey, .creationDateKey]
-        let old = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
-        let listed = Self.readIndex(indexURL).videos.map { URL(fileURLWithPath: $0) }
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .creationDateKey]
         var seen = Set<String>()
-        let urls = (listed + old).filter { url in
-            VideoRules.isVideo(url) && FileManager.default.fileExists(atPath: url.path) && seen.insert(url.standardizedFileURL.path).inserted
+        let urls = Self.readIndex(indexURL).videos.map { URL(fileURLWithPath: $0) }.filter { url in
+            VideoRules.isVideo(url) && seen.insert(url.standardizedFileURL.path).inserted
         }
         let durations = Dictionary(saved.map { ($0.url, $0.duration) }, uniquingKeysWith: { first, _ in first })
         saved = urls.map { url in
-            let values = try? url.resourceValues(forKeys: Set(keys))
-            return Video(url: url, title: url.deletingPathExtension().lastPathComponent, date: values?.creationDate ?? .distantPast,
+            let title = url.deletingPathExtension().lastPathComponent
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                return Video(url: url, title: title, date: VideoRules.startDate(fromName: title) ?? .distantPast, size: 0, exists: false)
+            }
+            let values = try? url.resourceValues(forKeys: keys)
+            return Video(url: url, title: title, date: values?.creationDate ?? VideoRules.startDate(fromName: title) ?? .distantPast,
                          duration: durations[url] ?? nil, size: values?.fileSize ?? 0)
         }.sorted { $0.date > $1.date }
     }
 
     /// Reads each listed video's length from its file.
     func loadDurations() async {
-        for video in saved where video.duration == nil {
+        for video in saved where video.duration == nil && video.exists {
             let seconds = try? await AVURLAsset(url: video.url).load(.duration).seconds
             if let index = saved.firstIndex(where: { $0.url == video.url }), let seconds, seconds.isFinite {
                 saved[index].duration = seconds
@@ -413,10 +455,24 @@ enum VideoRules {
         }
     }
 
-    /// Moves the video to the Trash and takes it off the list.
+    /// Moves the video to the Trash, if its file is still there, and takes it off the list.
     func delete(_ video: Video) throws {
-        try FileManager.default.trashItem(at: video.url, resultingItemURL: nil)
+        if FileManager.default.fileExists(atPath: video.url.path) {
+            try FileManager.default.trashItem(at: video.url, resultingItemURL: nil)
+        }
         Self.changeIndex(indexURL) { $0.videos.removeAll { URL(fileURLWithPath: $0).standardizedFileURL == video.url.standardizedFileURL } }
+        reload()
+    }
+
+    /// Takes the video off the list. Its file, if still there, stays where it is.
+    func forget(_ video: Video) {
+        Self.changeIndex(indexURL) { $0.videos.removeAll { URL(fileURLWithPath: $0).standardizedFileURL == video.url.standardizedFileURL } }
+        reload()
+    }
+
+    /// Empties the list. The video files stay where they are.
+    func clearList() {
+        Self.changeIndex(indexURL) { $0.videos = [] }
         reload()
     }
 }

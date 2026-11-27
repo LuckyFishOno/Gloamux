@@ -80,7 +80,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 | `agent-access.json`、`agent-activity.json` | AI 代理存取、允許的連線和活動紀錄。 |
 | `ssh-key-secure-enclave` | Gloamux 的 Secure Enclave SSH 金鑰（見 `AppSSHKey`）。 |
 | `runbooks/`、`recordings/`、`logs/` | Runbook 和執行結果、錄影，以及連線紀錄（權限 0600）。 |
-| `videos.json` | Gloamux 存過的視窗錄影（在下載項目或 `video.folder`）和錄製中檔案的路徑，讓中斷的錄影在下次啟動時取好檔名（權限 0600）。 |
+| `videos.json` | Gloamux 存過的視窗錄影歷史紀錄（在下載項目或 `video.folder`；檔案不見了仍保留，直到移除或清除）和錄製中檔案的路徑，讓中斷的錄影在下次啟動時取好檔名（權限 0600）。 |
 | `videos/` | 改存下載項目之前的視窗錄影（權限 0600），仍會列出。錄製中的檔案是隱藏的 `.NAME.recording.mp4` 或 `.mov`。 |
 
 命名：
@@ -182,7 +182,7 @@ Gloamux 的工作檔案放在 `~/Library/Application Support/Gloamux`。做介�
 - Runbook（`Runbooks.swift`，`runbooks/` 中的 Markdown）一次以括號貼上送出一個區塊，等待它的 `commandFinished`，遇到第一個失敗就停止，並把結果存在 `runbooks/.results/`。
 - 錄影（`TerminalRecording.swift`）只保留輸出，儲存時經過 `SecretRedaction`（也能找出被切成多段的機密），並把 asciicast v2 檔寫到 `recordings/`。
 - 連線紀錄（`TerminalLogs`）寫到 `logs/`，並逐行以 `SecretRedaction` 遮蔽。
-- 視窗錄影（`VideoRecording.swift`）用 ScreenCaptureKit 擷取工作區的 `NSWindow`（`SCContentFilter(desktopIndependentWindow:)`，縮放到開始時的大小），再以 `AVAssetWriter` 每兩秒一段寫入 H.264。`VideoTimeline` 依主機時鐘的擷取時間放置每一格，並剪掉因 `NSWindow` 工作表和縮到 Dock 通知而暫停的時段。`VideoRules` 放上限和檔名規則；`CaptureWriter.append` 是測試在沒有螢幕時驅動的路徑。`VideoRecordings` 每個工作區視窗一個，寫入 `VideoSettings.folder`（沒設 `video.folder` 時是下載項目），以 `videos.json` 記錄自己的影片和錄製中的檔案（同一工作區的視窗共用，所以每次變更都重新讀取），每次啟動把殘留的錄製中檔案改回正式名稱一次，並在 `closeWorkspaceWindow` 和 `finishRecordingsBeforeQuit` 完成檔案。`VideoRecordingUI.swift` 有工具列按鈕、一次性的同意說明和權限工作表；`WorkspaceCommandVideos.swift` 是 `gloamux videos`。
+- 視窗錄影（`VideoRecording.swift`）用 ScreenCaptureKit 擷取工作區的 `NSWindow`（`SCContentFilter(desktopIndependentWindow:)`，縮放到開始時的大小），再以 `AVAssetWriter` 每兩秒一段寫入 H.264。`VideoTimeline` 依主機時鐘的擷取時間放置每一格，並剪掉因 `NSWindow` 工作表和縮到 Dock 通知而暫停的時段。`VideoRules` 放上限和檔名規則；`CaptureWriter.append` 是測試在沒有螢幕時驅動的路徑。`VideoRecordings` 每個工作區視窗一個，寫入 `VideoSettings.folder`（沒設 `video.folder` 時是下載項目），以 `videos.json` 記錄自己影片的歷史紀錄（檔案不見時標成 `exists` false 而不是拿掉）和錄製中的檔案（同一工作區的視窗共用，所以每次變更都重新讀取），把舊的工作區 `videos` 資料夾加進清單一次，每次啟動把殘留的錄製中檔案改回正式名稱一次，並在 `closeWorkspaceWindow` 和 `finishRecordingsBeforeQuit` 完成檔案。`VideoRecordingUI.swift` 有工具列按鈕、一次性的同意說明和權限工作表；`WorkspaceCommandVideos.swift` 是 `gloamux videos`。
 
 ### 終端畫面
 

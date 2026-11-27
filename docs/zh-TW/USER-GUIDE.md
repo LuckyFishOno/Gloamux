@@ -296,7 +296,7 @@
 - 影片維持開始錄影時的視窗大小。之後調整視窗大小，畫面會縮放填入，形狀不合的地方補黑邊。
 - 你按停止、視窗關閉、Gloamux 結束（會先完成檔案）時，錄影就會結束。檔案到 4 GB 或磁碟剩不到 1 GB 時也會停止，並說明原因。最多同時錄 4 個視窗。
 - 格式、畫質、每秒張數、滑鼠游標和存放位置在[設定 › 一般 › 視窗錄影](#視窗錄影設定)選擇。
-- 影片預設存在 **下載項目**，也可以選別的資料夾，只有你的帳號能讀取。錄影中的檔案用點開頭的隱藏檔名。**終端 › 錄影** 會把 Gloamux 存過的每支影片（不論在哪個資料夾）列在 **視窗錄影** 下，可以播放和匯出；在那裡選 **移到垃圾桶** 會把檔案移到垃圾桶。這個設定出現前存在 Gloamux 資料夾 `videos` 資料夾裡的影片也會列出。檔案每兩秒寫入一段，所以當機後仍能播放到最後一段，下次啟動時會取好檔名並出現在清單中。
+- 影片預設存在 **下載項目**，也可以選別的資料夾，只有你的帳號能讀取。錄影中的檔案用點開頭的隱藏檔名。**終端 › 錄影** 會在 **視窗錄影** 下保留 Gloamux 存過的每支影片的歷史紀錄（不論在哪個資料夾），可以播放和匯出；在那裡選 **移到垃圾桶** 會把檔案移到垃圾桶。在 Finder 移走或刪掉的影片會留在清單上並標示 **找不到檔案**，直到你選 **從清單移除**；切回 Gloamux 時清單會重新檢查。**清除歷史紀錄** 會清空清單，檔案留在原處。這個設定出現前存在 Gloamux 資料夾 `videos` 資料夾裡的影片會加進清單一次。檔案每兩秒寫入一段，所以當機後仍能播放到最後一段，下次啟動時會取好檔名並出現在清單中。
 - 影片內容不會遮蔽。視窗顯示的任何東西都會錄進去，例如程式回顯的密碼、檔名和輸出。
 
 ### 顏色
@@ -732,7 +732,7 @@ Gloamux 開著時，工作區指令會在 App 裡執行。等待 Touch ID 或主
 | `gloamux triggers` | `list`、`add`、`edit`、`enable`、`disable`、`remove`。動作：`notify`、`sound`、`mark`。 |
 | `gloamux runbooks` | `list`、`show`、`create`、`import`、`delete`、`run`。 |
 | `gloamux recordings` | `list`、`export`（輸出成 `.cast`）、`remove`。 |
-| `gloamux videos` | `start [--window N] [--yes]`、`stop [--window N]`、`status`、`list`、`export FILE PATH`、`remove FILE`。視窗編號與 `gloamux tabs list` 相同。`start`、`stop`、`status` 需要 App 在執行且有螢幕錄製權限；第一次 `start` 需要 `--yes`。影片存在下載項目或 `video.folder`；`list` 會列出每支影片的路徑。 |
+| `gloamux videos` | `start [--window N] [--yes]`、`stop [--window N]`、`status`、`list`、`export FILE PATH`、`remove FILE`、`forget FILE`、`clear`。視窗編號與 `gloamux tabs list` 相同。`start`、`stop`、`status` 需要 App 在執行且有螢幕錄製權限；第一次 `start` 需要 `--yes`。影片存在下載項目或 `video.folder`；`list` 會列出每支影片的路徑和 `exists`，在 Gloamux 外移走或刪掉的檔案為 false。`remove` 會把檔案移到垃圾桶；`forget` 和 `clear` 只改清單。 |
 | `gloamux appearance` | `list`、`get`、`set THEME_ID`。 |
 | `gloamux settings` | `list`、`get`、`set`、`reset`。名稱見[設定一覽](#19-設定一覽)。 |
 | `gloamux layout` | `get`、`set default\|classic\|workbench`、`dropdown`（顯示或隱藏下拉視窗）。 |

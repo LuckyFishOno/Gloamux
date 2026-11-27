@@ -136,6 +136,14 @@ import SwiftUI
         XCTAssertFalse(VideoRules.isVideo(URL(fileURLWithPath: "/x/a.cast")))
     }
 
+    /// The list shows a video's name and, on its own line, when it started.
+    func testTheListShowsTheNameWithoutTheStartTime() {
+        XCTAssertEqual(VideoRules.shownName("2026-11-27 10.00.00 web"), "web")
+        XCTAssertEqual(VideoRules.shownName("2026-11-27 10.00.00 web 2"), "web 2")
+        XCTAssertEqual(VideoRules.shownName("holiday"), "holiday", "A name without a start time is kept")
+        XCTAssertEqual(VideoRules.shownName("2026-11-27 10.00.00"), "2026-11-27 10.00.00")
+    }
+
     func testACutOffRecordingGetsItsNameAtLaunch() throws {
         let folder = folder()
         try Data("video".utf8).write(to: folder.appendingPathComponent(VideoRules.partialName("2026-11-27 10.00.00 web", format: .mov)))
@@ -177,8 +185,10 @@ import SwiftUI
         let recovered = elsewhere.appendingPathComponent("2026-11-27 10.00.00 web.mov")
         XCTAssertTrue(FileManager.default.fileExists(atPath: recovered.path), "The cut-off recording got its name where it was")
         XCTAssertEqual(Set(store.saved.map(\.url.lastPathComponent)),
-                       ["2026-11-26 09.00.00 old.mp4", "2026-11-27 09.00.00 saved.mp4", "2026-11-27 10.00.00 web.mov"],
-                       "Listed videos and the old videos folder; not other files in the folder, nor a listed file that is gone")
+                       ["2026-11-26 09.00.00 old.mp4", "2026-11-27 09.00.00 saved.mp4", "2026-11-27 10.00.00 web.mov",
+                        "2026-11-27 08.00.00 moved away.mp4"],
+                       "Listed videos, including one whose file is gone, and the old videos folder; not other files in the folder")
+        XCTAssertEqual(store.saved.filter { !$0.exists }.map(\.url), [gone])
         let after = VideoRecordings.readIndex(index)
         XCTAssertTrue(after.recording.isEmpty)
         XCTAssertTrue(after.videos.contains(recovered.path))
@@ -191,6 +201,44 @@ import SwiftUI
         XCTAssertFalse(VideoRecordings.readIndex(index).videos.contains(listed.path))
         XCTAssertFalse(store.saved.contains { $0.url.lastPathComponent == listed.lastPathComponent })
         XCTAssertTrue(FileManager.default.fileExists(atPath: elsewhere.appendingPathComponent("holiday.mov").path))
+    }
+
+    /// The list is a history: a video moved or deleted in the Finder stays on it, marked, until it is taken off. Taking it
+    /// off or clearing the list leaves the files, and the old videos folder is not listed again after a clear.
+    func testTheListKeepsVideosWhoseFileIsGone() throws {
+        let workspace = folder(), elsewhere = folder()
+        let old = workspace.appendingPathComponent("videos", isDirectory: true)
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        let index = workspace.appendingPathComponent("videos.json")
+        let earlier = old.appendingPathComponent("2026-11-26 09.00.00 old.mp4")
+        try Data("old".utf8).write(to: earlier)
+        let first = elsewhere.appendingPathComponent("2026-11-27 09.00.00 first.mov")
+        let second = elsewhere.appendingPathComponent("2026-11-27 10.00.00 second.mp4")
+        try Data("first".utf8).write(to: first)
+        try Data("second".utf8).write(to: second)
+        VideoRecordings.changeIndex(index) { $0.videos = [first.path, second.path] }
+
+        let store = VideoRecordings(folder: old, index: index)
+        XCTAssertEqual(store.saved.count, 3)
+        XCTAssertTrue(store.saved.allSatisfy(\.exists))
+        try FileManager.default.removeItem(at: second)
+        store.reload()
+        let missing = try XCTUnwrap(store.saved.first { $0.url == second })
+        XCTAssertFalse(missing.exists)
+        XCTAssertEqual(missing.size, 0)
+        XCTAssertEqual(missing.date, VideoRules.startDate(fromName: "2026-11-27 10.00.00 second"))
+
+        try store.delete(missing)
+        XCTAssertFalse(store.saved.contains { $0.url == second }, "Move to Trash takes a gone file off the list without an error")
+        let kept = try XCTUnwrap(store.saved.first { $0.url == first })
+        store.forget(kept)
+        XCTAssertFalse(store.saved.contains { $0.url == first })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path), "Taking a video off the list leaves the file")
+
+        store.clearList()
+        XCTAssertTrue(store.saved.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: earlier.path))
+        XCTAssertTrue(VideoRecordings(folder: old, index: index).saved.isEmpty, "The old videos folder is listed only once")
     }
 
     func testVideosGoToDownloadsUnlessAFolderIsChosen() {
@@ -302,7 +350,10 @@ import SwiftUI
         try await write(writer, stride(from: 10.0, to: 10.5, by: 0.1).map { $0 })
         let outcome = await writer.close(at: 10.5)
         XCTAssertEqual(outcome, .written)
-        try FileManager.default.moveItem(at: partial, to: folder.appendingPathComponent("2026-11-27 10.00.00 web.mp4"))
+        let saved = folder.appendingPathComponent("2026-11-27 10.00.00 web.mp4")
+        try FileManager.default.moveItem(at: partial, to: saved)
+        VideoRecordings.changeIndex(model.videos.indexURL) { $0.videos.append(saved.path) }
+        model.videos.reload()
 
         let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 900, height: 600), styleMask: [.borderless],
                               backing: .buffered, defer: false)
@@ -342,10 +393,12 @@ import SwiftUI
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let video = folder.appendingPathComponent("2026-11-27 10.00.00 web.mov")
         try Data("not really a video".utf8).write(to: video)
+        VideoRecordings.changeIndex(model.videos.indexURL) { $0.videos.append(video.path) }
 
         let listed = try await run(["videos", "list"], model, live: false) as? [[String: Any]]
         XCTAssertEqual(listed?.first?["file"] as? String, video.lastPathComponent)
         XCTAssertEqual(listed?.first?["format"] as? String, "mov")
+        XCTAssertEqual(listed?.first?["exists"] as? Bool, true)
         XCTAssertEqual((listed?.first?["path"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent }, video.lastPathComponent,
                        "Videos may be anywhere, so the list gives each one's path")
         let copy = FileManager.default.temporaryDirectory.appendingPathComponent("gloamux-video-\(UUID()).mov")
@@ -357,6 +410,20 @@ import SwiftUI
         try await run(["videos", "remove", video.lastPathComponent], model)
         XCTAssertTrue(model.videos.saved.isEmpty)
         do { try await run(["videos", "remove", "missing.mp4"], model); XCTFail("A missing video was removed") } catch {}
+
+        // A video deleted in the Finder stays on the list until it is forgotten or the list is cleared.
+        let kept = folder.appendingPathComponent("2026-11-27 11.00.00 kept.mp4"), gone = folder.appendingPathComponent("2020-01-01 12.00.00 gone.mp4")
+        try Data("kept".utf8).write(to: kept)
+        VideoRecordings.changeIndex(model.videos.indexURL) { $0.videos += [kept.path, gone.path] }
+        let history = try await run(["videos", "list"], model, live: false) as? [[String: Any]]
+        XCTAssertEqual(history?.map { $0["exists"] as? Bool }, [true, false], "Newest first, by the time in the name when the file is gone")
+        do { try await run(["videos", "export", gone.lastPathComponent, copy.path + ".2"], model); XCTFail("Exported a file that is gone") } catch WorkspaceError.invalid {}
+        let forgotten = try await run(["videos", "forget", gone.lastPathComponent], model) as? [String: Any]
+        XCTAssertEqual(forgotten?["forgotten"] as? String, gone.lastPathComponent)
+        let cleared = try await run(["videos", "clear"], model) as? [String: Any]
+        XCTAssertEqual(cleared?["cleared"] as? Int, 1)
+        XCTAssertTrue(model.videos.saved.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path), "Clearing the list leaves the files")
 
         // Starting needs the app, an answer to what a video shows, and an open window.
         do { try await run(["videos", "start"], model, live: false); XCTFail("Started without the app") } catch WorkspaceError.invalid {}

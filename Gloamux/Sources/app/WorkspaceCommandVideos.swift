@@ -5,7 +5,7 @@ import Foundation
 extension WorkspaceCommand {
     static let videoAgreement = "A video shows everything the workspace window shows, with nothing masked: terminal output, file lists and paths, and commands in the Session Log. Run the command again with --yes to agree. Gloamux asks only once."
 
-    /// `videos start [--window N] [--yes] | stop [--window N] | status | list | export FILE PATH | remove FILE`.
+    /// `videos start [--window N] [--yes] | stop [--window N] | status | list | export FILE PATH | remove FILE | forget FILE | clear`.
     /// Window numbers are those of `gloamux tabs list`; without `--window`, the front workspace window.
     @MainActor static func videos(_ action: String, _ args: [String], _ model: WorkspaceModel, live: Bool,
                                   _ windows: [WorkspaceModel]) async throws -> Any {
@@ -57,13 +57,15 @@ extension WorkspaceCommand {
             return store.saved.map { video -> [String: Any] in
                 var info: [String: Any] = ["file": video.url.lastPathComponent, "path": video.url.path, "title": video.title,
                                            "date": dates.string(from: video.date),
-                                           "format": video.url.pathExtension.lowercased(), "bytes": video.size]
+                                           "format": video.url.pathExtension.lowercased(), "bytes": video.size,
+                                           "exists": video.exists]
                 if let duration = video.duration { info["seconds"] = (duration * 10).rounded() / 10 }
                 return info
             }
         case "export":
             try count(args, 2...2)
             let source = try savedVideo(args[0], model)
+            guard source.exists else { throw WorkspaceError.invalid("\(source.url.path) no longer exists. Run gloamux videos forget \(args[0]).") }
             guard args[1].hasPrefix("/") else { throw Usage("Use an absolute path for the video file.") }
             let url = URL(fileURLWithPath: args[1])
             guard !FileManager.default.fileExists(atPath: url.path) else { throw WorkspaceError.invalid("\(url.path) already exists.") }
@@ -74,6 +76,17 @@ extension WorkspaceCommand {
             let found = try savedVideo(args[0], model)
             try model.videos.delete(found)
             return ["removed": found.url.lastPathComponent]
+        case "forget":
+            try count(args, 1...1)
+            let found = try savedVideo(args[0], model)
+            model.videos.forget(found)
+            return ["forgotten": found.url.lastPathComponent]
+        case "clear":
+            try count(args, 0...0)
+            model.videos.reload()
+            let cleared = model.videos.saved.count
+            model.videos.clearList()
+            return ["cleared": cleared]
         default: throw Usage("Unknown videos operation.")
         }
     }

@@ -6,7 +6,9 @@ The [verification record](VERIFICATION.md) includes the November 25, 2026 local 
 
 The [feature backlog](FEATURE-BACKLOG.md) tracks documented workflows from Xshell 8 and MobaXterm 26.6, including their macOS counterparts. Tabby and Termius inform workspace navigation and appearance.
 
-Current release is **Gloamux 1.7 (build 18)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+Current release is **Gloamux 1.8 (build 19)**. The application and CLI ship together, and Sparkle updates are available from 1.1. The remaining CLI gap is remote desktop input.
+
+Included in 1.8 (build 19): the Recordings window keeps a history of window videos. A video moved or deleted in the Finder stays on the list marked **File not found** until it is removed, **Clear History** empties the list and keeps the files, each video shows a thumbnail, its name, and when it started, and `gloamux videos` gains `forget`, `clear`, and `exists`. See the [verification record](VERIFICATION.md).
 
 Included in 1.7 (build 18): window videos (the whole workspace window as MP4 or MOV, without sound, saved in Downloads by default, with `gloamux videos`); each toolbar button in the Default layout shows its own tooltip, where the Browser, Files, Quick commands, and Color theme buttons all showed "Browser"; and **File Transfer** and the **Session Log** keep room for their columns beside a wide right panel, keep the transfer arrows centered, and show the log one column at a time when the window is narrow. See the [verification record](VERIFICATION.md).
 

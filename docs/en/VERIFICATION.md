@@ -4,6 +4,13 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.8 (build 19): the window video history (November 27, 2026)
+
+- **What changed.** `videos.json` is a history: a listed video whose file is gone stays on the list with `exists` false until **Remove from List**, **Move to Trash** (which then only drops the entry), `gloamux videos forget`, or **Clear History** / `gloamux videos clear`, which keep the files. The list checks again when Gloamux becomes active. The old workspace `videos` folder is added to the list once. Rows show a first-frame thumbnail, the name without the start time, and the start time on the caption line; the player bar shows the folder.
+- **Unit tests.** `VideoRecordingTests` (18): the earlier 16, a missing file kept and marked, removed without an error, forgotten and cleared with the files kept, the old folder listed only once, and names shown without the start time; the command-line test covers `exists`, `forget`, `clear`, and export refusing a missing file.
+- **Packaged app, renamed copy, isolated workspace.** The Recordings window listed two demo videos and one deleted one; the deleted one showed **File not found** with its path and **Remove from List**; moving a file to the Trash in the Finder and reloading marked it; thumbnails, names, dates, and the folder path showed; `gloamux videos list` reported `exists`.
+- **Not checked.** **Clear History** and **Remove from List** were not clicked in the packaged app; they are covered by the unit tests.
+
 ## Gloamux 1.7 (build 18): window video (November 27, 2026)
 
 - **What it does.** Records the whole workspace window as H.264 MP4 or MOV without sound (ScreenCaptureKit and `AVAssetWriter`), from the toolbar, **Terminal › Record window video** (⇧⌘R), the command palette, or `gloamux videos start`. Videos are saved in Downloads by default (`video.folder`), listed in **Terminal › Recordings** through `videos.json`, and mode 0600.

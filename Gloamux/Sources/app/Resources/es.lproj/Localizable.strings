@@ -1367,3 +1367,9 @@
 "Save videos in" = "Guardar vídeos en";
 "Videos are saved in Downloads unless you choose another folder. The Recordings window lists every video Gloamux saved, in whichever folder it is." = "Los vídeos se guardan en Descargas salvo que elijas otra carpeta. La ventana Grabaciones muestra todos los vídeos que guardó Gloamux, estén en la carpeta que estén.";
 "Gloamux can’t save videos in the chosen folder. Choose another folder in Settings › General." = "Gloamux no puede guardar vídeos en la carpeta elegida. Elige otra carpeta en Ajustes › General.";
+"Clear History" = "Borrar historial";
+"Takes every video off this list. The video files stay where they are." = "Quita todos los vídeos de esta lista. Los archivos de vídeo se quedan donde están.";
+"Clear the video history?" = "¿Borrar el historial de vídeos?";
+"The video files stay where they are." = "Los archivos de vídeo se quedan donde están.";
+"File not found" = "No se encuentra el archivo";
+"Remove from List" = "Quitar de la lista";
