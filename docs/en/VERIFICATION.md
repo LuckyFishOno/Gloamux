@@ -4,6 +4,13 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.8.2 (build 21): the empty Recordings and Runbooks windows (November 27, 2026)
+
+- **What changed.** With nothing listed, the **Recordings** and **Runbooks** windows drew their header and empty message in the lower part of the window and left the top blank. No child of the split view could grow taller, so the split view shrank to its content, and AppKit placed it at the bottom of the window. The list column and the empty message now fill the window's height.
+- **Unit tests.** `ToolWindowLayoutTests` (3) hosts each window at its default size and checks that the split view fills the window and the header sits at the top: empty Recordings, empty Runbooks, and Runbooks with one file. Before the fix the two empty cases failed.
+- **Packaged app, renamed copy, isolated workspace.** The empty Recordings and Runbooks windows showed the header at the top and the message centered; the released 1.8.1 copy still showed them at the bottom. After **New runbook**, the list and the runbook filled the window.
+- **Not checked.** Recordings with a video listed was not opened in the packaged app; a filled list already took the full height before this change. **New runbook** lists the new file but does not select it, in 1.8.1 too; this is not changed here.
+
 ## Gloamux 1.8.1 (build 20): Saved passwords stays responsive under accessibility clients (November 27, 2026)
 
 - **What changed.** With no saved passwords, the **Saved passwords** sheet showed `ContentUnavailableView` once its list loaded. Inserted into a sheet that was already open, that view sent SwiftUI's accessibility update into an attribute-graph cycle without end as soon as VoiceOver, a window manager, or an automation tool read the window: the main thread stayed at full CPU and `gloamux` requests to the app got no answer. The sheet's empty state is now a plain symbol, title, and detail with the same text. The bug was present from 1.6 (build 17).

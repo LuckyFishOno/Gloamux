@@ -274,6 +274,7 @@ struct RunbooksView: View {
                     } actions: {
                         Button(T("New runbook")) { newRunbook() }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(library.files, id: \.self, selection: $library.selected) { url in
                         Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
@@ -290,7 +291,8 @@ struct RunbooksView: View {
                     .listStyle(.sidebar).scrollContentBackground(.hidden)
                 }
             }
-            .frame(minWidth: 200, idealWidth: 230, maxWidth: 320)
+            // Fills the window's height even with no runbooks, so the split view does not shrink to the header.
+            .frame(minWidth: 200, idealWidth: 230, maxWidth: 320, maxHeight: .infinity, alignment: .top)
             Group {
                 if let selection = library.selected, library.files.contains(selection) {
                     RunbookDocumentView(model: model, library: library, url: selection).id(selection)

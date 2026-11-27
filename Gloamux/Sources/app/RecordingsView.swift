@@ -28,6 +28,7 @@ struct RecordingsView: View {
                 Divider()
                 if store.saved.isEmpty && videos.saved.isEmpty {
                     ContentUnavailableView(T("No recordings"), systemImage: "record.circle", description: Text(T("Recordings you save appear here.")))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(selection: $selection) {
                         // Headings are plain rows: a sidebar section heading always offers to collapse its section.
@@ -52,7 +53,9 @@ struct RecordingsView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .frame(minWidth: 260, idealWidth: 300, maxWidth: 380)
+            // The column fills the window's height even with nothing listed; otherwise the split view shrinks to the
+            // header and the empty message and sits at the bottom of the window.
+            .frame(minWidth: 260, idealWidth: 300, maxWidth: 380, maxHeight: .infinity, alignment: .top)
             Group {
                 if let url = selection, let recording = store.saved.first(where: { $0.url == url }) {
                     RecordingPlayerView(model: model, recording: recording) { export(recording) }.id(url)
