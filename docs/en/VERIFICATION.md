@@ -4,6 +4,13 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.8.1 (build 20): Saved passwords stays responsive under accessibility clients (November 27, 2026)
+
+- **What changed.** With no saved passwords, the **Saved passwords** sheet showed `ContentUnavailableView` once its list loaded. Inserted into a sheet that was already open, that view sent SwiftUI's accessibility update into an attribute-graph cycle without end as soon as VoiceOver, a window manager, or an automation tool read the window: the main thread stayed at full CPU and `gloamux` requests to the app got no answer. The sheet's empty state is now a plain symbol, title, and detail with the same text. The bug was present from 1.6 (build 17).
+- **How it was found and narrowed.** In a diagnostic build that opened the sheet without Touch ID and read it with an `AXUIElement` client: the same view present from the sheet's first frame, a plain text, or a hand-built symbol and text inserted later did not hang; `ContentUnavailableView` inserted later did, in a stack and in a `ZStack`. The same view in the main window's Session Log and in tool windows did not hang. A view hosted in an `NSWindow` in a unit test never showed the cycle, so the regression test `SavedSignInsViewTests` keeps the view out of the sheet's source.
+- **Other sheets under the same client.** Session properties, Rename, Paste history, and the Settings window: no cycle. No other sheet uses `ContentUnavailableView`.
+- **Packaged app, renamed copy, isolated workspace.** With **Saved passwords** open after Touch ID, three reads of the whole accessibility tree finished in under 0.05 seconds each, AttributeGraph reported no cycle, the app used about 5 % CPU, and `gloamux tabs list` answered at once. Before the fix the same steps hung the 1.6 and 1.7 copies.
+
 ## Gloamux 1.8 (build 19): the window video history (November 27, 2026)
 
 - **What changed.** `videos.json` is a history: a listed video whose file is gone stays on the list with `exists` false until **Remove from List**, **Move to Trash** (which then only drops the entry), `gloamux videos forget`, or **Clear History** / `gloamux videos clear`, which keep the files. The list checks again when Gloamux becomes active. The old workspace `videos` folder is added to the list once. Rows show a first-frame thumbnail, the name without the start time, and the start time on the caption line; the player bar shows the folder.

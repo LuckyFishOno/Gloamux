@@ -35,9 +35,7 @@ struct SavedSignInsView: View {
                 TextField(T("Search"), text: $filter).textFieldStyle(.roundedBorder).frame(width: 180)
             }
             if loaded && items.isEmpty {
-                ContentUnavailableView(T("No saved passwords"), systemImage: "key",
-                                       description: Text(T("A password is saved here after it first signs in.")))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyMessage
             } else {
                 List(shown) { item in row(item) }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -63,6 +61,20 @@ struct SavedSignInsView: View {
             Text(T(item.place == .vault ? "Only the copy in the password vault is deleted."
                    : "The next connection asks for it again, unless the password vault has a copy and is unlocked."))
         }
+    }
+
+    /// Shown once the list has loaded empty. Not `ContentUnavailableView`: inserted into this sheet after it opened, that
+    /// view sent SwiftUI's accessibility update into an attribute-graph cycle that never ended once an accessibility
+    /// client (VoiceOver, a window manager, an automation tool) read the window, and the app stopped responding.
+    private var emptyMessage: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "key").appFont(.system(size: 40)).foregroundStyle(.secondary)
+            Text(T("No saved passwords")).appFont(.title2.weight(.semibold))
+            Text(T("A password is saved here after it first signs in.")).appFont(.callout).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private func row(_ item: SavedSignIn) -> some View {
