@@ -4,6 +4,10 @@
 
 This record lists the checks behind each release, newest first. The original November 24, 2026 architecture and stress-test baseline used the changes on top of `b1e4638` that ship in Gloamux 1.2 (build 3), packaged as `build/Gloamux.app`.
 
+## Gloamux 1.8.4 (build 23): open the recordings folder (November 27, 2026)
+
+The Recordings folder button stays enabled with an empty history. Without text recordings it opens the configured video destination (Downloads by default). It creates the destination if needed and opens the directory itself in Finder, rather than selecting it in its parent. Selected videos and text recordings retain their respective folder destinations. Swift debug build passed (sandbox-disabled SwiftPM with a temporary module cache). Finder clicking was not retested in the packaged UI; released as 1.8.4 (build 23) at the owner's request with `release.sh build --skip-tests`.
+
 ## Gloamux 1.8.3 (build 22): empty recordings and Runbook selection (November 27, 2026)
 
 - Recordings keeps its sidebar list mounted even with no entries, so the list provides the split view's flexible height. Its header stays at the top, and the detail pane shows one No recordings message instead of asking the user to select an entry from an empty list.

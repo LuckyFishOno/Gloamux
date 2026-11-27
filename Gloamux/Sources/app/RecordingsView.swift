@@ -20,9 +20,9 @@ struct RecordingsView: View {
                     Text(T("Recordings")).appFont(.headline)
                     InfoButton(T("Terminal text recordings start from the Terminal menu or the command palette. Only what the terminal shows is recorded, never your keystrokes, and access tokens, private keys, and password values are replaced with [REDACTED]. Files use the asciinema format.\n\nWindow videos record the whole workspace window as a video file, without sound. Nothing in them is masked."))
                     Spacer()
-                    Button { NSWorkspace.shared.activateFileViewerSelecting([shownFolder]) } label: { Image(systemName: "folder") }
+                    Button(action: openFolder) { Image(systemName: "folder") }
                         .buttonStyle(.borderless).help(T("Show in Finder"))
-                        .disabled(!FileManager.default.fileExists(atPath: shownFolder.path))
+                        .accessibilityLabel(T("Show in Finder"))
                 }
                 .padding(12)
                 Divider()
@@ -185,7 +185,18 @@ struct RecordingsView: View {
     /// The selected video's folder, or where new videos go, when a video or only videos are shown.
     private var shownFolder: URL {
         if let url = selection, VideoRules.isVideo(url) { return url.deletingLastPathComponent() }
-        return store.saved.isEmpty && !videos.saved.isEmpty ? VideoSettings.current.folder : store.folder
+        return store.saved.isEmpty ? VideoSettings.current.folder : store.folder
+    }
+
+    private func openFolder() {
+        do {
+            let folder = shownFolder
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // Open the directory itself; revealing it would select Downloads in its parent.
+            if !NSWorkspace.shared.open(folder) {
+                throw CocoaError(.fileReadUnknown)
+            }
+        } catch { self.error = error.localizedDescription }
     }
 
     private func export(_ video: VideoRecordings.Video) {
