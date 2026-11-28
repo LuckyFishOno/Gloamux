@@ -8,6 +8,8 @@ Current release: **Gloamux 1.8.4 (build 23)**.
 
 Gloamux keeps your servers in one window: saved connections in folders, terminals side by side, the server's files next to the shell, and Windows or Mac desktops in a tab. It is built with Swift, SwiftUI, and AppKit, keeps everything on your Mac, and provides the `gloamux` command line for session management, terminal control, file transfers, and workspace settings. Remote desktop keyboard and pointer input uses the app. Vault setup, unlocking, and secret display also stay in the app.
 
+> **Currently free to try.** The source is published for inspection and has not adopted an open-source license. Future paid versions may be offered. [Licensing details](#licensing-status).
+
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/LuckyFishOno/Gloamux?display_name=tag"></a>
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple&logoColor=white">

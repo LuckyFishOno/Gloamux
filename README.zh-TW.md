@@ -8,6 +8,8 @@
 
 Gloamux 把伺服器收進同一個視窗：連線用資料夾整理，終端可以並排，伺服器的檔案就在 shell 旁邊，Windows 或 Mac 桌面也能開在分頁裡。它以 Swift、SwiftUI 和 AppKit 打造，資料全部留在你的 Mac 上，並提供 `gloamux` 命令列管理連線、控制終端、傳輸檔案和設定工作區。遠端桌面的鍵盤與指標輸入使用 App，密碼庫建立、解鎖和機密顯示也由 App 處理。
 
+> **目前免費試用。** 原始碼公開供檢視，尚未採用開源授權。未來可能推出付費版本。[查看授權說明](#授權狀態)。
+
 <p align="center">
   <a href="https://github.com/LuckyFishOno/Gloamux/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/LuckyFishOno/Gloamux?display_name=tag"></a>
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple&logoColor=white">
