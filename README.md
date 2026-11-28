@@ -239,9 +239,15 @@ Every document has an English and a Traditional Chinese version, in [`docs/en`](
 | [Roadmap](docs/en/ROADMAP.md) and [feature backlog](docs/en/FEATURE-BACKLOG.md) | What is done and what comes next |
 | [Theme inventory](docs/en/THEME-INVENTORY.md) | The sources of the bundled color themes |
 
+## Licensing status
+
+Gloamux is currently available to download and try for free. It has not adopted an open-source license, including MIT. The source is published for inspection; please contact the author for permission to modify, redistribute, or commercially use it. Third-party components remain under their own licenses; see the [third-party notices](docs/en/DEVELOPMENT.md#third-party-notices).
+
+Future paid versions may be considered based on community feedback. Pricing and licensing terms have not been decided, and the current free availability is not a promise of permanent free access or free updates.
+
 ## Contributing
 
-Bug reports and focused pull requests are welcome. Useful reports include your macOS version, Mac model, the kind of connection (SSH, SFTP, RDP, VNC, and so on), the server software if you know it, and a screenshot or short recording for interface issues. Leave out hostnames, user names, and keys you do not want to share.
+Bug reports and feature suggestions are welcome. Before submitting code, please open an issue to discuss the proposed change and agree on contribution terms, including its use in a possible future paid version. Useful reports include your macOS version, Mac model, the kind of connection (SSH, SFTP, RDP, VNC, and so on), the server software if you know it, and a screenshot or short recording for interface issues. Leave out hostnames, user names, and keys you do not want to share.
 
 If Gloamux is useful to you, starring the repository helps other Mac users find it.
 
